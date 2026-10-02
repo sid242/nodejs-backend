@@ -1,0 +1,1 @@
+ALTER TABLE "User" ADD COLUMN "emailVerifiedAt" timestamp (3);
