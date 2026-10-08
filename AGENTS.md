@@ -1,13 +1,13 @@
 # Node.js Scalable Foundation — AI Agent Instructions
 
-This repository is a production-ready, scalable Node.js backend foundation built with **Express**, **PostgreSQL (Drizzle ORM)**, **Redis**, **BullMQ**, **Socket.IO**, and **AWS S3 / SES**, containerized and architected for independent horizontal scaling on AWS ECS Fargate.
+This repository is a production-ready, scalable Node.js & TypeScript backend foundation built with **Express**, **PostgreSQL (Drizzle ORM)**, **Redis**, **BullMQ**, **Socket.IO**, and **AWS S3 / SES**, containerized and architected for independent horizontal scaling on AWS ECS Fargate.
 
 ---
 
 ## 1. System Architecture & Core Principles
 
 - **Stateless API Replicas**: No in-memory state or sessions. All authentication state (refresh tokens), rate limiting counters, WebSocket adapter sync, and caching live in Redis or Postgres.
-- **Separate Worker Processes**: Background jobs, email delivery, media processing, and scheduled cron jobs run in a separate process (`src/worker.js`) to decouple CPU/IO heavy tasks from the API request loop.
+- **Separate Worker Processes**: Background jobs, email delivery, media processing, and scheduled cron jobs run in a separate process (`src/worker.ts`) to decouple CPU/IO heavy tasks from the API request loop.
 - **Strict Response Envelopes**:
   - Success: `{ success: true, message: string, data: any, meta?: any, requestId: string }`
   - Error: `{ error: { code: string, message: string, details?: any }, requestId: string }`
@@ -25,45 +25,47 @@ node-scalable-foundation/
 ├── drizzle/                      # Generated SQL migration files (Drizzle Kit)
 ├── nginx/                        # Local load balancer & reverse proxy config
 ├── src/
-│   ├── app.js                    # Express app initialization, middleware stack
-│   ├── server.js                 # API HTTP & WebSocket server entrypoint
-│   ├── worker.js                 # Background worker process entrypoint
-│   ├── routes.js                 # Central /api/v1 router aggregation
+│   ├── app.ts                    # Express app initialization, middleware stack
+│   ├── server.ts                 # API HTTP & WebSocket server entrypoint
+│   ├── worker.ts                 # Background worker process entrypoint
+│   ├── routes.ts                 # Central /api/v1 router aggregation
+│   ├── types/                    # Express global type augmentations (Request)
+│   │   └── express.d.ts
 │   ├── config/                   # Environment (Zod), DB, Redis, Pino Logger
-│   │   ├── env.js                # Strict environment variable validation
-│   │   ├── db.js                 # Drizzle Postgres client & pool
-│   │   ├── redis.js              # ioredis client factory & lifecycle management
-│   │   └── logger.js             # Structured JSON Pino logger with redactions
+│   │   ├── env.ts                # Strict environment variable validation
+│   │   ├── db.ts                 # Drizzle Postgres client & pool
+│   │   ├── redis.ts              # ioredis client factory & lifecycle management
+│   │   └── logger.ts             # Structured JSON Pino logger with redactions
 │   ├── db/                       # Database schema & migration runner
-│   │   ├── migrate.js            # Drizzle migration executor
+│   │   ├── migrate.ts            # Drizzle migration executor
 │   │   └── schema/               # Domain-specific Drizzle schema definitions
-│   │       ├── enums.js          # Shared PostgreSQL enums
-│   │       ├── users.js          # Users table & public projections
-│   │       ├── files.js          # Files table & status enums
-│   │       └── index.js          # Unified schema exports
+│   │       ├── enums.ts          # Shared PostgreSQL enums
+│   │       ├── users.ts          # Users table & public projections
+│   │       ├── files.ts          # Files table & status enums
+│   │       └── index.ts          # Unified schema exports
 │   ├── docs/                     # OpenAPI 3.0 specs & Swagger UI (/docs)
-│   │   ├── index.js              # Swagger UI router & /openapi.json endpoint
-│   │   ├── openapi.js            # Root OpenAPI document generator & aggregator
-│   │   ├── helpers.js            # Security schemes & response envelope helpers
+│   │   ├── index.ts              # Swagger UI router & /openapi.json endpoint
+│   │   ├── openapi.ts            # Root OpenAPI document generator & aggregator
+│   │   ├── helpers.ts            # Security schemes & response envelope helpers
 │   │   └── routes/               # Modular OpenAPI route specifications
-│   │       ├── health.docs.js
-│   │       ├── auth.docs.js
-│   │       ├── users.docs.js
-│   │       └── files.docs.js
+│   │       ├── health.docs.ts
+│   │       ├── auth.docs.ts
+│   │       ├── users.docs.ts
+│   │       └── files.docs.ts
 │   ├── lib/                      # Core utility libraries
-│   │   ├── async-handler.js      # Express async route wrapper
-│   │   ├── cache.js              # Redis cache-aside with mutex/stampede lock
-│   │   ├── errors.js             # AppError subclass hierarchy
-│   │   ├── mailer.js             # AWS SES v2 client wrapper
-│   │   ├── responses.js          # AppResponse standard JSON formatter
-│   │   ├── s3.js                 # AWS S3 presigned POST & GET generator
-│   │   └── utils.js              # Generic helper utilities
+│   │   ├── async-handler.ts      # Express async route wrapper
+│   │   ├── cache.ts              # Redis cache-aside with mutex/stampede lock
+│   │   ├── errors.ts             # AppError subclass hierarchy
+│   │   ├── mailer.ts             # AWS SES v2 client wrapper
+│   │   ├── responses.ts          # AppResponse standard JSON formatter
+│   │   ├── s3.ts                 # AWS S3 presigned POST & GET generator
+│   │   └── utils.ts              # Generic helper utilities
 │   ├── middleware/               # Express middleware
-│   │   ├── auth.js               # JWT authentication & RBAC guards
-│   │   ├── error.js              # Centralized error handler & 404 handler
-│   │   ├── http-logger.js        # Pino HTTP logger with request ID propagation
-│   │   ├── rate-limit.js         # Redis-backed rate limiters (global, auth, user)
-│   │   └── validate.js           # Zod request validation middleware
+│   │   ├── auth.ts               # JWT authentication & RBAC guards
+│   │   ├── error.ts              # Centralized error handler & 404 handler
+│   │   ├── http-logger.ts        # Pino HTTP logger with request ID propagation
+│   │   ├── rate-limit.ts         # Redis-backed rate limiters (global, auth, user)
+│   │   └── validate.ts           # Zod request validation middleware
 │   ├── modules/                  # Domain-driven feature modules
 │   │   ├── auth/                 # Authentication, JWT, refresh tokens
 │   │   ├── files/                # S3 uploads, confirmation, downloads
@@ -71,13 +73,13 @@ node-scalable-foundation/
 │   │   └── users/                # User profile & administration
 │   ├── observability/            # Prometheus metrics (/metrics)
 │   ├── queues/                   # BullMQ queue definitions & workers
-│   │   ├── index.js              # Queue definitions (email, file, maintenance)
-│   │   ├── bull-board.js         # Admin dashboard router
+│   │   ├── index.ts              # Queue definitions (email, file, maintenance)
+│   │   ├── bull-board.ts         # Admin dashboard router
 │   │   └── workers/              # Job processors & cron schedulers
 │   └── sockets/                  # Real-time WebSockets (Socket.IO + Redis adapter)
-│       ├── index.js              # Socket.IO server, JWT handshake, room handlers
-│       └── emitter.js            # Redis emitter for worker -> client notifications
-└── test/                         # Unit & integration tests (Node.js test runner)
+│       ├── index.ts              # Socket.IO server, JWT handshake, room handlers
+│       └── emitter.ts            # Redis emitter for worker -> client notifications
+└── test/                         # Unit & integration tests (tsx --test)
 ```
 
 ---
@@ -88,13 +90,13 @@ node-scalable-foundation/
 
 Every new business domain should be placed in `src/modules/<domain>/`:
 
-1. **`<domain>.dto.js`**: Defines Zod request schemas (body, query, params) and data contracts.
-2. **`<domain>.routes.js`**: Defines routes, applies auth guards (`requireAuth`, `requireRole`), attaches rate limiters, validates inputs via `validate({ body, query, params })`, and routes to the controller.
-3. **`<domain>.controller.js`**: HTTP layer wrapped in `asyncHandler`. Extracts validated params/body/query, invokes the service layer, and formats output with `AppResponse.ok(data)` or `AppResponse.created(data)`.
-4. **`<domain>.service.js`**: Contains business logic, orchestrating workflows, hashing, caching via `cache.wrap()`, BullMQ background queue dispatch, and error throwing via `AppError.*`.
-5. **`<domain>.repository.js`**: Pure database data-access layer containing Drizzle ORM queries (`db.select()`, `db.insert()`, `db.update()`, `db.delete()`).
-6. **Database Schema**: Tables added to `src/db/schema/<domain>.js` and re-exported in `src/db/schema/index.js`.
-7. **Registration**: Mount router in `src/routes.js` under `/api/v1/<domain>`.
+1. **`<domain>.dto.ts`**: Defines Zod request schemas (body, query, params) and data contracts.
+2. **`<domain>.routes.ts`**: Defines routes, applies auth guards (`requireAuth`, `requireRole`), attaches rate limiters, validates inputs via `validate({ body, query, params })`, and routes to the controller.
+3. **`<domain>.controller.ts`**: HTTP layer wrapped in `asyncHandler`. Extracts validated params/body/query, invokes the service layer, and formats output with `AppResponse.ok(data)` or `AppResponse.created(data)`.
+4. **`<domain>.service.ts`**: Contains business logic, orchestrating workflows, hashing, caching via `cache.wrap()`, BullMQ background queue dispatch, and error throwing via `AppError.*`.
+5. **`<domain>.repository.ts`**: Pure database data-access layer containing Drizzle ORM queries (`db.select()`, `db.insert()`, `db.update()`, `db.delete()`).
+6. **Database Schema**: Tables added to `src/db/schema/<domain>.ts` and re-exported in `src/db/schema/index.ts`.
+7. **Registration**: Mount router in `src/routes.ts` under `/api/v1/<domain>`.
 
 ### 3.2 Error Handling
 
@@ -104,7 +106,7 @@ Every new business domain should be placed in `src/modules/<domain>/`:
   - `AppError.forbidden('Insufficient permissions')` (403)
   - `AppError.notFound('Resource not found')` (404)
   - `AppError.conflict('Resource already exists')` (409)
-- All unhandled exceptions are caught by `src/middleware/error.js`, logged with Pino, and returned as `{ error: { code, message, details }, requestId }`.
+- All unhandled exceptions are caught by `src/middleware/error.ts`, logged with Pino, and returned as `{ error: { code, message, details }, requestId }`.
 
 ### 3.3 Database & Migrations (Drizzle ORM)
 
@@ -117,28 +119,29 @@ Every new business domain should be placed in `src/modules/<domain>/`:
 
 ### 3.4 Caching Strategy
 
-- Use `cache.wrap(key, ttlSeconds, fetchFn)` from `src/lib/cache.js`.
+- Use `cache.wrap(key, ttlSeconds, fetchFn)` from `src/lib/cache.ts`.
 - It includes a distributed mutex lock to prevent cache stampedes under high concurrency.
 - Invalidate cache on mutations using `cache.del(key)` or `cache.delPattern(pattern)`.
 
 ### 3.5 Background Queues & WebSockets
 
-- Background queues are defined in `src/queues/index.js`.
-- Worker processors are registered in `src/queues/workers/index.js`.
-- Workers running in `src/worker.js` can notify connected WebSocket clients in real-time using `emitToUser(userId, event, payload)` or `emitToRoom(room, event, payload)` from `src/sockets/emitter.js`.
+- Background queues are defined in `src/queues/index.ts`.
+- Worker processors are registered in `src/queues/workers/index.ts`.
+- Workers running in `src/worker.ts` can notify connected WebSocket clients in real-time using `emitToUser(userId, event, payload)` or `emitToRoom(room, event, payload)` from `src/sockets/emitter.ts`.
 
 ---
 
 ## 4. Useful Commands
 
-| Command                | Description                                                  |
-| :--------------------- | :----------------------------------------------------------- |
-| `npm run dev`          | Run API server with file watch (`--watch --env-file=.env`)   |
-| `npm run dev:worker`   | Run Background Worker with file watch                        |
-| `npm test`             | Run tests using Node.js built-in test runner (`node --test`) |
-| `npm run lint`         | Check linting with ESLint                                    |
-| `npm run lint:fix`     | Fix lint issues automatically                                |
-| `npm run format`       | Format files with Prettier                                   |
-| `npm run db:generate`  | Generate Drizzle migrations from schema changes              |
-| `npm run db:migrate`   | Execute pending Drizzle migrations                           |
-| `docker compose up -d` | Start local Postgres, Redis, and MinIO containers            |
+| Command                | Description                                                          |
+| :--------------------- | :------------------------------------------------------------------- |
+| `npm run dev`          | Run API server with file watch (`tsx watch --env-file=.env`)         |
+| `npm run dev:worker`   | Run Background Worker with file watch (`tsx watch --env-file=.env`)  |
+| `npm run typecheck`    | Run TypeScript compiler type checking (`tsc --noEmit`)                |
+| `npm test`             | Run test suites with tsx test runner (`tsx --test`)                  |
+| `npm run lint`         | Check linting with ESLint                                            |
+| `npm run lint:fix`     | Fix lint issues automatically                                        |
+| `npm run format`       | Format files with Prettier                                           |
+| `npm run db:generate`  | Generate Drizzle migrations from schema changes                      |
+| `npm run db:migrate`   | Execute pending Drizzle migrations                                   |
+| `docker compose up -d` | Start local Postgres, Redis, and MinIO containers                    |

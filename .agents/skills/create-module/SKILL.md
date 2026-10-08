@@ -82,8 +82,8 @@ Create `src/modules/<domain>/<domain>.repository.js`:
 
 ```javascript
 import { desc, eq } from 'drizzle-orm';
-import { db } from '../../config/db.js';
-import { items, publicItem } from '../../db/schema/index.js';
+import { db } from '@/config/db.js';
+import { items, publicItem } from '@/db/schema/index.js';
 
 export async function create(userId, data) {
   const [created] = await db
@@ -116,9 +116,9 @@ export async function findByUserId(userId, { page, limit }) {
 Create `src/modules/<domain>/<domain>.service.js`:
 
 ```javascript
-import * as itemRepo from './<domain>.repository.js';
-import { cache } from '../../lib/cache.js';
-import { AppError } from '../../lib/errors.js';
+import * as itemRepo from '@/modules/<domain>/<domain>.repository.js';
+import { cache } from '@/lib/cache.js';
+import { AppError } from '@/lib/errors.js';
 
 export async function createItem(userId, data) {
   const created = await itemRepo.create(userId, data);
@@ -147,9 +147,9 @@ export const listItems = (userId, { page, limit }) =>
 Create `src/modules/<domain>/<domain>.controller.js`:
 
 ```javascript
-import { asyncHandler } from '../../lib/async-handler.js';
-import { AppResponse } from '../../lib/responses.js';
-import * as service from './<domain>.service.js';
+import { asyncHandler } from '@/lib/async-handler.js';
+import { AppResponse } from '@/lib/responses.js';
+import * as service from '@/modules/<domain>/<domain>.service.js';
 
 export const createItem = asyncHandler(async (req, res) => {
   const result = await service.createItem(req.user.id, req.valid.body);
@@ -175,10 +175,14 @@ Create `src/modules/<domain>/<domain>.routes.js`:
 
 ```javascript
 import { Router } from 'express';
-import { validate } from '../../middleware/validate.js';
-import { requireAuth } from '../../middleware/auth.js';
-import { createItemDto, listItemsQueryDto, itemIdParamDto } from './<domain>.dto.js';
-import * as controller from './<domain>.controller.js';
+import { validate } from '@/middleware/validate.js';
+import { requireAuth } from '@/middleware/auth.js';
+import {
+  createItemDto,
+  listItemsQueryDto,
+  itemIdParamDto,
+} from '@/modules/<domain>/<domain>.dto.js';
+import * as controller from '@/modules/<domain>/<domain>.controller.js';
 
 const router = Router();
 router.use(requireAuth);
