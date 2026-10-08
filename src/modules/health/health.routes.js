@@ -22,14 +22,12 @@ router.get('/ready', async (_req, res) => {
     database.status === 'fulfilled' &&
     stateRedis.status === 'fulfilled' &&
     queueRedis.status === 'fulfilled';
-  res
-    .status(ok ? 200 : 503)
-    .json({
-      status: ok ? 'ok' : 'degraded',
-      db: database.status,
-      redis: stateRedis.status,
-      queue: queueRedis.status,
-    });
+  res.status(ok ? 200 : 503).json({
+    status: ok ? 'ok' : 'degraded',
+    db: database.status,
+    redis: stateRedis.status,
+    queue: queueRedis.status,
+  });
 });
 
 export default router;

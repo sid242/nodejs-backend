@@ -34,6 +34,7 @@ This guide details how to create and wire a new background worker and queue in t
 ## 2. Implement the Worker Processor
 
 Create `src/queues/workers/report.worker.js`:
+
 ```javascript
 import { logger } from '../../config/logger.js';
 import { emitToUser } from '../../sockets/emitter.js';
@@ -81,6 +82,7 @@ export async function processReport(job) {
 ## 4. Register Recurring / Cron Schedulers (Optional)
 
 If the worker job needs to run on a recurring cron pattern:
+
 ```javascript
 export async function registerSchedulers() {
   await reportQueue.upsertJobScheduler(
@@ -96,6 +98,7 @@ export async function registerSchedulers() {
 ## 5. Produce Jobs from Services
 
 From any API route or service:
+
 ```javascript
 import { reportQueue } from '../../queues/index.js';
 
@@ -103,7 +106,7 @@ export async function requestReport(userId, options) {
   const job = await reportQueue.add(
     'generate',
     { userId, options, requestedAt: new Date().toISOString() },
-    { jobId: `report:${userId}:${Date.now()}` } // Deduplication / tracking key
+    { jobId: `report:${userId}:${Date.now()}` }, // Deduplication / tracking key
   );
   return { jobId: job.id };
 }
@@ -114,7 +117,9 @@ export async function requestReport(userId, options) {
 ## 6. Run & Test Workers
 
 Run the worker daemon in development:
+
 ```bash
 npm run dev:worker
 ```
+
 Monitor queue metrics and inspect failed jobs in the Bull-Board dashboard at `/admin/queues`.

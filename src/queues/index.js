@@ -9,7 +9,10 @@ export const QUEUES = {
 };
 
 // Producer connection (used by the API and the worker when it enqueues follow-up jobs).
-export const queueConnection = createRedis('queue-producer', { forBull: true, url: env.QUEUE_REDIS_URL });
+export const queueConnection = createRedis('queue-producer', {
+  forBull: true,
+  url: env.QUEUE_REDIS_URL,
+});
 
 // Sensible defaults: retry with exponential backoff, and don't let Redis fill up with old jobs.
 const defaultJobOptions = {

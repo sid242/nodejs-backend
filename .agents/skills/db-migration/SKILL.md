@@ -14,6 +14,7 @@ This skill outlines the lifecycle of managing PostgreSQL schemas with Drizzle OR
 ## 1. Schema File Structure
 
 All schemas reside in `src/db/schema/`:
+
 - `src/db/schema/enums.js`: PostgreSQL custom enums (e.g., `roleEnum`, `fileStatusEnum`).
 - `src/db/schema/<domain>.js`: Domain table definitions (e.g. `users.js`, `files.js`).
 - `src/db/schema/index.js`: Main schema entrypoint that re-exports all domain schemas.
@@ -23,7 +24,9 @@ All schemas reside in `src/db/schema/`:
 ## 2. Step-by-Step Migration Guide
 
 ### Step 1: Update Schema Definitions
+
 Create or edit a schema file in `src/db/schema/<domain>.js`:
+
 ```javascript
 import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
@@ -38,23 +41,31 @@ export const products = pgTable('Product', {
     .$onUpdate(() => new Date()),
 });
 ```
+
 Make sure `src/db/schema/index.js` exports the table.
 
 ### Step 2: Generate Migration SQL
+
 Run Drizzle Kit to create timestamped SQL migration files under `drizzle/`:
+
 ```bash
 npm run db:generate
 ```
+
 Review the newly generated SQL file in `drizzle/` to verify column types, constraints, and indexes.
 
 ### Step 3: Verify Integrity & Consistency
+
 Run schema integrity checks:
+
 ```bash
 npm run db:check
 ```
 
 ### Step 4: Apply Migration
+
 Run migration executor (`src/db/migrate.js`):
+
 ```bash
 npm run db:migrate
 ```

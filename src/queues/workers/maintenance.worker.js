@@ -17,26 +17,16 @@ export async function processMaintenance(job) {
       .orderBy(asc(files.createdAt))
       .limit(env.MAINTENANCE_BATCH_SIZE);
     const deletedIds = [];
-    await forEachConcurrent(
-      stale,
-      env.S3_DELETE_CONCURRENCY,
-      async (file) => {
-        try {
-          // S3 DeleteObject is also successful when the object never existed.
-          await deleteObject(file.key);
-          deletedIds.push(file.id);
-        } catch (err) {
-          logger.warn({ err, key: file.key }, 'stale object deletion failed; will retry');
-        }
-      },
-    );
-    if (deletedIds.length)
-      await db.delete(files).where(
-        inArray(
-          files.id,
-          deletedIds,
-        ),
-      );
+    await forEachConcurrent(stale, env.S3_DELETE_CONCURRENCY, async (file) => {
+      try {
+        // S3 DeleteObject is also successful when the object never existed.
+        await deleteObject(file.key);
+        deletedIds.push(file.id);
+      } catch (err) {
+        logger.warn({ err, key: file.key }, 'stale object deletion failed; will retry');
+      }
+    });
+    if (deletedIds.length) await db.delete(files).where(inArray(files.id, deletedIds));
     logger.info(
       { removed: deletedIds.length, failed: stale.length - deletedIds.length },
       'cleaned up stale pending files',

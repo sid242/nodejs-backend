@@ -1,11 +1,9 @@
-import { eq } from 'drizzle-orm';
-import { db } from '../../config/db.js';
-import { files } from '../../db/schema/index.js';
+import * as fileRepo from '../../modules/files/files.repository.js';
 import { emitToUser } from '../../sockets/emitter.js';
 
 export async function processFile(job) {
   const { fileId, ownerId } = job.data;
-  const [file] = await db.select().from(files).where(eq(files.id, fileId)).limit(1);
+  const file = await fileRepo.findById(fileId);
   if (!file) return { skipped: true };
 
   // TODO: real work goes here (thumbnails with sharp, virus scan, OCR, video transcode...).

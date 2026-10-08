@@ -58,6 +58,7 @@ Full containerised stack with load balancing: `docker compose --profile full up 
 | Cron jobs           | `queues/workers/index.js`                           | BullMQ job schedulers (safe with many replicas)                                          |
 | WebSockets          | `src/sockets`                                       | JWT handshake, Redis adapter, rooms, flood guard, worker->client emitter                 |
 | Health              | `modules/health`                                    | `/health/live`, `/health/ready` (DB+Redis, 503 while draining)                           |
+| API Docs / Swagger  | `src/docs/`                                         | Interactive Swagger UI at `/docs`, OpenAPI 3.0 spec at `/docs/openapi.json`              |
 | Metrics             | `observability/metrics.js`                          | Prometheus `/metrics` (blocked at nginx)                                                 |
 | Graceful shutdown   | `server.js`, `worker.js`                            | drain LB, close sockets/queues/DB; workers finish in-flight jobs                         |
 | Docker/CI/CD        | `Dockerfile`, `.github/workflows`, `deploy/`        | one image, two roles; OIDC to AWS; migrations as a one-off task                          |
@@ -95,7 +96,7 @@ Bucket setup: block public access, enable default encryption, add a CORS rule al
 ## Production checklist / what to add next
 
 - [ ] Sentry or OpenTelemetry tracing; Prometheus/Grafana or CloudWatch alarms (5xx rate, p95 latency, queue depth, failed jobs)
-- [ ] OpenAPI/Swagger docs (`zod-to-openapi`) and API versioning policy
+- [x] OpenAPI/Swagger docs (`@asteasolutions/zod-to-openapi` + `swagger-ui-express` at `/docs`)
 - [ ] Integration tests (Testcontainers for Postgres/Redis) on top of the included unit tests
 - [ ] Infrastructure as code (Terraform/CDK) for everything described above
 - [ ] WAF in front of the ALB; dependency scanning (Dependabot/Trivy); `npm audit` in CI

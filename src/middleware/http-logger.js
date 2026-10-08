@@ -10,7 +10,10 @@ export const httpLogger = pinoHttp({
     res.setHeader('x-request-id', id);
     return id;
   },
-  autoLogging: { ignore: (req) => req.url.startsWith('/health') || req.url === '/metrics' },
+  autoLogging: {
+    ignore: (req) =>
+      req.url.startsWith('/health') || req.url === '/metrics' || req.url.startsWith('/docs'),
+  },
   customLogLevel: (_req, res, err) =>
     err || res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info',
   serializers: {

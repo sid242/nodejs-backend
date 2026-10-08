@@ -1,7 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { eq } from 'drizzle-orm';
-import { db } from '../../config/db.js';
-import { publicUser, users } from '../../db/schema/index.js';
+import * as authRepo from './auth.repository.js';
 import { AppError } from '../../lib/errors.js';
 import { cache } from '../../lib/cache.js';
 import { emailQueue } from '../../queues/index.js';
@@ -15,52 +13,43 @@ import {
   revokeAllUserTokens,
 } from './tokens.js';
 
-export { publicUser };
-
 // Compared against when the user doesn't exist, so response time doesn't reveal valid emails.
 const DUMMY_HASH = bcrypt.hashSync('dummy-password', 12);
 
 export async function register({ email, password, name }) {
   const passwordHash = await bcrypt.hash(password, 12);
-  const [user] = await db
-    .insert(users)
-    .values({ email: email.toLowerCase(), passwordHash, name })
-    .returning(publicUser);
+  const user = await authRepo.createUser({ email, passwordHash, name });
   await cache.delByPrefix('users:list:');
+
   // Slow/unreliable work goes to the queue, not the request path. jobId makes it idempotent.
   await emailQueue.add(
     'welcome',
     { to: user.email, name: user.name },
     { jobId: `welcome-${user.id}` },
   );
+
   return { user, ...(await issueTokens(user)) };
 }
 
 export async function login({ email, password }) {
-  const [record] = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, email.toLowerCase()))
-    .limit(1);
+  const record = await authRepo.findByEmail(email);
   const ok = await bcrypt.compare(password, record?.passwordHash ?? DUMMY_HASH);
   if (!record || !ok) throw AppError.unauthorized('Invalid email or password');
+
   const user = { id: record.id, email: record.email, name: record.name, role: record.role };
   return { user, ...(await issueTokens(user)) };
 }
 
 export async function refresh(refreshToken) {
   const userId = await consumeRefreshToken(refreshToken);
-  const [user] = await db.select(publicUser).from(users).where(eq(users.id, userId)).limit(1);
+  const user = await authRepo.findPublicUserById(userId);
   if (!user) throw AppError.unauthorized();
+
   return issueTokens(user);
 }
 
 export async function forgotPassword({ email }) {
-  const [record] = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, email.toLowerCase()))
-    .limit(1);
+  const record = await authRepo.findByEmail(email);
 
   if (record) {
     const token = await createPasswordResetToken(record.id);
@@ -78,12 +67,7 @@ export async function resetPassword({ token, password }) {
   const userId = await verifyAndConsumePasswordResetToken(token);
   const passwordHash = await bcrypt.hash(password, 12);
 
-  const [user] = await db
-    .update(users)
-    .set({ passwordHash })
-    .where(eq(users.id, userId))
-    .returning(publicUser);
-
+  const user = await authRepo.updatePassword(userId, passwordHash);
   if (!user) throw AppError.notFound('User not found');
 
   await Promise.all([revokeAllUserTokens(userId), cache.del(`user:${userId}`)]);
@@ -92,7 +76,7 @@ export async function resetPassword({ token, password }) {
 }
 
 export async function requestEmailVerification(userId) {
-  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  const user = await authRepo.findById(userId);
   if (!user) throw AppError.notFound('User not found');
   if (user.emailVerifiedAt) throw AppError.badRequest('Email is already verified');
 
@@ -108,11 +92,7 @@ export async function requestEmailVerification(userId) {
 
 export async function verifyEmail({ token }) {
   const userId = await verifyAndConsumeEmailVerificationToken(token);
-  const [user] = await db
-    .update(users)
-    .set({ emailVerifiedAt: new Date() })
-    .where(eq(users.id, userId))
-    .returning(publicUser);
+  const user = await authRepo.markEmailVerified(userId);
 
   if (!user) throw AppError.notFound('User not found');
   await cache.del(`user:${userId}`);

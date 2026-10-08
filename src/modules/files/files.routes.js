@@ -1,65 +1,22 @@
 import { Router } from 'express';
-import { z } from 'zod';
-import { asyncHandler } from '../../lib/async-handler.js';
 import { validate } from '../../middleware/validate.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { uploadLimiter } from '../../middleware/rate-limit.js';
-import { AppResponse } from '../../lib/responses.js';
-import * as service from './files.service.js';
+import { fileIdParamDto, requestUploadDto } from './files.dto.js';
+import * as controller from './files.controller.js';
 
 const router = Router();
 router.use(requireAuth);
 
-const idParams = z.object({ id: z.string().uuid() });
-
-router.get(
-  '/',
-  asyncHandler(async (req, res) => AppResponse.ok(await service.listFiles(req.user.id)).send(res)),
-);
-
+router.get('/', controller.listFiles);
 router.post(
   '/upload-url',
   uploadLimiter,
-  validate({
-    body: z.object({
-      filename: z.string().min(1).max(200),
-      contentType: z.enum(service.ALLOWED_TYPES),
-    }),
-  }),
-  asyncHandler(async (req, res) =>
-    AppResponse.created(
-      await service.requestUpload(req.user.id, req.valid.body),
-      'Upload requested',
-    ).send(res),
-  ),
+  validate({ body: requestUploadDto }),
+  controller.requestUpload,
 );
-
-router.post(
-  '/:id/confirm',
-  validate({ params: idParams }),
-  asyncHandler(async (req, res) =>
-    AppResponse.ok(
-      await service.confirmUpload(req.user.id, req.valid.params.id),
-      'Upload confirmed',
-    ).send(res),
-  ),
-);
-
-router.get(
-  '/:id/download-url',
-  validate({ params: idParams }),
-  asyncHandler(async (req, res) =>
-    AppResponse.ok(await service.getDownloadUrl(req.user.id, req.valid.params.id)).send(res),
-  ),
-);
-
-router.delete(
-  '/:id',
-  validate({ params: idParams }),
-  asyncHandler(async (req, res) => {
-    await service.deleteFile(req.user.id, req.valid.params.id);
-    res.status(204).end();
-  }),
-);
+router.post('/:id/confirm', validate({ params: fileIdParamDto }), controller.confirmUpload);
+router.get('/:id/download-url', validate({ params: fileIdParamDto }), controller.getDownloadUrl);
+router.delete('/:id', validate({ params: fileIdParamDto }), controller.deleteFile);
 
 export default router;

@@ -82,7 +82,8 @@ export const cache = {
       return fresh;
     } finally {
       // Never delete a replacement lock acquired after ours expired.
-      if (locked) await cacheRedis.eval(RELEASE_LOCK_IF_OWNER, 1, lockKey, lockToken).catch(() => {});
+      if (locked)
+        await cacheRedis.eval(RELEASE_LOCK_IF_OWNER, 1, lockKey, lockToken).catch(() => {});
     }
   },
 };

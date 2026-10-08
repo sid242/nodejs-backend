@@ -29,7 +29,7 @@ const documentSchema = z.object({ docId: z.string().uuid() });
 socket.on('doc:join', async (payload, ack) => {
   try {
     const { docId } = documentSchema.parse(payload);
-    
+
     // 1. Authorize: Ensure user has read access
     // const allowed = await checkAccess(userId, docId);
     // if (!allowed) throw new Error('Forbidden');
@@ -50,6 +50,7 @@ socket.on('doc:join', async (payload, ack) => {
 Workers running in `src/worker.js` cannot access the Socket.IO server directly. Instead, they publish events via the Redis Emitter (`src/sockets/emitter.js`).
 
 ### Targeting a Specific User:
+
 ```javascript
 import { emitToUser } from '../sockets/emitter.js';
 
@@ -61,6 +62,7 @@ emitToUser(userId, 'notification:received', {
 ```
 
 ### Broadcasting to a Shared Room:
+
 ```javascript
 import { emitToRoom } from '../sockets/emitter.js';
 

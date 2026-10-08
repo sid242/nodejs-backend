@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import client from 'prom-client';
+import client from '@prometheus-io/client';
 
 client.collectDefaultMetrics(); // event loop lag, heap, GC, etc.
 

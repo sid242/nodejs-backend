@@ -41,6 +41,9 @@ node-scalable-foundation/
 │   │       ├── users.js          # Users table & public projections
 │   │       ├── files.js          # Files table & status enums
 │   │       └── index.js          # Unified schema exports
+│   ├── docs/                     # OpenAPI 3.0 specs & Swagger UI (/docs)
+│   │   ├── index.js              # Swagger UI router & /openapi.json endpoint
+│   │   └── openapi.js            # @asteasolutions/zod-to-openapi generator
 │   ├── lib/                      # Core utility libraries
 │   │   ├── async-handler.js      # Express async route wrapper
 │   │   ├── cache.js              # Redis cache-aside with mutex/stampede lock
@@ -75,14 +78,20 @@ node-scalable-foundation/
 
 ## 3. Key Development Conventions
 
-### 3.1 Module Blueprint (3-Layer Pattern)
+### 3.1 Module Blueprint (4-Layer Pattern + DTOs)
+
 Every new business domain should be placed in `src/modules/<domain>/`:
-1. **`<domain>.routes.js`**: Defines routes, applies auth (`requireAuth`, `requireRole`), validates inputs via `validate({ body, query, params })`, wraps handlers in `asyncHandler`, and formats output with `AppResponse.ok(data)` or `AppResponse.created(data)`.
-2. **`<domain>.service.js`**: Contains business logic, database queries using Drizzle ORM (`db`), caching via `cache.wrap()`, and error throwing via `AppError.*`.
-3. **Database Schema**: Tables added to `src/db/schema/<domain>.js` and re-exported in `src/db/schema/index.js`.
-4. **Registration**: Mount router in `src/routes.js` under `/api/v1/<domain>`.
+
+1. **`<domain>.dto.js`**: Defines Zod request schemas (body, query, params) and data contracts.
+2. **`<domain>.routes.js`**: Defines routes, applies auth guards (`requireAuth`, `requireRole`), attaches rate limiters, validates inputs via `validate({ body, query, params })`, and routes to the controller.
+3. **`<domain>.controller.js`**: HTTP layer wrapped in `asyncHandler`. Extracts validated params/body/query, invokes the service layer, and formats output with `AppResponse.ok(data)` or `AppResponse.created(data)`.
+4. **`<domain>.service.js`**: Contains business logic, orchestrating workflows, hashing, caching via `cache.wrap()`, BullMQ background queue dispatch, and error throwing via `AppError.*`.
+5. **`<domain>.repository.js`**: Pure database data-access layer containing Drizzle ORM queries (`db.select()`, `db.insert()`, `db.update()`, `db.delete()`).
+6. **Database Schema**: Tables added to `src/db/schema/<domain>.js` and re-exported in `src/db/schema/index.js`.
+7. **Registration**: Mount router in `src/routes.js` under `/api/v1/<domain>`.
 
 ### 3.2 Error Handling
+
 - Never throw generic `Error` for client-facing issues. Use `AppError`:
   - `AppError.badRequest('Invalid parameter', details)` (400)
   - `AppError.unauthorized('Invalid or missing token')` (401)
@@ -92,6 +101,7 @@ Every new business domain should be placed in `src/modules/<domain>/`:
 - All unhandled exceptions are caught by `src/middleware/error.js`, logged with Pino, and returned as `{ error: { code, message, details }, requestId }`.
 
 ### 3.3 Database & Migrations (Drizzle ORM)
+
 - Schemas defined with `pgTable` in `src/db/schema/`.
 - Always export public projection shapes to prevent leaking sensitive fields (e.g. `passwordHash`).
 - Migration commands:
@@ -100,11 +110,13 @@ Every new business domain should be placed in `src/modules/<domain>/`:
   - `npm run db:migrate`: Apply pending migrations to PostgreSQL.
 
 ### 3.4 Caching Strategy
+
 - Use `cache.wrap(key, ttlSeconds, fetchFn)` from `src/lib/cache.js`.
 - It includes a distributed mutex lock to prevent cache stampedes under high concurrency.
 - Invalidate cache on mutations using `cache.del(key)` or `cache.delPattern(pattern)`.
 
 ### 3.5 Background Queues & WebSockets
+
 - Background queues are defined in `src/queues/index.js`.
 - Worker processors are registered in `src/queues/workers/index.js`.
 - Workers running in `src/worker.js` can notify connected WebSocket clients in real-time using `emitToUser(userId, event, payload)` or `emitToRoom(room, event, payload)` from `src/sockets/emitter.js`.
@@ -113,14 +125,14 @@ Every new business domain should be placed in `src/modules/<domain>/`:
 
 ## 4. Useful Commands
 
-| Command | Description |
-| :--- | :--- |
-| `npm run dev` | Run API server with file watch (`--watch --env-file=.env`) |
-| `npm run dev:worker` | Run Background Worker with file watch |
-| `npm test` | Run tests using Node.js built-in test runner (`node --test`) |
-| `npm run lint` | Check linting with ESLint |
-| `npm run lint:fix` | Fix lint issues automatically |
-| `npm run format` | Format files with Prettier |
-| `npm run db:generate` | Generate Drizzle migrations from schema changes |
-| `npm run db:migrate` | Execute pending Drizzle migrations |
-| `docker compose up -d` | Start local Postgres, Redis, and MinIO containers |
+| Command                | Description                                                  |
+| :--------------------- | :----------------------------------------------------------- |
+| `npm run dev`          | Run API server with file watch (`--watch --env-file=.env`)   |
+| `npm run dev:worker`   | Run Background Worker with file watch                        |
+| `npm test`             | Run tests using Node.js built-in test runner (`node --test`) |
+| `npm run lint`         | Check linting with ESLint                                    |
+| `npm run lint:fix`     | Fix lint issues automatically                                |
+| `npm run format`       | Format files with Prettier                                   |
+| `npm run db:generate`  | Generate Drizzle migrations from schema changes              |
+| `npm run db:migrate`   | Execute pending Drizzle migrations                           |
+| `docker compose up -d` | Start local Postgres, Redis, and MinIO containers            |

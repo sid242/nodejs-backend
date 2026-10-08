@@ -1,6 +1,7 @@
 # API & Coding Conventions
 
 ## 1. Module System & Imports
+
 - Target runtime: Node.js >= 20.6 with native ESM (`"type": "module"`).
 - Always use standard ES `import` and `export` statements with full `.js` file extensions:
   ```javascript
@@ -9,9 +10,11 @@
   ```
 
 ## 2. API Response Formatting
+
 All public HTTP API responses must conform to the standard envelopes:
 
 ### Success Response:
+
 ```json
 {
   "success": true,
@@ -21,7 +24,9 @@ All public HTTP API responses must conform to the standard envelopes:
   "requestId": "req-1234-5678"
 }
 ```
+
 Constructed using `AppResponse`:
+
 ```javascript
 // Status 200:
 AppResponse.ok(data, 'Optional message', meta).send(res);
@@ -31,6 +36,7 @@ AppResponse.created(data, 'Resource created').send(res);
 ```
 
 ### Error Response:
+
 ```json
 {
   "error": {
@@ -43,6 +49,7 @@ AppResponse.created(data, 'Resource created').send(res);
 ```
 
 ## 3. Error Handling
+
 - Use `AppError` subclasses from `src/lib/errors.js`:
   ```javascript
   throw AppError.badRequest('Invalid parameters', validationErrors);
@@ -59,11 +66,12 @@ AppResponse.created(data, 'Resource created').send(res);
     asyncHandler(async (req, res) => {
       const profile = await service.getProfile(req.user.id);
       AppResponse.ok(profile).send(res);
-    })
+    }),
   );
   ```
 
 ## 4. Request Validation
+
 - Validate all incoming `body`, `query`, and `params` with Zod using the `validate()` middleware:
   ```javascript
   import { validate } from '../../middleware/validate.js';
@@ -84,6 +92,7 @@ AppResponse.created(data, 'Resource created').send(res);
 - Validated values are placed onto `req.valid` (e.g., `req.valid.body`, `req.valid.query`, `req.valid.params`).
 
 ## 5. Logging Standards
+
 - Inside request contexts, always use `req.log` (Pino child logger with `requestId` and route metadata attached):
   ```javascript
   req.log.info({ userId: req.user.id }, 'User updated profile');

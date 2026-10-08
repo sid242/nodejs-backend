@@ -74,21 +74,21 @@ export function initSocket(httpServer) {
       })().catch(() => next(new Error('rate_limited')));
     });
 
-/**
- * Room authorization guard:
- * - Admin rooms ('admin:*') require ADMIN role.
- * - Private user rooms ('user:*') require matching user ID.
- * - Public rooms ('public:*' or generic IDs) can be joined by authenticated users.
- */
-async function authorizeRoomAccess(user, roomId) {
-  if (roomId.startsWith('admin:') && user.role !== 'ADMIN') {
-    return false;
-  }
-  if (roomId.startsWith('user:') && roomId !== `user:${user.id}`) {
-    return false;
-  }
-  return true;
-}
+    /**
+     * Room authorization guard:
+     * - Admin rooms ('admin:*') require ADMIN role.
+     * - Private user rooms ('user:*') require matching user ID.
+     * - Public rooms ('public:*' or generic IDs) can be joined by authenticated users.
+     */
+    async function authorizeRoomAccess(user, roomId) {
+      if (roomId.startsWith('admin:') && user.role !== 'ADMIN') {
+        return false;
+      }
+      if (roomId.startsWith('user:') && roomId !== `user:${user.id}`) {
+        return false;
+      }
+      return true;
+    }
 
     socket.on('room:join', async (payload, ack) => {
       try {
@@ -122,7 +122,12 @@ async function authorizeRoomAccess(user, roomId) {
           ack?.({ ok: false, error: 'not_in_room' });
           return;
         }
-        io.to(`room:${roomId}`).emit('room:message', { roomId, text, from: userId, at: Date.now() });
+        io.to(`room:${roomId}`).emit('room:message', {
+          roomId,
+          text,
+          from: userId,
+          at: Date.now(),
+        });
         ack?.({ ok: true });
       } catch (err) {
         ack?.({ ok: false, error: err.message });

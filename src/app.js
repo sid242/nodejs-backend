@@ -10,6 +10,7 @@ import { globalLimiter } from './middleware/rate-limit.js';
 import { basicAuth } from './middleware/basic-auth.js';
 import { metricsMiddleware, metricsRouter } from './observability/metrics.js';
 import { bullBoardRouter } from './queues/bull-board.js';
+import { docsRouter } from './docs/index.js';
 import healthRoutes from './modules/health/health.routes.js';
 import apiRoutes from './routes.js';
 
@@ -24,6 +25,9 @@ export function createApp() {
 
   app.use('/health', healthRoutes);
   app.use('/metrics', metricsRouter);
+
+  // Interactive Swagger UI & OpenAPI spec (mounted before helmet: UI uses inline assets)
+  app.use('/docs', docsRouter());
 
   // Queue dashboard (mounted before helmet: its UI uses inline assets). Off unless a password is set.
   if (env.BULL_BOARD_PASSWORD)
