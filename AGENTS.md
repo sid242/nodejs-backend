@@ -43,7 +43,13 @@ node-scalable-foundation/
 │   │       └── index.js          # Unified schema exports
 │   ├── docs/                     # OpenAPI 3.0 specs & Swagger UI (/docs)
 │   │   ├── index.js              # Swagger UI router & /openapi.json endpoint
-│   │   └── openapi.js            # @asteasolutions/zod-to-openapi generator
+│   │   ├── openapi.js            # Root OpenAPI document generator & aggregator
+│   │   ├── helpers.js            # Security schemes & response envelope helpers
+│   │   └── routes/               # Modular OpenAPI route specifications
+│   │       ├── health.docs.js
+│   │       ├── auth.docs.js
+│   │       ├── users.docs.js
+│   │       └── files.docs.js
 │   ├── lib/                      # Core utility libraries
 │   │   ├── async-handler.js      # Express async route wrapper
 │   │   ├── cache.js              # Redis cache-aside with mutex/stampede lock
