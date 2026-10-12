@@ -18,9 +18,11 @@ export const loginDto = z.object({
 
 export type LoginDto = z.infer<typeof loginDto>;
 
-export const refreshTokenDto = z.object({
-  refreshToken: z.string().min(1),
-});
+export const refreshTokenDto = z
+  .object({
+    refreshToken: z.string().min(1).optional(),
+  })
+  .default({});
 
 export type RefreshTokenDto = z.infer<typeof refreshTokenDto>;
 
@@ -36,6 +38,14 @@ export const resetPasswordDto = z.object({
 });
 
 export type ResetPasswordDto = z.infer<typeof resetPasswordDto>;
+
+export const requestEmailVerificationDto = z
+  .object({
+    email: emailSchema.optional(),
+  })
+  .default({});
+
+export type RequestEmailVerificationDto = z.infer<typeof requestEmailVerificationDto>;
 
 export const verifyEmailDto = z.object({
   token: z.string().min(1),

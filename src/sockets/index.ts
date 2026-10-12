@@ -7,6 +7,8 @@ import { createRedis, redis } from '@/config/redis.js';
 import { logger } from '@/config/logger.js';
 import { parseList } from '@/lib/utils.js';
 import { verifyAccessToken } from '@/modules/auth/tokens.js';
+import { parseCookies } from '@/modules/auth/cookies.js';
+import { ACCESS_TOKEN_COOKIE } from '@/constants/index.js';
 
 const roomSchema = z.object({ roomId: z.string().min(1).max(64) });
 const messageSchema = roomSchema.extend({ text: z.string().min(1).max(2000) });
@@ -44,10 +46,17 @@ export function initSocket(httpServer: HttpServer): SocketManager {
     maxHttpBufferSize: 1e5,
   });
 
-  // Authenticate during the handshake: client passes io(url, { auth: { token } }).
+  // Authenticate during the handshake: client passes io(url, { auth: { token } }) or browser cookies.
   io.use((socket: Socket, next) => {
     void (async () => {
-      const payload = verifyAccessToken(socket.handshake.auth?.token);
+      let token = socket.handshake.auth?.token;
+      if (!token && socket.handshake.headers.cookie) {
+        const cookies = parseCookies(socket.handshake.headers.cookie);
+        token = cookies[ACCESS_TOKEN_COOKIE];
+      }
+      if (!token) throw new Error('unauthorized');
+
+      const payload = verifyAccessToken(token);
       const allowed = await consumeRateLimit(
         `connect:${payload.sub}`,
         env.SOCKET_CONNECTIONS_PER_MINUTE,

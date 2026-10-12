@@ -15,19 +15,19 @@ export class AppError extends Error {
     return new AppError(400, msg, 'BAD_REQUEST', details);
   }
 
-  static unauthorized(msg = 'Unauthorized'): AppError {
-    return new AppError(401, msg, 'UNAUTHORIZED');
+  static unauthorized(msg = 'Unauthorized', details?: any): AppError {
+    return new AppError(401, msg, 'UNAUTHORIZED', details);
   }
 
-  static forbidden(msg = 'Forbidden'): AppError {
-    return new AppError(403, msg, 'FORBIDDEN');
+  static forbidden(msg = 'Forbidden', details?: any): AppError {
+    return new AppError(403, msg, 'FORBIDDEN', details);
   }
 
-  static notFound(msg = 'Not found'): AppError {
-    return new AppError(404, msg, 'NOT_FOUND');
+  static notFound(msg = 'Not found', details?: any): AppError {
+    return new AppError(404, msg, 'NOT_FOUND', details);
   }
 
-  static conflict(msg = 'Conflict'): AppError {
-    return new AppError(409, msg, 'CONFLICT');
+  static conflict(msg = 'Conflict', details?: any): AppError {
+    return new AppError(409, msg, 'CONFLICT', details);
   }
 }

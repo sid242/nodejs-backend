@@ -2,6 +2,7 @@ import express, { type Express } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import compression from 'compression';
+import cookieParser from 'cookie-parser';
 import { env } from '@/config/env.js';
 import { parseList } from '@/lib/utils.js';
 import { httpLogger } from '@/middleware/http-logger.js';
@@ -38,6 +39,7 @@ export function createApp(): Express {
   app.use(cors({ origin: parseList(env.CORS_ORIGINS), credentials: true }));
   app.use(compression());
   app.use(express.json({ limit: '1mb' }));
+  app.use(cookieParser());
 
   app.use('/api/v1', globalLimiter, apiRoutes);
 

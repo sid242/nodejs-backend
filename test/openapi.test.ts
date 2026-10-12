@@ -11,6 +11,7 @@ test('OpenAPI specification generates valid 3.0.3 document', () => {
   assert.ok(doc.paths, 'Expected paths object');
   assert.ok(doc.components, 'Expected components object');
   assert.ok(doc.components?.securitySchemes?.bearerAuth, 'Expected bearerAuth security scheme');
+  assert.ok(doc.components?.securitySchemes?.cookieAuth, 'Expected cookieAuth security scheme');
 });
 
 test('OpenAPI spec contains all core API endpoints and tags', () => {

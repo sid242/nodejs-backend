@@ -15,6 +15,13 @@ export const bearerAuth = registry.registerComponent('securitySchemes', 'bearerA
   description: 'JWT Access Token in the Authorization header (Bearer <token>)',
 });
 
+export const cookieAuth = registry.registerComponent('securitySchemes', 'cookieAuth', {
+  type: 'apiKey',
+  in: 'cookie',
+  name: 'accessToken',
+  description: 'JWT Access Token in HttpOnly cookie',
+});
+
 // ---------------------------------------------------------------------------
 // Common Envelope Schemas
 // ---------------------------------------------------------------------------

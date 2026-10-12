@@ -6,9 +6,10 @@ import {
   refreshTokenDto,
   forgotPasswordDto,
   resetPasswordDto,
+  requestEmailVerificationDto,
   verifyEmailDto,
 } from '@/modules/auth/auth.dto.js';
-import { bearerAuth, errorResponse, successResponse } from '@/docs/helpers.js';
+import { errorResponse, successResponse } from '@/docs/helpers.js';
 import { UserSchema } from '@/docs/routes/users.docs.js';
 
 export function registerAuthDocs(registry: OpenAPIRegistry): void {
@@ -17,6 +18,10 @@ export function registerAuthDocs(registry: OpenAPIRegistry): void {
   const TokenInput = registry.register('TokenInput', refreshTokenDto);
   const ForgotPasswordInput = registry.register('ForgotPasswordInput', forgotPasswordDto);
   const ResetPasswordInput = registry.register('ResetPasswordInput', resetPasswordDto);
+  const RequestEmailVerificationInput = registry.register(
+    'RequestEmailVerificationInput',
+    requestEmailVerificationDto,
+  );
   const VerifyEmailInput = registry.register('VerifyEmailInput', verifyEmailDto);
 
   const AuthResponseData = registry.register(
@@ -73,11 +78,11 @@ export function registerAuthDocs(registry: OpenAPIRegistry): void {
     path: '/api/v1/auth/refresh',
     summary: 'Refresh access token',
     description:
-      'Exchanges a valid refresh token for a new access token and rotated refresh token.',
+      'Exchanges a valid refresh token for a new access token and rotated refresh token. Accepts token via JSON body (mobile/API) or HttpOnly cookie (web).',
     tags: ['Auth'],
     request: {
       body: {
-        description: 'Refresh token payload',
+        description: 'Refresh token payload (optional when using HttpOnly cookie)',
         content: { 'application/json': { schema: TokenInput } },
       },
     },
@@ -97,11 +102,12 @@ export function registerAuthDocs(registry: OpenAPIRegistry): void {
     method: 'post',
     path: '/api/v1/auth/logout',
     summary: 'Logout user',
-    description: 'Revokes the given refresh token from Redis.',
+    description:
+      'Revokes the refresh token and clears auth cookies. Accepts token via JSON body (mobile) or HttpOnly cookie (web).',
     tags: ['Auth'],
     request: {
       body: {
-        description: 'Refresh token to revoke',
+        description: 'Refresh token to revoke (optional when using HttpOnly cookie)',
         content: { 'application/json': { schema: TokenInput } },
       },
     },
@@ -153,12 +159,18 @@ export function registerAuthDocs(registry: OpenAPIRegistry): void {
     method: 'post',
     path: '/api/v1/auth/verify-email/request',
     summary: 'Request email verification link',
-    description: 'Sends a new verification email to the authenticated user.',
+    description:
+      'Sends a verification email. Can be called unauthenticated with an email body, or authenticated with a Bearer token / cookie.',
     tags: ['Auth'],
-    security: [{ [bearerAuth.name]: [] }],
+    request: {
+      body: {
+        description: 'Optional email payload (if unauthenticated)',
+        content: { 'application/json': { schema: RequestEmailVerificationInput } },
+      },
+    },
     responses: {
       200: successResponse(z.object({ message: z.string() }), 'Verification email enqueued'),
-      401: errorResponse('Unauthorized'),
+      400: errorResponse('Email already verified'),
     },
   });
 

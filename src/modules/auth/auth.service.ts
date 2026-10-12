@@ -21,6 +21,7 @@ import type {
   VerifyEmailDto,
 } from '@/modules/auth/auth.dto.js';
 import type { PublicUser } from '@/db/schema/index.js';
+import { AUTH_MESSAGES, REDIS_PREFIXES } from '@/constants/index.js';
 
 // Compared against when the user doesn't exist, so response time doesn't reveal valid emails.
 const DUMMY_HASH = bcrypt.hashSync('dummy-password', 12);
@@ -32,14 +33,22 @@ export interface AuthResult extends AuthTokens {
 export async function register({ email, password, name }: RegisterDto): Promise<AuthResult> {
   const passwordHash = await bcrypt.hash(password, 12);
   const user = await authRepo.createUser({ email, passwordHash, name });
-  await cache.delByPrefix('users:list:');
+  await cache.delByPrefix(REDIS_PREFIXES.USERS_LIST_CACHE);
 
   // Slow/unreliable work goes to the queue, not the request path. jobId makes it idempotent.
-  await emailQueue.add(
-    'welcome',
-    { to: user.email, name: user.name },
-    { jobId: `welcome-${user.id}` },
-  );
+  const verificationToken = await createEmailVerificationToken(user.id);
+  await Promise.all([
+    emailQueue.add(
+      'welcome',
+      { to: user.email, name: user.name },
+      { jobId: `welcome-${user.id}` },
+    ),
+    emailQueue.add(
+      'verify-email',
+      { to: user.email, name: user.name, token: verificationToken },
+      { jobId: `verify-email-${user.id}-${Date.now()}` },
+    ),
+  ]);
 
   return { user, ...(await issueTokens(user)) };
 }
@@ -47,7 +56,14 @@ export async function register({ email, password, name }: RegisterDto): Promise<
 export async function login({ email, password }: LoginDto): Promise<AuthResult> {
   const record = await authRepo.findByEmail(email);
   const ok = await bcrypt.compare(password, record?.passwordHash ?? DUMMY_HASH);
-  if (!record || !ok) throw AppError.unauthorized('Invalid email or password');
+  if (!record || !ok) throw AppError.unauthorized(AUTH_MESSAGES.INVALID_CREDENTIALS);
+
+  if (!record.emailVerifiedAt) {
+    throw AppError.forbidden(AUTH_MESSAGES.EMAIL_NOT_VERIFIED, {
+      email: record.email,
+      emailVerified: false,
+    });
+  }
 
   const user: PublicUser = {
     id: record.id,
@@ -64,6 +80,12 @@ export async function refresh(refreshToken: string): Promise<AuthTokens> {
   const userId = await consumeRefreshToken(refreshToken);
   const user = await authRepo.findPublicUserById(userId);
   if (!user) throw AppError.unauthorized();
+  if (!user.emailVerifiedAt) {
+    throw AppError.forbidden(AUTH_MESSAGES.EMAIL_NOT_VERIFIED, {
+      email: user.email,
+      emailVerified: false,
+    });
+  }
 
   return issueTokens(user);
 }
@@ -80,7 +102,7 @@ export async function forgotPassword({ email }: ForgotPasswordDto): Promise<{ me
     );
   }
 
-  return { message: 'If that email is registered, password reset instructions have been sent.' };
+  return { message: AUTH_MESSAGES.PASSWORD_RESET_SENT };
 }
 
 export async function resetPassword({
@@ -93,24 +115,45 @@ export async function resetPassword({
   const user = await authRepo.updatePassword(userId, passwordHash);
   if (!user) throw AppError.notFound('User not found');
 
-  await Promise.all([revokeAllUserTokens(userId), cache.del(`user:${userId}`)]);
+  await Promise.all([
+    revokeAllUserTokens(userId),
+    cache.del(`${REDIS_PREFIXES.USER_CACHE}${userId}`),
+  ]);
 
-  return { message: 'Password has been reset successfully. Please log in with your new password.' };
+  return { message: AUTH_MESSAGES.PASSWORD_RESET_SUCCESS };
 }
 
-export async function requestEmailVerification(userId: string): Promise<{ message: string }> {
-  const user = await authRepo.findById(userId);
-  if (!user) throw AppError.notFound('User not found');
-  if (user.emailVerifiedAt) throw AppError.badRequest('Email is already verified');
+export async function requestEmailVerification(identifier: {
+  userId?: string;
+  email?: string;
+}): Promise<{ message: string }> {
+  let user: any = null;
+  if (identifier.userId) {
+    user = await authRepo.findById(identifier.userId);
+  } else if (identifier.email) {
+    user = await authRepo.findByEmail(identifier.email);
+  }
 
-  const token = await createEmailVerificationToken(userId);
+  // Prevent email enumeration: return generic message if user not found
+  if (!user) {
+    return { message: AUTH_MESSAGES.VERIFICATION_EMAIL_SENT };
+  }
+
+  if (user.emailVerifiedAt) {
+    if (identifier.userId) {
+      throw AppError.badRequest(AUTH_MESSAGES.EMAIL_ALREADY_VERIFIED);
+    }
+    return { message: AUTH_MESSAGES.VERIFICATION_EMAIL_SENT };
+  }
+
+  const token = await createEmailVerificationToken(user.id);
   await emailQueue.add(
     'verify-email',
     { to: user.email, name: user.name, token },
     { jobId: `verify-email-${user.id}-${Date.now()}` },
   );
 
-  return { message: 'Verification email has been sent.' };
+  return { message: AUTH_MESSAGES.VERIFICATION_EMAIL_SENT };
 }
 
 export async function verifyEmail({
@@ -120,7 +163,7 @@ export async function verifyEmail({
   const user = await authRepo.markEmailVerified(userId);
 
   if (!user) throw AppError.notFound('User not found');
-  await cache.del(`user:${userId}`);
+  await cache.del(`${REDIS_PREFIXES.USER_CACHE}${userId}`);
 
-  return { user, message: 'Email verified successfully.' };
+  return { user, message: AUTH_MESSAGES.EMAIL_VERIFIED_SUCCESS };
 }
