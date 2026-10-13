@@ -121,3 +121,16 @@ export async function removeTenantMember(tenantId: string, memberId: string): Pr
     .returning();
   return !!deleted;
 }
+
+export const tenantsRepo = {
+  createTenant,
+  findTenantById,
+  findTenantBySlug,
+  updateTenant,
+  findUserTenants,
+  addTenantMember,
+  findTenantMember,
+  findTenantMemberById,
+  findTenantMembers,
+  removeTenantMember,
+};

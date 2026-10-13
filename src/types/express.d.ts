@@ -20,6 +20,13 @@ export interface TenantMembershipContext {
   roles: string[];
 }
 
+export interface ImpersonatorContext {
+  userId: string;
+  role: string;
+  reason: string;
+  sessionId: string;
+}
+
 export interface ValidatedRequestData {
   body?: any;
   query?: any;
@@ -31,6 +38,8 @@ declare global {
     interface Request {
       id?: string;
       user?: AuthenticatedUser;
+      impersonator?: ImpersonatorContext;
+      isImpersonated?: boolean;
       tenant?: AuthenticatedTenant;
       membership?: TenantMembershipContext;
       permissions?: string[];

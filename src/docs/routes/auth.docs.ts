@@ -8,6 +8,7 @@ import {
   resetPasswordDto,
   requestEmailVerificationDto,
   verifyEmailDto,
+  impersonateUserDto,
 } from '@/modules/auth/auth.dto.js';
 import { errorResponse, successResponse } from '@/docs/helpers.js';
 import { UserSchema } from '@/docs/routes/users.docs.js';
@@ -23,6 +24,7 @@ export function registerAuthDocs(registry: OpenAPIRegistry): void {
     requestEmailVerificationDto,
   );
   const VerifyEmailInput = registry.register('VerifyEmailInput', verifyEmailDto);
+  const ImpersonateInput = registry.register('ImpersonateInput', impersonateUserDto);
 
   const AuthResponseData = registry.register(
     'AuthResponseData',
@@ -189,6 +191,60 @@ export function registerAuthDocs(registry: OpenAPIRegistry): void {
     responses: {
       200: successResponse(z.object({ message: z.string() }), 'Email verified successfully'),
       400: errorResponse('Invalid or expired verification token'),
+    },
+  });
+
+  const ImpersonationResponseData = registry.register(
+    'ImpersonationResponseData',
+    z.object({
+      accessToken: z
+        .string()
+        .openapi({ description: 'Short-lived JWT impersonation access token' }),
+      sessionId: z.string().openapi({ description: 'Active Redis impersonation session ID' }),
+      expiresInSeconds: z.number(),
+      expiresInMinutes: z.number(),
+      targetUser: UserSchema,
+    }),
+  );
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/auth/impersonate',
+    summary: 'Impersonate a user (Admin only)',
+    description:
+      'Allows a system administrator to assume the identity of a target user for support/investigation with time-boxing and full audit logging.',
+    tags: ['Auth'],
+    security: [{ bearerAuth: [] }],
+    request: {
+      body: {
+        description: 'Target user ID, reason, and duration',
+        content: { 'application/json': { schema: ImpersonateInput } },
+      },
+    },
+    responses: {
+      200: successResponse(ImpersonationResponseData, 'Impersonation session started successfully'),
+      400: errorResponse('Cannot impersonate yourself or invalid parameters'),
+      401: errorResponse('Unauthorized'),
+      403: errorResponse('Forbidden: cannot impersonate an administrator'),
+      404: errorResponse('Target user not found'),
+    },
+  });
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/auth/stop-impersonate',
+    summary: 'Stop active impersonation session',
+    description:
+      'Terminates the active impersonation session in Redis and logs an audit exit event.',
+    tags: ['Auth'],
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: successResponse(
+        z.object({ message: z.string() }),
+        'Impersonation session stopped successfully',
+      ),
+      400: errorResponse('Not currently in an active impersonation session'),
+      401: errorResponse('Unauthorized or expired session'),
     },
   });
 }

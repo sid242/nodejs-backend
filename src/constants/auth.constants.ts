@@ -33,6 +33,7 @@ export const REDIS_PREFIXES = {
   RATE_LIMIT: 'socket:rl:',
   USER_CACHE: 'user:',
   USERS_LIST_CACHE: 'users:list:',
+  IMPERSONATION_SESSION: 'imp:session:',
 } as const;
 
 export const AUTH_MESSAGES = {
@@ -52,4 +53,10 @@ export const AUTH_MESSAGES = {
   REFRESH_TOKEN_REQUIRED: 'Refresh token is required',
   INVALID_REFRESH_TOKEN: 'Invalid refresh token',
   REFRESH_TOKEN_REVOKED: 'Refresh token revoked or already used',
+  IMPERSONATION_STARTED: 'Impersonation session started successfully',
+  IMPERSONATION_STOPPED: 'Impersonation session stopped successfully',
+  IMPERSONATION_REVOKED: 'Impersonation session has expired or was revoked',
+  CANNOT_IMPERSONATE_SELF: 'Cannot impersonate yourself',
+  CANNOT_IMPERSONATE_ADMIN: 'Cannot impersonate an administrator',
+  NOT_IMPERSONATING: 'Not currently in an active impersonation session',
 } as const;

@@ -130,6 +130,29 @@ Changes to sensitive resources (tenants, members, roles, files) are recorded to 
 - Records client metadata (`ipAddress`, `userAgent`) and JSON `diff` (before/after states).
 - Queryable by tenant owners and compliance officers via `/api/v1/audit`.
 
+### 5. Secure, Audited Impersonation
+
+Administrators can assume user identities for support and troubleshooting with strict compliance guardrails:
+
+- **Time-Boxed Access Tokens**: Short-lived JWTs (default 30 min) without refresh tokens, tied to an active Redis session.
+- **Dual-Identity Context**: Downstream logic executes as `req.user` (target user), while audit loggers and security guards retain `req.impersonator` (the real admin).
+- **Security Guardrails**:
+  - `blockIfImpersonating()` blocks password changes and credential modification while impersonating.
+  - Prevents impersonating another administrator (privilege escalation prevention).
+  - Mandatory audit events on session start (`AUTH_IMPERSONATE_START`) and session exit (`AUTH_IMPERSONATE_STOP`).
+
+```bash
+# Start impersonation (Admin only)
+curl -X POST http://localhost:3000/api/v1/auth/impersonate \
+  -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"targetUserId": "<USER_UUID>", "reason": "Debugging invoice display", "durationMinutes": 30}'
+
+# Exit impersonation session
+curl -X POST http://localhost:3000/api/v1/auth/stop-impersonate \
+  -H "Authorization: Bearer <IMPERSONATION_TOKEN>"
+```
+
 ---
 
 ## Useful Commands
@@ -180,6 +203,7 @@ Changes to sensitive resources (tenants, members, roles, files) are recorded to 
 - [x] Immutable compliance audit logging (actor, tenant, resource, diff)
 - [x] Session tracking and multi-device revocation
 - [x] Deterministic SHA-256 verification tokens (email verification & password reset)
+- [x] Controlled, dual-identity user impersonation with time-boxing and guardrails
 - [x] Background BullMQ workers with Bull-Board dashboard (`/admin/queues`)
 - [x] Real-time WebSockets with Redis adapter & background worker emitter
 - [ ] Integration test suite with Testcontainers (PostgreSQL & Redis)

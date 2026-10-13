@@ -6,7 +6,7 @@ import { env } from '@/config/env.js';
 import { createRedis, redis } from '@/config/redis.js';
 import { logger } from '@/config/logger.js';
 import { parseList } from '@/lib/utils.js';
-import { verifyAccessToken } from '@/modules/auth/tokens.js';
+import { verifyAccessToken, isImpersonationSessionActive } from '@/modules/auth/tokens.js';
 import { parseCookies } from '@/modules/auth/cookies.js';
 import { ACCESS_TOKEN_COOKIE } from '@/constants/index.js';
 
@@ -57,6 +57,15 @@ export function initSocket(httpServer: HttpServer): SocketManager {
       if (!token) throw new Error('unauthorized');
 
       const payload = verifyAccessToken(token);
+
+      if ((payload as any).impersonator) {
+        const imp = (payload as any).impersonator;
+        const isActive = await isImpersonationSessionActive(imp.sessionId);
+        if (!isActive) throw new Error('unauthorized');
+        socket.data.impersonator = imp;
+        socket.data.isImpersonated = true;
+      }
+
       const allowed = await consumeRateLimit(
         `connect:${payload.sub}`,
         env.SOCKET_CONNECTIONS_PER_MINUTE,
@@ -72,7 +81,16 @@ export function initSocket(httpServer: HttpServer): SocketManager {
     const user = socket.data.user as SocketUser;
     const userId = user.id;
     socket.join(`user:${userId}`); // personal room: lets workers target a user from anywhere
-    logger.debug({ userId, socketId: socket.id }, 'socket connected');
+
+    if (socket.data.isImpersonated) {
+      socket.join(`session:${socket.data.impersonator.sessionId}`);
+      logger.info(
+        { userId, impersonatorId: socket.data.impersonator.userId, socketId: socket.id },
+        'impersonated socket connected',
+      );
+    } else {
+      logger.debug({ userId, socketId: socket.id }, 'socket connected');
+    }
 
     // Per-socket flood guard (a socket lives on exactly one node, so in-memory is fine).
     let windowStart = Date.now();

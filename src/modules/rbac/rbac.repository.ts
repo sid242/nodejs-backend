@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, notInArray, or } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, notInArray, or, sql } from 'drizzle-orm';
 import { db } from '@/config/db.js';
 import {
   appModules,
@@ -256,6 +256,38 @@ export async function getMemberRoles(memberId: string): Promise<RoleRecord[]> {
 }
 
 /**
+ * Counts how many members currently hold a specific role.
+ * Used to block deleting roles that are still in active use.
+ */
+export async function countMembersAssignedToRole(roleId: string): Promise<number> {
+  const [result] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(tenantMemberRoles)
+    .where(eq(tenantMemberRoles.roleId, roleId));
+  return result?.count ?? 0;
+}
+
+/**
+ * Counts the number of active members in a tenant who hold the OWNER role.
+ * Used to enforce the Last-Owner invariant and protect against tenant orphaning.
+ */
+export async function countTenantOwners(tenantId: string): Promise<number> {
+  const [result] = await db
+    .select({ count: sql<number>`count(distinct ${tenantMembers.id})::int` })
+    .from(tenantMembers)
+    .innerJoin(tenantMemberRoles, eq(tenantMembers.id, tenantMemberRoles.memberId))
+    .innerJoin(roles, eq(tenantMemberRoles.roleId, roles.id))
+    .where(
+      and(
+        eq(tenantMembers.tenantId, tenantId),
+        eq(tenantMembers.status, 'ACTIVE'),
+        eq(roles.name, 'OWNER'),
+      ),
+    );
+  return result?.count ?? 0;
+}
+
+/**
  * Resolves all distinct permissions for a user within a specific tenant across all their assigned roles.
  */
 export async function getEffectivePermissions(
@@ -356,3 +388,36 @@ export async function getTenantModules(tenantId: string): Promise<
     isEnabled: overrideMap.has(m.id) ? overrideMap.get(m.id)! : true,
   }));
 }
+
+export const rbacRepo = {
+  findAllModulesWithPermissions,
+  findModuleById,
+  findModuleByKey,
+  createModule,
+  updateModule,
+  deleteModule,
+  findPermissionsByModuleId,
+  findPermissionById,
+  findPermissionByKey,
+  createPermission,
+  createPermissionsBatch,
+  updatePermission,
+  deletePermission,
+  findAllPermissions,
+  findRoleById,
+  findRolesByTenant,
+  createRole,
+  updateRole,
+  deleteRole,
+  getRolePermissionKeys,
+  setRolePermissions,
+  assignRoleToMember,
+  removeRoleFromMember,
+  getMemberRoles,
+  countMembersAssignedToRole,
+  countTenantOwners,
+  getEffectivePermissions,
+  setTenantModuleEnabled,
+  getTenantModules,
+  syncSystemModules,
+};

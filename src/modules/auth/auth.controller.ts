@@ -73,3 +73,24 @@ export const revokeSession = asyncHandler(async (req: Request, res: Response) =>
   if (!success) throw AppError.notFound('Session not found');
   AppResponse.ok({ message: 'Session revoked successfully' }).send(res);
 });
+
+export const impersonate = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.impersonateUser(req.user!, req.valid?.body, {
+    ip: req.ip,
+    userAgent: req.headers['user-agent'],
+    tenantId: req.tenant?.id,
+  });
+  AppResponse.ok(result, 'Impersonation session started successfully').send(res);
+});
+
+export const stopImpersonation = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.impersonator) {
+    throw AppError.badRequest('Not currently in an active impersonation session');
+  }
+  const result = await service.stopImpersonation(req.impersonator, req.user!.id, {
+    ip: req.ip,
+    userAgent: req.headers['user-agent'],
+    tenantId: req.tenant?.id,
+  });
+  AppResponse.ok(result, 'Impersonation session stopped successfully').send(res);
+});

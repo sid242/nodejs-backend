@@ -1,5 +1,10 @@
 import { cache } from '@/lib/cache.js';
-import * as rbacRepo from './rbac.repository.js';
+import {
+  rbacRepo,
+  type Permission,
+  type ModuleWithPermissions,
+  type AppModule,
+} from './rbac.repository.js';
 import * as dto from './rbac.dto.js';
 import { AppError } from '@/lib/errors.js';
 import { db } from '@/config/db.js';
@@ -177,15 +182,23 @@ export async function deleteTenantRole(tenantId: string, roleId: string): Promis
   if (role.isSystem) throw AppError.forbidden('Cannot delete built-in system roles');
   if (role.tenantId !== tenantId) throw AppError.forbidden('Role does not belong to this tenant');
 
+  // Edge case safeguard: Cannot delete a role that still has active members assigned!
+  const assignedCount = await rbacRepo.countMembersAssignedToRole(roleId);
+  if (assignedCount > 0) {
+    throw AppError.badRequest(
+      `Cannot delete role "${role.name}" because it is currently assigned to ${assignedCount} member(s). Reassign them first.`,
+    );
+  }
+
   await rbacRepo.deleteRole(roleId);
   await invalidateRbacCache(tenantId);
 }
 
-export async function listModulesWithPermissions(): Promise<rbacRepo.ModuleWithPermissions[]> {
+export async function listModulesWithPermissions(): Promise<ModuleWithPermissions[]> {
   return rbacRepo.findAllModulesWithPermissions();
 }
 
-export async function getModuleById(moduleId: string): Promise<rbacRepo.ModuleWithPermissions> {
+export async function getModuleById(moduleId: string): Promise<ModuleWithPermissions> {
   const module = await rbacRepo.findModuleById(moduleId);
   if (!module) throw AppError.notFound('Module not found');
 
@@ -196,9 +209,7 @@ export async function getModuleById(moduleId: string): Promise<rbacRepo.ModuleWi
   };
 }
 
-export async function createModule(
-  data: dto.CreateModuleDto,
-): Promise<rbacRepo.ModuleWithPermissions> {
+export async function createModule(data: dto.CreateModuleDto): Promise<ModuleWithPermissions> {
   const existing = await rbacRepo.findModuleByKey(data.key);
   if (existing) {
     throw AppError.conflict(`Module with key '${data.key}' already exists`);
@@ -247,7 +258,7 @@ export async function createModule(
 export async function updateModule(
   moduleId: string,
   data: dto.UpdateModuleDto,
-): Promise<rbacRepo.AppModule> {
+): Promise<AppModule> {
   const module = await rbacRepo.findModuleById(moduleId);
   if (!module) throw AppError.notFound('Module not found');
 
@@ -270,7 +281,7 @@ export async function deleteModule(moduleId: string): Promise<void> {
 
 export async function createPermission(
   data: dto.CreatePermissionDto & { moduleId: string },
-): Promise<rbacRepo.Permission> {
+): Promise<Permission> {
   const module = await rbacRepo.findModuleById(data.moduleId);
   if (!module) throw AppError.notFound('Module not found');
 
@@ -292,7 +303,7 @@ export async function createPermission(
   return created;
 }
 
-export async function getPermissionById(permissionId: string): Promise<rbacRepo.Permission> {
+export async function getPermissionById(permissionId: string): Promise<Permission> {
   const perm = await rbacRepo.findPermissionById(permissionId);
   if (!perm) throw AppError.notFound('Permission not found');
   return perm;
@@ -301,7 +312,7 @@ export async function getPermissionById(permissionId: string): Promise<rbacRepo.
 export async function updatePermission(
   permissionId: string,
   data: dto.UpdatePermissionDto,
-): Promise<rbacRepo.Permission> {
+): Promise<Permission> {
   const perm = await rbacRepo.findPermissionById(permissionId);
   if (!perm) throw AppError.notFound('Permission not found');
 

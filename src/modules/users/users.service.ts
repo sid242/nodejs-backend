@@ -1,6 +1,7 @@
 import * as userRepo from '@/modules/users/users.repository.js';
 import { cache } from '@/lib/cache.js';
 import { AppError } from '@/lib/errors.js';
+import { revokeAllUserTokens } from '@/modules/auth/tokens.js';
 import type { UpdateMeDto, ListUsersQueryDto } from '@/modules/users/users.dto.js';
 import type { PublicUser } from '@/db/schema/index.js';
 
@@ -38,7 +39,13 @@ export async function updateUserRole(
 ): Promise<PublicUser> {
   const updated = await userRepo.updateRole(targetUserId, role);
   if (!updated) throw AppError.notFound('User not found');
-  await Promise.all([cache.del(`user:${targetUserId}`), cache.delByPrefix('users:list:')]);
+
+  // Invalidate cache and revoke active refresh tokens so next refresh cycle issues updated role claim
+  await Promise.all([
+    cache.del(`user:${targetUserId}`),
+    cache.delByPrefix('users:list:'),
+    revokeAllUserTokens(targetUserId),
+  ]);
   return updated;
 }
 
@@ -48,6 +55,17 @@ export async function updateUserStatus(
 ): Promise<PublicUser> {
   const updated = await userRepo.updateStatus(targetUserId, status);
   if (!updated) throw AppError.notFound('User not found');
-  await Promise.all([cache.del(`user:${targetUserId}`), cache.delByPrefix('users:list:')]);
+
+  // If account is suspended or deactivated, immediately terminate active refresh sessions
+  const revocationPromise =
+    status === 'SUSPENDED' || status === 'DEACTIVATED'
+      ? revokeAllUserTokens(targetUserId)
+      : Promise.resolve();
+
+  await Promise.all([
+    cache.del(`user:${targetUserId}`),
+    cache.delByPrefix('users:list:'),
+    revocationPromise,
+  ]);
   return updated;
 }

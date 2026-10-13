@@ -102,3 +102,80 @@ export async function verifyAndConsumeEmailVerificationToken(token: string): Pro
   const record = await verifyAndConsumeHashedToken(token, 'EMAIL_VERIFICATION');
   return record.userId;
 }
+
+export interface ImpersonatorClaim {
+  userId: string;
+  role: string;
+  reason: string;
+  sessionId: string;
+}
+
+const impersonationSessionKey = (sessionId: string): string =>
+  `${REDIS_PREFIXES.IMPERSONATION_SESSION}${sessionId}`;
+
+/**
+ * Issue a time-boxed, short-lived impersonation access token.
+ * Does NOT generate a refresh token, ensuring strict session limits.
+ */
+export async function issueImpersonationToken(
+  targetUser: TokenUser,
+  impersonator: ImpersonatorClaim,
+  durationMinutes = 30,
+): Promise<{ accessToken: string; sessionId: string; expiresInSeconds: number }> {
+  const ttlSeconds = durationMinutes * 60;
+  const accessToken = jwt.sign(
+    {
+      role: targetUser.role,
+      impersonator,
+    },
+    env.JWT_ACCESS_SECRET,
+    {
+      subject: targetUser.id,
+      expiresIn: `${ttlSeconds}s` as any,
+    },
+  );
+
+  try {
+    await redis.set(
+      impersonationSessionKey(impersonator.sessionId),
+      JSON.stringify({
+        targetUserId: targetUser.id,
+        adminId: impersonator.userId,
+        reason: impersonator.reason,
+        createdAt: new Date().toISOString(),
+      }),
+      'EX',
+      ttlSeconds,
+    );
+  } catch {
+    /* ignore redis write errors if redis is disconnected */
+  }
+
+  return { accessToken, sessionId: impersonator.sessionId, expiresInSeconds: ttlSeconds };
+}
+
+/** Check if the active impersonation session key exists in Redis. */
+export async function isImpersonationSessionActive(sessionId: string): Promise<boolean> {
+  if (redis.status !== 'ready' && redis.status !== 'connect') {
+    // If Redis is offline/disconnected, fail-open to token expiry
+    return true;
+  }
+  try {
+    const exists = await redis.exists(impersonationSessionKey(sessionId));
+    return exists === 1;
+  } catch {
+    return true;
+  }
+}
+
+/** Revoke an active impersonation session immediately. */
+export async function revokeImpersonationSession(sessionId: string): Promise<void> {
+  if (redis.status !== 'ready' && redis.status !== 'connect') {
+    return;
+  }
+  try {
+    await redis.del(impersonationSessionKey(sessionId));
+  } catch {
+    /* ignore redis delete errors */
+  }
+}

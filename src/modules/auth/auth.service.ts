@@ -1,8 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import * as authRepo from '@/modules/auth/auth.repository.js';
 import { AppError } from '@/lib/errors.js';
 import { cache } from '@/lib/cache.js';
 import { emailQueue } from '@/queues/index.js';
+import { logSecurityEvent } from '@/modules/audit/audit.service.js';
 import {
   issueTokens,
   consumeRefreshToken,
@@ -11,7 +13,10 @@ import {
   createEmailVerificationToken,
   verifyAndConsumeEmailVerificationToken,
   revokeAllUserTokens,
+  issueImpersonationToken,
+  revokeImpersonationSession,
   type AuthTokens,
+  type ImpersonatorClaim,
 } from '@/modules/auth/tokens.js';
 import type {
   RegisterDto,
@@ -19,6 +24,7 @@ import type {
   ForgotPasswordDto,
   ResetPasswordDto,
   VerifyEmailDto,
+  ImpersonateUserDto,
 } from '@/modules/auth/auth.dto.js';
 import type { PublicUser } from '@/db/schema/index.js';
 import { AUTH_MESSAGES, REDIS_PREFIXES } from '@/constants/index.js';
@@ -170,4 +176,116 @@ export async function verifyEmail({
   await cache.del(`${REDIS_PREFIXES.USER_CACHE}${userId}`);
 
   return { user, message: AUTH_MESSAGES.EMAIL_VERIFIED_SUCCESS };
+}
+
+export interface ImpersonationResult {
+  accessToken: string;
+  sessionId: string;
+  expiresInSeconds: number;
+  expiresInMinutes: number;
+  targetUser: PublicUser;
+}
+
+export async function impersonateUser(
+  adminUser: { id: string; role: string },
+  data: ImpersonateUserDto,
+  clientMeta?: { ip?: string; userAgent?: string; tenantId?: string },
+): Promise<ImpersonationResult> {
+  if (adminUser.id === data.targetUserId) {
+    throw AppError.badRequest(AUTH_MESSAGES.CANNOT_IMPERSONATE_SELF);
+  }
+
+  const target = await authRepo.findById(data.targetUserId);
+  if (!target || target.deletedAt) {
+    throw AppError.notFound('Target user not found');
+  }
+
+  if (target.status === 'SUSPENDED' || target.status === 'DEACTIVATED') {
+    throw AppError.forbidden(
+      `Cannot impersonate account with status: ${target.status.toLowerCase()}`,
+    );
+  }
+
+  // Prevent privilege escalation: Admin cannot impersonate another Admin
+  if (target.role === 'ADMIN' && adminUser.role !== 'SUPER_ADMIN') {
+    throw AppError.forbidden(AUTH_MESSAGES.CANNOT_IMPERSONATE_ADMIN);
+  }
+
+  const sessionId = randomUUID();
+  const durationMinutes = data.durationMinutes ?? 30;
+
+  const impersonatorClaim: ImpersonatorClaim = {
+    userId: adminUser.id,
+    role: adminUser.role,
+    reason: data.reason,
+    sessionId,
+  };
+
+  const tokenResult = await issueImpersonationToken(
+    { id: target.id, role: target.role },
+    impersonatorClaim,
+    durationMinutes,
+  );
+
+  // Record immutable audit event
+  await logSecurityEvent({
+    tenantId: clientMeta?.tenantId,
+    userId: adminUser.id,
+    action: 'AUTH_IMPERSONATE_START',
+    entityType: 'User',
+    entityId: target.id,
+    ipAddress: clientMeta?.ip,
+    userAgent: clientMeta?.userAgent,
+    metadata: {
+      targetEmail: target.email,
+      targetRole: target.role,
+      reason: data.reason,
+      sessionId,
+      durationMinutes,
+    },
+  });
+
+  const targetUser: PublicUser = {
+    id: target.id,
+    email: target.email,
+    name: target.name,
+    role: target.role,
+    status: target.status,
+    emailVerifiedAt: target.emailVerifiedAt,
+    phoneNumber: target.phoneNumber,
+    phoneVerifiedAt: target.phoneVerifiedAt,
+    createdAt: target.createdAt,
+  };
+
+  return {
+    accessToken: tokenResult.accessToken,
+    sessionId,
+    expiresInSeconds: tokenResult.expiresInSeconds,
+    expiresInMinutes: durationMinutes,
+    targetUser,
+  };
+}
+
+export async function stopImpersonation(
+  impersonator: ImpersonatorClaim,
+  targetUserId: string,
+  clientMeta?: { ip?: string; userAgent?: string; tenantId?: string },
+): Promise<{ message: string }> {
+  await revokeImpersonationSession(impersonator.sessionId);
+
+  await logSecurityEvent({
+    tenantId: clientMeta?.tenantId,
+    userId: impersonator.userId,
+    action: 'AUTH_IMPERSONATE_STOP',
+    entityType: 'User',
+    entityId: targetUserId,
+    ipAddress: clientMeta?.ip,
+    userAgent: clientMeta?.userAgent,
+    metadata: {
+      sessionId: impersonator.sessionId,
+      reason: impersonator.reason,
+    },
+  });
+
+  return { message: AUTH_MESSAGES.IMPERSONATION_STOPPED };
 }

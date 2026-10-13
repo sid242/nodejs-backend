@@ -52,3 +52,11 @@ export const verifyEmailDto = z.object({
 });
 
 export type VerifyEmailDto = z.infer<typeof verifyEmailDto>;
+
+export const impersonateUserDto = z.object({
+  targetUserId: z.string().uuid(),
+  reason: z.string().min(5).max(500),
+  durationMinutes: z.number().int().min(5).max(120).default(30),
+});
+
+export type ImpersonateUserDto = z.infer<typeof impersonateUserDto>;

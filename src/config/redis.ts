@@ -32,5 +32,10 @@ export const redis: Redis = createRedis('state');
 export const cacheRedis: Redis = createRedis('cache', { url: env.CACHE_REDIS_URL });
 
 export async function closeRedisClients(): Promise<void> {
-  await Promise.allSettled([redis.quit(), cacheRedis.quit()]);
+  try {
+    redis.disconnect();
+    cacheRedis.disconnect();
+  } catch {
+    /* ignore disconnection errors */
+  }
 }

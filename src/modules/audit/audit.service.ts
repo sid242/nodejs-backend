@@ -19,3 +19,28 @@ export async function getAuditTrail(filters: auditRepo.AuditLogFilters): Promise
 }> {
   return auditRepo.findAuditLogs(filters);
 }
+
+export interface ImpersonatorMeta {
+  userId: string;
+  role?: string;
+  reason?: string;
+  sessionId?: string;
+}
+
+/**
+ * Enriches audit log metadata with dual-actor impersonation context whenever active,
+ * guaranteeing audit trail compliance with DPDP Act and HIPAA.
+ */
+export function enrichAuditMetadata(
+  metadata: Record<string, any> | undefined | null,
+  impersonator?: ImpersonatorMeta,
+): Record<string, any> | undefined {
+  if (!impersonator) return metadata ?? undefined;
+  return {
+    ...(metadata ?? {}),
+    impersonatedBy: impersonator.userId,
+    ...(impersonator.role && { impersonatorRole: impersonator.role }),
+    ...(impersonator.reason && { impersonationReason: impersonator.reason }),
+    ...(impersonator.sessionId && { impersonationSessionId: impersonator.sessionId }),
+  };
+}

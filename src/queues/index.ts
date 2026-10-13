@@ -32,6 +32,10 @@ export const maintenanceQueue = make(QUEUES.MAINTENANCE);
 export const allQueues: Queue[] = [emailQueue, fileQueue, maintenanceQueue];
 
 export async function closeQueues(): Promise<void> {
-  await Promise.all(allQueues.map((q) => q.close()));
-  await queueConnection.quit();
+  await Promise.allSettled(allQueues.map((q) => q.close()));
+  try {
+    queueConnection.disconnect();
+  } catch {
+    /* ignore disconnect error */
+  }
 }

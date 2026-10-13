@@ -1,9 +1,9 @@
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import { AppError } from '@/lib/errors.js';
-import { verifyAccessToken } from '@/modules/auth/tokens.js';
-import { ACCESS_TOKEN_COOKIE, AUTH_HEADERS } from '@/constants/index.js';
+import { verifyAccessToken, isImpersonationSessionActive } from '@/modules/auth/tokens.js';
+import { ACCESS_TOKEN_COOKIE, AUTH_HEADERS, AUTH_MESSAGES } from '@/constants/index.js';
 
-export function requireAuth(req: Request, _res: Response, next: NextFunction): void {
+export async function requireAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
   let token: string | undefined;
 
   const header = req.headers.authorization;
@@ -13,14 +13,33 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction): v
     token = req.cookies[ACCESS_TOKEN_COOKIE];
   }
 
-  if (!token) throw AppError.unauthorized();
+  if (!token) return next(AppError.unauthorized());
 
-  const payload = verifyAccessToken(token); // throws -> 401 via error handler
-  req.user = { id: payload.sub as string, role: (payload as any).role };
-  next();
+  try {
+    const payload = verifyAccessToken(token);
+    req.user = { id: payload.sub as string, role: (payload as any).role };
+
+    if ((payload as any).impersonator) {
+      const imp = (payload as any).impersonator;
+      const isActive = await isImpersonationSessionActive(imp.sessionId);
+      if (!isActive) {
+        return next(AppError.unauthorized(AUTH_MESSAGES.IMPERSONATION_REVOKED));
+      }
+      req.impersonator = imp;
+      req.isImpersonated = true;
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
 }
 
-export function optionalAuth(req: Request, _res: Response, next: NextFunction): void {
+export async function optionalAuth(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): Promise<void> {
   try {
     let token: string | undefined;
     const header = req.headers.authorization;
@@ -32,6 +51,14 @@ export function optionalAuth(req: Request, _res: Response, next: NextFunction): 
     if (token) {
       const payload = verifyAccessToken(token);
       req.user = { id: payload.sub as string, role: (payload as any).role };
+      if ((payload as any).impersonator) {
+        const imp = (payload as any).impersonator;
+        const isActive = await isImpersonationSessionActive(imp.sessionId);
+        if (isActive) {
+          req.impersonator = imp;
+          req.isImpersonated = true;
+        }
+      }
     }
   } catch {
     // Soft failure for optional auth: proceed unauthenticated

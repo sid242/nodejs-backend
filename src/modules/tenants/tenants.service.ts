@@ -1,8 +1,9 @@
 import { AppError } from '@/lib/errors.js';
-import * as tenantsRepo from './tenants.repository.js';
-import * as rbacRepo from '@/modules/rbac/rbac.repository.js';
+import { tenantsRepo } from './tenants.repository.js';
+import { rbacRepo } from '@/modules/rbac/rbac.repository.js';
 import * as rbacService from '@/modules/rbac/rbac.service.js';
 import * as authRepo from '@/modules/auth/auth.repository.js';
+import { revokeAllUserTokens } from '@/modules/auth/tokens.js';
 import * as auditRepo from '@/modules/audit/audit.repository.js';
 import { logSecurityEvent } from '@/modules/audit/audit.service.js';
 import { db } from '@/config/db.js';
@@ -193,8 +194,31 @@ export async function removeMemberFromTenant(
     );
   }
 
+  // Edge Case safeguard: Cannot remove member if they are the last remaining OWNER
+  const existingRoles = await rbacRepo.getMemberRoles(member.id);
+  const isOwner = existingRoles.some((r) => r.name.toLowerCase() === 'owner');
+  if (isOwner) {
+    const ownerCount = await rbacRepo.countTenantOwners(tenantId);
+    if (ownerCount <= 1) {
+      throw AppError.badRequest(
+        'Cannot remove the last remaining Owner of this organization. Promote another member to Owner first.',
+      );
+    }
+
+    // Only an Owner can remove another Owner
+    const operatorMember = await tenantsRepo.findTenantMember(tenantId, operatorUserId);
+    if (operatorMember) {
+      const operatorRoles = await rbacRepo.getMemberRoles(operatorMember.id);
+      const operatorIsOwner = operatorRoles.some((r) => r.name.toLowerCase() === 'owner');
+      if (!operatorIsOwner) {
+        throw AppError.forbidden('Only an Owner can remove another Owner');
+      }
+    }
+  }
+
   await tenantsRepo.removeTenantMember(tenantId, memberId);
   await rbacService.invalidateRbacCache(tenantId, member.userId);
+  await revokeAllUserTokens(member.userId);
 
   await logSecurityEvent({
     tenantId,
@@ -217,6 +241,31 @@ export async function updateMemberRole(
     throw AppError.notFound('Member not found in this tenant');
   }
 
+  const existingRoles = await rbacRepo.getMemberRoles(member.id);
+  const wasOwner = existingRoles.some((r) => r.name.toLowerCase() === 'owner');
+  const willBeOwner = newRoleName.toLowerCase() === 'owner';
+
+  // Edge Case 1: Last Owner Invariant (Cannot demote the only remaining Owner)
+  if (wasOwner && !willBeOwner) {
+    const ownerCount = await rbacRepo.countTenantOwners(tenantId);
+    if (ownerCount <= 1) {
+      throw AppError.badRequest(
+        'Cannot demote the last remaining Owner of this organization. Promote another member to Owner first.',
+      );
+    }
+  }
+
+  // Edge Case 2: Privilege Escalation Prevention (Only an Owner can grant or revoke OWNER role)
+  const operatorMember = await tenantsRepo.findTenantMember(tenantId, operatorUserId);
+  if (operatorMember) {
+    const operatorRoles = await rbacRepo.getMemberRoles(operatorMember.id);
+    const operatorIsOwner = operatorRoles.some((r) => r.name.toLowerCase() === 'owner');
+
+    if (!operatorIsOwner && (willBeOwner || wasOwner)) {
+      throw AppError.forbidden('Only an Owner can grant or revoke the Owner role');
+    }
+  }
+
   const availableRoles = await rbacRepo.findRolesByTenant(tenantId);
   const matchedRole = availableRoles.find(
     (r) => r.name.toLowerCase() === newRoleName.toLowerCase(),
@@ -225,12 +274,14 @@ export async function updateMemberRole(
     throw AppError.badRequest(`Role "${newRoleName}" is not valid for this tenant`);
   }
 
-  const existingRoles = await rbacRepo.getMemberRoles(member.id);
   for (const r of existingRoles) {
     await rbacRepo.removeRoleFromMember(member.id, r.id);
   }
   await rbacRepo.assignRoleToMember(member.id, matchedRole.id);
   await rbacService.invalidateRbacCache(tenantId, member.userId);
+
+  // Invalidate target user's active sessions so they must re-authenticate with updated claims
+  await revokeAllUserTokens(member.userId);
 
   await logSecurityEvent({
     tenantId,
@@ -238,7 +289,10 @@ export async function updateMemberRole(
     action: 'MEMBER.ROLE_CHANGED',
     entityType: 'TenantMember',
     entityId: member.id,
-    metadata: { newRole: matchedRole.name },
+    metadata: {
+      previousRoles: existingRoles.map((r) => r.name),
+      newRole: matchedRole.name,
+    },
   });
 
   return { message: 'Member role updated successfully', role: matchedRole.name };

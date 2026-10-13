@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { validate } from '@/middleware/validate.js';
 import { authLimiter } from '@/middleware/rate-limit.js';
-import { requireAuth, optionalAuth } from '@/middleware/auth.js';
+import { requireAuth, optionalAuth, requireRole } from '@/middleware/auth.js';
+import { blockIfImpersonating } from '@/middleware/impersonate-guard.js';
 import {
   registerDto,
   loginDto,
@@ -10,6 +11,7 @@ import {
   resetPasswordDto,
   requestEmailVerificationDto,
   verifyEmailDto,
+  impersonateUserDto,
 } from '@/modules/auth/auth.dto.js';
 import * as controller from '@/modules/auth/auth.controller.js';
 
@@ -33,5 +35,16 @@ router.post('/verify-email/confirm', validate({ body: verifyEmailDto }), control
 // --- Active Device Sessions Management ---
 router.get('/sessions', requireAuth, controller.listSessions);
 router.delete('/sessions/:sessionId', requireAuth, controller.revokeSession);
+
+// --- Controlled Impersonation ---
+router.post(
+  '/impersonate',
+  requireAuth,
+  blockIfImpersonating('Impersonation'),
+  requireRole('ADMIN'),
+  validate({ body: impersonateUserDto }),
+  controller.impersonate,
+);
+router.post('/stop-impersonate', requireAuth, controller.stopImpersonation);
 
 export default router;

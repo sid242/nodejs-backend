@@ -27,8 +27,19 @@ const make = ({
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     passOnStoreError: true,
-    keyGenerator: (req: Request) =>
-      byUser && req.user?.id ? `u:${req.user.id}` : req.ip || 'anonymous',
+    keyGenerator: (req: Request) => {
+      if (byUser) {
+        // Edge case safeguard: When impersonating, throttle against the admin's ID
+        // so the actual user's rate-limit allowance remains intact.
+        if (req.impersonator?.userId) {
+          return `imp:${req.impersonator.userId}`;
+        }
+        if (req.user?.id) {
+          return `u:${req.user.id}`;
+        }
+      }
+      return req.ip || 'anonymous';
+    },
     store: new RedisStore({
       sendCommand: (...args: string[]) => (redis as any).call(...args),
       prefix: `rl:${name}:`,
