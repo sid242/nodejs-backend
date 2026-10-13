@@ -1,12 +1,14 @@
 # Node.js Scalable Foundation
 
-Express + Postgres (Drizzle ORM) + Redis + BullMQ + Socket.IO + S3, containerised and deployable to AWS ECS Fargate.
+Production-ready, scalable Node.js & TypeScript backend foundation built with **Express**, **PostgreSQL (Drizzle ORM)**, **Redis**, **BullMQ**, **Socket.IO**, and **AWS S3 / SES**, containerized and architected for independent horizontal scaling on AWS ECS Fargate.
+
+---
 
 ## Architecture
 
 ```
-                 ┌────────────── ALB / nginx ──────────────┐
- Browser ───────▶│  HTTPS + WebSocket (/socket.io)         │
+                 ┌────────────── ALB / Nginx ──────────────┐
+ Browser ───────▶│ HTTPS + WebSocket (/socket.io)          │
    │             └───────┬─────────────────────┬───────────┘
    │ direct upload       ▼                     ▼
    ▼                ┌─────────┐  ...N  ┌─────────┐        ┌────────────┐
@@ -23,83 +25,164 @@ Express + Postgres (Drizzle ORM) + Redis + BullMQ + Socket.IO + S3, containerise
                           └────────────────┘   emits socket events via Redis
 ```
 
-Everything stateless lives in Redis/Postgres/S3, so API and worker replicas scale horizontally and independently.
+- **Stateless API Replicas**: All state (refresh tokens, cache, rate limits, WebSocket adapter sync) lives in Redis, Postgres, or S3, allowing API and worker replicas to scale horizontally and independently.
+- **Dedicated Background Workers**: Heavy I/O, scheduled jobs, email delivery, and media processing execute in decoupled worker processes (`src/worker.ts`).
+- **Standardized Response Envelopes**:
+  - Success: `{ success: true, message: string, data: any, meta?: any, requestId: string }`
+  - Error: `{ error: { code: string, message: string, details?: any }, requestId: string }`
+  - Operational endpoints (`/health/*`, `/metrics`, `/docs`) retain their standard HTTP formats.
 
-Public API success responses use `{ success, message, data, requestId }`; errors use `{ error, requestId }`. Health and metrics endpoints keep their operational response formats.
+---
 
-## Quick start
+## Quick Start
 
 ```bash
 cp .env.example .env            # set the two JWT secrets (32+ chars)
-npm install                     # generates package-lock.json (commit it: Dockerfile uses `npm ci`)
-docker compose up -d            # postgres, redis, minio (S3)
-npm run db:generate             # only after changing files in src/db/schema/
-npm run db:migrate
-npm run dev                     # API       (terminal 1)
-npm run dev:worker              # workers   (terminal 2)
+npm install                     # install dependencies (Node >= 20.6)
+docker compose up -d            # start local Postgres, Redis, and MinIO (S3)
+npm run db:generate             # generate Drizzle migrations from schema
+npm run db:migrate              # apply database migrations
+npm run db:seed                 # (optional) seed default system roles & permissions
+npm run dev                     # run API server in watch mode (terminal 1)
+npm run dev:worker              # run background workers in watch mode (terminal 2)
 ```
 
-Full containerised stack with load balancing: `docker compose --profile full up -d --build --scale api=3` then use http://localhost:8080.
-(In that mode, presigned S3 URLs point at `minio:9000`, which your browser can't reach; use `npm run dev` for upload testing locally.)
+Full containerised stack with load balancing:
 
-## What's where
+```bash
+docker compose --profile full up -d --build --scale api=3
+```
 
-| Concern | Location | Notes |
+Then access the API at `http://localhost:8080`. (In full profile, presigned S3 URLs point to `minio:9000`, which is an internal container hostname; use `npm run dev` for local upload testing).
 
-| Database            | `src/db/schema/`, `src/config/db.js`                | Domain-organised Drizzle schema and PostgreSQL client                                    |
-| ------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Config + validation | `src/config/env.js`                                 | Zod; app refuses to boot on bad env; explicit DB pool, HTTP timeout, and worker I/O caps |
-| Logging             | `src/config/logger.js`, `middleware/http-logger.js` | Pino JSON, secrets redacted, `x-request-id` propagated                                   |
-| Redis cache         | `src/lib/cache.js`                                  | cache-aside, stampede lock, fails open, SCAN-based invalidation                          |
-| Rate limiting       | `middleware/rate-limit.js`                          | Redis store shared across replicas; global / auth / per-user                             |
-| Auth                | `modules/auth`                                      | bcrypt, short JWT access token, rotating refresh token stored in Redis                   |
-| S3 uploads          | `lib/s3.js`, `modules/files`                        | presigned POST with size/type limits; confirm step; presigned download                   |
-| Queues              | `src/queues`                                        | BullMQ: retries + backoff, idempotent `jobId`, dashboard at `/admin/queues`              |
-| Cron jobs           | `queues/workers/index.js`                           | BullMQ job schedulers (safe with many replicas)                                          |
-| WebSockets          | `src/sockets`                                       | JWT handshake, Redis adapter, rooms, flood guard, worker->client emitter                 |
-| Health              | `modules/health`                                    | `/health/live`, `/health/ready` (DB+Redis, 503 while draining)                           |
-| API Docs / Swagger  | `src/docs/`                                         | Interactive Swagger UI at `/docs`, OpenAPI 3.0 spec at `/docs/openapi.json`              |
-| Metrics             | `observability/metrics.js`                          | Prometheus `/metrics` (blocked at nginx)                                                 |
-| Graceful shutdown   | `server.js`, `worker.js`                            | drain LB, close sockets/queues/DB; workers finish in-flight jobs                         |
-| Docker/CI/CD        | `Dockerfile`, `.github/workflows`, `deploy/`        | one image, two roles; OIDC to AWS; migrations as a one-off task                          |
+---
 
-## Upload flow (S3)
+## Directory & Feature Layout
 
-1. `POST /api/v1/files/upload-url` `{filename, contentType}` -> `{fileId, upload:{url, fields}}`
-2. Browser `POST`s `multipart/form-data` (`...fields`, then `file`) straight to S3
-3. `POST /api/v1/files/:id/confirm` -> server verifies the object, enqueues processing job
-4. Worker processes, then pushes `file:processed` to the user's socket
-5. `GET /api/v1/files/:id/download-url` -> short-lived presigned GET
+| Concern                    | Location                                                | Notes                                                                                   |
+| :------------------------- | :------------------------------------------------------ | :-------------------------------------------------------------------------------------- |
+| **Language & Runtime**     | `tsconfig.json`, `package.json`                         | 100% TypeScript ESM (`"type": "module"`), Node >=20.6, path alias `@/*`                 |
+| **Database & ORM**         | `src/db/schema/`, `src/config/db.ts`                    | PostgreSQL with Drizzle ORM, connection pool budget, typed schema definitions           |
+| **Config & Validation**    | `src/config/env.ts`                                     | Strict Zod validation; crashes on missing env; explicit pool, timeouts, and caps        |
+| **Logging**                | `src/config/logger.ts`, `src/middleware/http-logger.ts` | Structured Pino JSON logging, sensitive field redaction, `x-request-id` propagation     |
+| **Redis Cache**            | `src/lib/cache.ts`                                      | Cache-aside pattern with distributed mutex stampede lock and SCAN invalidation          |
+| **Rate Limiting**          | `src/middleware/rate-limit.ts`                          | Redis-backed sliding window rate limiters (global, auth endpoints, per-user)            |
+| **Authentication**         | `src/modules/auth`                                      | bcrypt password hashing, short-lived JWT access tokens, rotating refresh tokens         |
+| **Sessions & Devices**     | `src/db/schema/sessions.ts`                             | Multi-device session tracking, IP and user-agent logging, remote revocation             |
+| **Email & Verification**   | `src/db/schema/verification-tokens.ts`                  | SHA-256 deterministic hash tokens for email verification & password resets              |
+| **Multi-Tenancy**          | `src/modules/tenants`, `src/middleware/tenant.ts`       | Organization isolation via `x-tenant-id`, membership verification, status checks        |
+| **Dynamic RBAC**           | `src/modules/rbac`, `src/middleware/rbac.ts`            | Decentralized permissions catalog, system roles, custom tenant roles & guards           |
+| **Compliance Audit Trail** | `src/modules/audit`, `src/db/schema/audit-logs.ts`      | Immutable audit log (actor, tenant, resource, action, IP, diff metadata)                |
+| **S3 Direct Uploads**      | `src/lib/s3.ts`, `src/modules/files`                    | Presigned POST with strict MIME/size caps, confirmation step, presigned GET             |
+| **Background Queues**      | `src/queues`, `src/worker.ts`                           | BullMQ with retries, exponential backoff, Bull-Board UI at `/admin/queues`              |
+| **Cron & Schedulers**      | `src/queues/workers/index.ts`                           | BullMQ repeatable job schedulers (safe across multi-replica deployments)                |
+| **Real-time WebSockets**   | `src/sockets`                                           | Socket.IO with Redis adapter, JWT handshake, rooms, worker-to-client emitter            |
+| **Health Checks**          | `src/modules/health`                                    | `/health/live`, `/health/ready` (checks DB + Redis, returns 503 during graceful drain)  |
+| **Interactive API Docs**   | `src/docs/`                                             | Swagger UI at `/docs`, OpenAPI 3.0 specification at `/docs/openapi.json`                |
+| **Metrics & Telemetry**    | `src/observability/metrics.ts`                          | Prometheus `/metrics` collector (blocked by default at Nginx proxy)                     |
+| **Graceful Shutdown**      | `src/server.ts`, `src/worker.ts`                        | Drains load balancer, closes WebSockets, queues, DB pool; workers finish in-flight jobs |
+| **Container & CI/CD**      | `Dockerfile`, `.github/workflows/`, `deploy/`           | Multi-stage Docker image, GitHub Actions CI, ECS Fargate task definitions               |
 
-Bucket setup: block public access, enable default encryption, add a CORS rule allowing `POST` from your frontend origin, and a lifecycle rule to abort incomplete multipart uploads. Put CloudFront in front for public/read-heavy assets.
+---
 
-## AWS deployment (recommended shape)
+## Core Capabilities & Workflows
 
-- **Compute:** ECS Fargate, two services from the same image: `app-api` (behind ALB, target-tracking on CPU/requests) and `app-worker` (no LB; scale on queue depth via a custom CloudWatch metric).
-- **Data:** RDS Postgres (+ RDS Proxy once replicas multiply), ElastiCache Redis (set `maxmemory-policy noeviction`; BullMQ needs it).
-- **Network:** ALB in public subnets, tasks and data in private subnets, NAT/VPC endpoints for S3/ECR/Secrets Manager.
-- **Secrets:** Secrets Manager injected through the task definition `secrets` block. No AWS keys in env: the **task role** grants S3/SES access.
-- **Logs:** `awslogs` driver -> CloudWatch (structured JSON queryable in Logs Insights).
-- **ALB:** idle timeout 60s (Node keep-alive is 65s), health check `/health/ready`, deregistration delay ~30s.
-- **Task role (minimum):** `s3:GetObject/PutObject/DeleteObject` on `bucket/uploads/*`, `ses:SendEmail`.
-- **Deploy:** push to `main` -> test -> build/push to ECR -> migrate -> rolling update with automatic rollback. Replace the `ACCOUNT_ID` / ARNs in `deploy/` and set repo secret `AWS_DEPLOY_ROLE_ARN` plus vars `PRIVATE_SUBNETS`, `APP_SECURITY_GROUP`.
+### 1. Multi-Tenancy & Tenant Context
 
-## Scaling rules of thumb
+Every tenant-scoped request resolves organization context through `src/middleware/tenant.ts`:
 
-- Never keep state in process memory (sessions, rooms, rate limits all live in Redis).
-- Pool math: `DB_POOL_MAX x (API replicas + worker replicas)` must stay under Postgres `max_connections`; budget migration tasks too.
-- Keep request paths fast: anything slow or flaky (email, image work, third parties) goes through a queue.
-- Make jobs idempotent (they will be retried); use `jobId` for dedupe.
-- Add DB indexes for every list/filter query; paginate everything.
-- Use a separate Redis for queues vs cache if cache eviction ever becomes necessary.
+- Accepts `x-tenant-id` header (UUID or slug), query parameter, or path parameter.
+- Verifies tenant status (`ACTIVE` or `TRIALING`).
+- Checks user membership in the tenant (`TenantMember`).
+- Injects `req.tenant`, `req.membership`, and user permissions onto the Express `Request`.
 
-## Production checklist / what to add next
+```bash
+# Example authenticated tenant request:
+curl -H "Authorization: Bearer <TOKEN>" \
+     -H "x-tenant-id: dental-clinic-central" \
+     http://localhost:3000/api/v1/tenants/current
+```
 
-- [ ] Sentry or OpenTelemetry tracing; Prometheus/Grafana or CloudWatch alarms (5xx rate, p95 latency, queue depth, failed jobs)
-- [x] OpenAPI/Swagger docs (`@asteasolutions/zod-to-openapi` + `swagger-ui-express` at `/docs`)
-- [ ] Integration tests (Testcontainers for Postgres/Redis) on top of the included unit tests
-- [ ] Infrastructure as code (Terraform/CDK) for everything described above
-- [ ] WAF in front of the ALB; dependency scanning (Dependabot/Trivy); `npm audit` in CI
-- [ ] Email verification, password reset, RBAC beyond `USER/ADMIN`, audit log
-- [ ] Migrate to TypeScript once the shape settles (structure maps 1:1)
-- [ ] Backups + restore drill (RDS PITR), Redis persistence (AOF) if queued jobs must survive restarts
+### 2. Dynamic RBAC (Role-Based Access Control)
+
+The RBAC engine supports system roles (`OWNER`, `ADMIN`, `MEMBER`) and custom tenant roles:
+
+- **Decentralized Module Permissions**: Each module registers its permissions in `src/modules/rbac/modules.registry.ts` (e.g. `files:read`, `tenants:update`, `members:invite`).
+- **Route Guards**:
+  - `requirePermission('files:write')`: Requires explicit permission or wildcard `*`.
+  - `requirePermissions(['members:read', 'members:invite'])`: Requires all specified permissions.
+  - `requireAnyPermission(['audit:read', 'roles:read'])`: Requires at least one permission.
+  - `requireTenantRole('OWNER')`: Enforces specific role level.
+
+### 3. S3 Direct Upload Flow
+
+1. `POST /api/v1/files/upload-url` `{ filename, contentType }` -> returns `{ fileId, upload: { url, fields } }`
+2. Browser directly `POST`s `multipart/form-data` (form fields, then binary file) to S3/MinIO.
+3. `POST /api/v1/files/:id/confirm` -> server verifies object existence, validates size, and queues a processing job.
+4. Background worker processes the file and emits `file:processed` via WebSocket.
+5. `GET /api/v1/files/:id/download-url` -> returns a short-lived presigned GET URL.
+
+### 4. Audit Logging & Compliance
+
+Changes to sensitive resources (tenants, members, roles, files) are recorded to the immutable `audit_logs` table:
+
+- Captures `tenantId`, `actorId`, `action` (`CREATE`, `UPDATE`, `DELETE`, `READ`), `resource`, `resourceId`.
+- Records client metadata (`ipAddress`, `userAgent`) and JSON `diff` (before/after states).
+- Queryable by tenant owners and compliance officers via `/api/v1/audit`.
+
+---
+
+## Useful Commands
+
+| Command               | Description                                                         |
+| :-------------------- | :------------------------------------------------------------------ |
+| `npm run dev`         | Run API server with file watch (`tsx watch --env-file=.env`)        |
+| `npm run dev:worker`  | Run Background Worker with file watch (`tsx watch --env-file=.env`) |
+| `npm run typecheck`   | Run TypeScript compiler type checking (`tsc --noEmit`)              |
+| `npm test`            | Run test suites using tsx test runner (`tsx --test`)                |
+| `npm run lint`        | Run ESLint checks                                                   |
+| `npm run lint:fix`    | Fix linting errors automatically                                    |
+| `npm run format`      | Format codebase using Prettier                                      |
+| `npm run db:generate` | Generate SQL migrations from Drizzle schemas                        |
+| `npm run db:migrate`  | Execute pending database migrations                                 |
+| `npm run db:seed`     | Seed default system permissions and roles                           |
+
+---
+
+## AWS Deployment Shape (ECS Fargate)
+
+- **Compute:** ECS Fargate, two services from the same container image:
+  - `app-api`: Behind an Application Load Balancer (target-tracking on CPU/requests).
+  - `app-worker`: Headless worker process (scales on BullMQ queue depth via CloudWatch).
+- **Database:** RDS PostgreSQL (+ RDS Proxy for pool multiplexing under high concurrency).
+- **Cache & Queues:** ElastiCache Redis (`maxmemory-policy noeviction` required for BullMQ).
+- **Network:** ALB in public subnets; Fargate tasks, RDS, and Redis in private subnets.
+- **Secrets:** AWS Secrets Manager injected directly via the ECS task definition `secrets` block. No plaintext credentials in environment variables.
+- **ALB Configuration:** Idle timeout 60s (Node keep-alive set to 65s), health check endpoint `/health/ready`, deregistration delay ~30s.
+
+---
+
+## Scaling Rules of Thumb
+
+1. **Zero Process Memory State**: Sessions, rate limits, WebSocket rooms, and locks live in Redis. Replicas can be destroyed or added at any moment.
+2. **Postgres Connection Budget**: Total connections across `(API Replicas + Worker Replicas) * DB_POOL_MAX` must remain below PostgreSQL `max_connections`.
+3. **Idempotent Background Jobs**: Every BullMQ processor must handle retries safely; use deterministic `jobId` for deduplication.
+4. **Cache Stampede Prevention**: Wrap high-traffic database queries in `cache.wrap(key, ttl, fetcher)` to utilize Redis distributed mutex locks.
+
+---
+
+## Production Roadmap & Status
+
+- [x] Full TypeScript ESM migration with strict type checking and path aliases (`@/*`)
+- [x] OpenAPI 3.0 documentation & interactive Swagger UI (`/docs`)
+- [x] Multi-tenant organization isolation and membership guards (`x-tenant-id`)
+- [x] Dynamic Role-Based Access Control (RBAC) with decentralized permissions
+- [x] Immutable compliance audit logging (actor, tenant, resource, diff)
+- [x] Session tracking and multi-device revocation
+- [x] Deterministic SHA-256 verification tokens (email verification & password reset)
+- [x] Background BullMQ workers with Bull-Board dashboard (`/admin/queues`)
+- [x] Real-time WebSockets with Redis adapter & background worker emitter
+- [ ] Integration test suite with Testcontainers (PostgreSQL & Redis)
+- [ ] Infrastructure as Code (Terraform / AWS CDK)
+- [ ] OpenTelemetry / Sentry distributed tracing and CloudWatch alarm dashboards
+- [ ] AWS WAF rules in front of the Application Load Balancer
