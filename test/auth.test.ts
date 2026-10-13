@@ -105,7 +105,10 @@ test('clearAuthCookies clears both accessToken and refreshToken cookies', async 
 });
 
 test('dual-mode auth token extraction: header takes precedence, cookie is fallback', () => {
-  function extractToken(req: { headers: { authorization?: string }; cookies?: { accessToken?: string } }) {
+  function extractToken(req: {
+    headers: { authorization?: string };
+    cookies?: { accessToken?: string };
+  }) {
     let token: string | undefined;
     const header = req.headers.authorization;
     if (header?.startsWith('Bearer ')) {
@@ -120,7 +123,10 @@ test('dual-mode auth token extraction: header takes precedence, cookie is fallba
   assert.equal(extractToken({ headers: { authorization: 'Bearer mobile-token' } }), 'mobile-token');
 
   // Web browser client with cookie
-  assert.equal(extractToken({ headers: {}, cookies: { accessToken: 'cookie-token' } }), 'cookie-token');
+  assert.equal(
+    extractToken({ headers: {}, cookies: { accessToken: 'cookie-token' } }),
+    'cookie-token',
+  );
 
   // Header takes precedence when both provided
   assert.equal(
@@ -151,7 +157,10 @@ test('auth and queue constants are properly defined', async () => {
   assert.equal(COOKIE_PATHS.ROOT, '/');
   assert.equal(COOKIE_PATHS.AUTH, '/api/v1/auth');
   assert.equal(AUTH_HEADERS.PREFIX, 'Bearer ');
-  assert.equal(AUTH_MESSAGES.EMAIL_NOT_VERIFIED, 'Email not verified. Please verify your email before logging in.');
+  assert.equal(
+    AUTH_MESSAGES.EMAIL_NOT_VERIFIED,
+    'Email not verified. Please verify your email before logging in.',
+  );
   assert.equal(TOKEN_EXPIRATION.PASSWORD_RESET_SECONDS, 900);
   assert.equal(TOKEN_EXPIRATION.EMAIL_VERIFICATION_SECONDS, 86400);
   assert.equal(REDIS_PREFIXES.REFRESH_TOKEN, 'rt:');
@@ -171,7 +180,8 @@ test('login requires verified email: unverified user is rejected', async () => {
   // Unverified user throws error
   assert.throws(
     () => validateEmailVerified({ emailVerifiedAt: null }),
-    (err: Error) => err.message === 'Email not verified. Please verify your email before logging in.',
+    (err: Error) =>
+      err.message === 'Email not verified. Please verify your email before logging in.',
   );
 
   // Verified user succeeds

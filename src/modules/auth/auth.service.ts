@@ -38,11 +38,7 @@ export async function register({ email, password, name }: RegisterDto): Promise<
   // Slow/unreliable work goes to the queue, not the request path. jobId makes it idempotent.
   const verificationToken = await createEmailVerificationToken(user.id);
   await Promise.all([
-    emailQueue.add(
-      'welcome',
-      { to: user.email, name: user.name },
-      { jobId: `welcome-${user.id}` },
-    ),
+    emailQueue.add('welcome', { to: user.email, name: user.name }, { jobId: `welcome-${user.id}` }),
     emailQueue.add(
       'verify-email',
       { to: user.email, name: user.name, token: verificationToken },
@@ -56,7 +52,12 @@ export async function register({ email, password, name }: RegisterDto): Promise<
 export async function login({ email, password }: LoginDto): Promise<AuthResult> {
   const record = await authRepo.findByEmail(email);
   const ok = await bcrypt.compare(password, record?.passwordHash ?? DUMMY_HASH);
-  if (!record || !ok) throw AppError.unauthorized(AUTH_MESSAGES.INVALID_CREDENTIALS);
+  if (!record || !ok || record.deletedAt)
+    throw AppError.unauthorized(AUTH_MESSAGES.INVALID_CREDENTIALS);
+
+  if (record.status === 'SUSPENDED' || record.status === 'DEACTIVATED') {
+    throw AppError.forbidden(`Account is ${record.status.toLowerCase()}`);
+  }
 
   if (!record.emailVerifiedAt) {
     throw AppError.forbidden(AUTH_MESSAGES.EMAIL_NOT_VERIFIED, {
@@ -70,7 +71,10 @@ export async function login({ email, password }: LoginDto): Promise<AuthResult> 
     email: record.email,
     name: record.name,
     role: record.role,
+    status: record.status,
     emailVerifiedAt: record.emailVerifiedAt,
+    phoneNumber: record.phoneNumber,
+    phoneVerifiedAt: record.phoneVerifiedAt,
     createdAt: record.createdAt,
   };
   return { user, ...(await issueTokens(user)) };

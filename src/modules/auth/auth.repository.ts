@@ -42,7 +42,7 @@ export async function findById(id: string): Promise<User | null> {
 export async function updatePassword(id: string, passwordHash: string): Promise<PublicUser | null> {
   const [user] = await db
     .update(users)
-    .set({ passwordHash })
+    .set({ passwordHash, passwordChangedAt: new Date() })
     .where(eq(users.id, id))
     .returning(publicUser);
   return (user as PublicUser) ?? null;
@@ -51,7 +51,7 @@ export async function updatePassword(id: string, passwordHash: string): Promise<
 export async function markEmailVerified(id: string): Promise<PublicUser | null> {
   const [user] = await db
     .update(users)
-    .set({ emailVerifiedAt: new Date() })
+    .set({ emailVerifiedAt: new Date(), status: 'ACTIVE' })
     .where(eq(users.id, id))
     .returning(publicUser);
   return (user as PublicUser) ?? null;

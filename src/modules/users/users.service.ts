@@ -25,3 +25,29 @@ export const listUsers = ({
   cache.wrap(`users:list:${page}:${limit}`, 30, async () => {
     return userRepo.findPaginated({ page, limit });
   });
+
+export async function getUserById(id: string): Promise<PublicUser> {
+  const user = await userRepo.findById(id);
+  if (!user) throw AppError.notFound('User not found');
+  return user;
+}
+
+export async function updateUserRole(
+  targetUserId: string,
+  role: 'USER' | 'ADMIN',
+): Promise<PublicUser> {
+  const updated = await userRepo.updateRole(targetUserId, role);
+  if (!updated) throw AppError.notFound('User not found');
+  await Promise.all([cache.del(`user:${targetUserId}`), cache.delByPrefix('users:list:')]);
+  return updated;
+}
+
+export async function updateUserStatus(
+  targetUserId: string,
+  status: 'PENDING_VERIFICATION' | 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED',
+): Promise<PublicUser> {
+  const updated = await userRepo.updateStatus(targetUserId, status);
+  if (!updated) throw AppError.notFound('User not found');
+  await Promise.all([cache.del(`user:${targetUserId}`), cache.delByPrefix('users:list:')]);
+  return updated;
+}

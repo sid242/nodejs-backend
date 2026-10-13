@@ -12,3 +12,15 @@ export const listUsersQueryDto = z.object({
 });
 
 export type ListUsersQueryDto = z.infer<typeof listUsersQueryDto>;
+
+export const updateUserRoleDto = z.object({
+  role: z.enum(['USER', 'ADMIN']),
+});
+
+export type UpdateUserRoleDto = z.infer<typeof updateUserRoleDto>;
+
+export const updateUserStatusDto = z.object({
+  status: z.enum(['PENDING_VERIFICATION', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED']),
+});
+
+export type UpdateUserStatusDto = z.infer<typeof updateUserStatusDto>;

@@ -133,15 +133,15 @@ Every new business domain should be placed in `src/modules/<domain>/`:
 
 ## 4. Useful Commands
 
-| Command                | Description                                                          |
-| :--------------------- | :------------------------------------------------------------------- |
-| `npm run dev`          | Run API server with file watch (`tsx watch --env-file=.env`)         |
-| `npm run dev:worker`   | Run Background Worker with file watch (`tsx watch --env-file=.env`)  |
-| `npm run typecheck`    | Run TypeScript compiler type checking (`tsc --noEmit`)                |
-| `npm test`             | Run test suites with tsx test runner (`tsx --test`)                  |
-| `npm run lint`         | Check linting with ESLint                                            |
-| `npm run lint:fix`     | Fix lint issues automatically                                        |
-| `npm run format`       | Format files with Prettier                                           |
-| `npm run db:generate`  | Generate Drizzle migrations from schema changes                      |
-| `npm run db:migrate`   | Execute pending Drizzle migrations                                   |
-| `docker compose up -d` | Start local Postgres, Redis, and MinIO containers                    |
+| Command                | Description                                                         |
+| :--------------------- | :------------------------------------------------------------------ |
+| `npm run dev`          | Run API server with file watch (`tsx watch --env-file=.env`)        |
+| `npm run dev:worker`   | Run Background Worker with file watch (`tsx watch --env-file=.env`) |
+| `npm run typecheck`    | Run TypeScript compiler type checking (`tsc --noEmit`)              |
+| `npm test`             | Run test suites with tsx test runner (`tsx --test`)                 |
+| `npm run lint`         | Check linting with ESLint                                           |
+| `npm run lint:fix`     | Fix lint issues automatically                                       |
+| `npm run format`       | Format files with Prettier                                          |
+| `npm run db:generate`  | Generate Drizzle migrations from schema changes                     |
+| `npm run db:migrate`   | Execute pending Drizzle migrations                                  |
+| `docker compose up -d` | Start local Postgres, Redis, and MinIO containers                   |

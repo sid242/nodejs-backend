@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import type { OpenAPIRegistry } from '@asteasolutions/zod-to-openapi';
-import { updateMeDto, listUsersQueryDto } from '@/modules/users/users.dto.js';
+import {
+  updateMeDto,
+  listUsersQueryDto,
+  updateUserRoleDto,
+  updateUserStatusDto,
+} from '@/modules/users/users.dto.js';
 import { bearerAuth, errorResponse, successResponse } from '@/docs/helpers.js';
 
 export const UserSchema = z.object({
@@ -8,7 +13,12 @@ export const UserSchema = z.object({
   email: z.string().email().openapi({ example: 'jane.doe@example.com' }),
   name: z.string().openapi({ example: 'Jane Doe' }),
   role: z.enum(['USER', 'ADMIN']).openapi({ example: 'USER' }),
+  status: z
+    .enum(['PENDING_VERIFICATION', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED'])
+    .openapi({ example: 'ACTIVE' }),
   emailVerified: z.boolean().openapi({ example: true }),
+  phoneNumber: z.string().nullable().openapi({ example: '+1234567890' }),
+  lastLoginAt: z.string().datetime().nullable(),
   createdAt: z.string().datetime().openapi({ example: '2026-01-15T08:30:00.000Z' }),
   updatedAt: z.string().datetime().openapi({ example: '2026-01-15T08:30:00.000Z' }),
 });
@@ -17,6 +27,8 @@ export function registerUsersDocs(registry: OpenAPIRegistry): { UserSchema: type
   registry.register('User', UserSchema);
 
   const UpdateMeInput = registry.register('UpdateMeInput', updateMeDto);
+  const UpdateUserRoleInput = registry.register('UpdateUserRoleInput', updateUserRoleDto);
+  const UpdateUserStatusInput = registry.register('UpdateUserStatusInput', updateUserStatusDto);
 
   const PaginatedUsersData = registry.register(
     'PaginatedUsersData',
@@ -80,6 +92,57 @@ export function registerUsersDocs(registry: OpenAPIRegistry): { UserSchema: type
       200: successResponse(PaginatedUsersData, 'Paginated list of users'),
       401: errorResponse('Unauthorized'),
       403: errorResponse('Forbidden - Admin access required'),
+    },
+  });
+
+  registry.registerPath({
+    method: 'get',
+    path: '/api/v1/users/{userId}',
+    summary: 'Get user details by ID (Admin only)',
+    description: 'Returns full profile of specified user. Requires ADMIN role.',
+    tags: ['Users'],
+    security: [{ [bearerAuth.name]: [] }],
+    responses: {
+      200: successResponse(UserSchema, 'User profile details'),
+      401: errorResponse('Unauthorized'),
+      403: errorResponse('Forbidden - Admin access required'),
+      404: errorResponse('User not found'),
+    },
+  });
+
+  registry.registerPath({
+    method: 'patch',
+    path: '/api/v1/users/{userId}/role',
+    summary: 'Update user system role (Admin only)',
+    description: 'Elevates or revokes global system admin privileges. Requires ADMIN role.',
+    tags: ['Users'],
+    security: [{ [bearerAuth.name]: [] }],
+    request: {
+      body: { content: { 'application/json': { schema: UpdateUserRoleInput } } },
+    },
+    responses: {
+      200: successResponse(UserSchema, 'User role updated'),
+      401: errorResponse('Unauthorized'),
+      403: errorResponse('Forbidden - Admin access required'),
+      404: errorResponse('User not found'),
+    },
+  });
+
+  registry.registerPath({
+    method: 'patch',
+    path: '/api/v1/users/{userId}/status',
+    summary: 'Update user account status (Admin only)',
+    description: 'Suspends, activates, or deactivates user account. Requires ADMIN role.',
+    tags: ['Users'],
+    security: [{ [bearerAuth.name]: [] }],
+    request: {
+      body: { content: { 'application/json': { schema: UpdateUserStatusInput } } },
+    },
+    responses: {
+      200: successResponse(UserSchema, 'User status updated'),
+      401: errorResponse('Unauthorized'),
+      403: errorResponse('Forbidden - Admin access required'),
+      404: errorResponse('User not found'),
     },
   });
 

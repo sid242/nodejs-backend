@@ -6,6 +6,7 @@ import { revokeRefreshToken } from '@/modules/auth/tokens.js';
 import { setAuthCookies, clearAuthCookies } from '@/modules/auth/cookies.js';
 import { REFRESH_TOKEN_COOKIE } from '@/constants/index.js';
 import * as service from '@/modules/auth/auth.service.js';
+import * as sessionsRepo from '@/modules/auth/sessions.repository.js';
 
 export const register = asyncHandler(async (req: Request, res: Response) => {
   const result = await service.register(req.valid?.body);
@@ -60,4 +61,15 @@ export const requestEmailVerification = asyncHandler(async (req: Request, res: R
 export const verifyEmail = asyncHandler(async (req: Request, res: Response) => {
   const result = await service.verifyEmail(req.valid?.body);
   AppResponse.ok(result).send(res);
+});
+
+export const listSessions = asyncHandler(async (req: Request, res: Response) => {
+  const sessions = await sessionsRepo.findUserActiveSessions(req.user!.id);
+  AppResponse.ok(sessions).send(res);
+});
+
+export const revokeSession = asyncHandler(async (req: Request, res: Response) => {
+  const success = await sessionsRepo.revokeSessionById(String(req.params.sessionId), req.user!.id);
+  if (!success) throw AppError.notFound('Session not found');
+  AppResponse.ok({ message: 'Session revoked successfully' }).send(res);
 });

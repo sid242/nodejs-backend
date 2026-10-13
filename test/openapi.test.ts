@@ -30,6 +30,9 @@ test('OpenAPI spec contains all core API endpoints and tags', () => {
   // User routes
   assert.ok(paths.includes('/api/v1/users/me'));
   assert.ok(paths.includes('/api/v1/users'));
+  assert.ok(paths.includes('/api/v1/users/{userId}'));
+  assert.ok(paths.includes('/api/v1/users/{userId}/role'));
+  assert.ok(paths.includes('/api/v1/users/{userId}/status'));
 
   // Files routes
   assert.ok(paths.includes('/api/v1/files'));
@@ -41,6 +44,21 @@ test('OpenAPI spec contains all core API endpoints and tags', () => {
   // Health routes
   assert.ok(paths.includes('/health/live'));
   assert.ok(paths.includes('/health/ready'));
+
+  // Tenants routes
+  assert.ok(paths.includes('/api/v1/tenants'));
+  assert.ok(paths.includes('/api/v1/tenants/{tenantId}'));
+  assert.ok(paths.includes('/api/v1/tenants/{tenantId}/members'));
+
+  // RBAC routes (Modules, Permissions, Roles, Entitlements)
+  assert.ok(paths.includes('/api/v1/rbac/modules'));
+  assert.ok(paths.includes('/api/v1/rbac/modules/{moduleId}'));
+  assert.ok(paths.includes('/api/v1/rbac/permissions'));
+  assert.ok(paths.includes('/api/v1/rbac/permissions/{permissionId}'));
+  assert.ok(paths.includes('/api/v1/rbac/tenants/{tenantId}/roles'));
+  assert.ok(paths.includes('/api/v1/rbac/tenants/{tenantId}/roles/{roleId}'));
+  assert.ok(paths.includes('/api/v1/rbac/tenants/{tenantId}/modules'));
+  assert.ok(paths.includes('/api/v1/rbac/tenants/{tenantId}/modules/{moduleId}'));
 });
 
 test('OpenAPI spec registers common schemas and security components', () => {
@@ -53,4 +71,12 @@ test('OpenAPI spec registers common schemas and security components', () => {
   assert.ok(schemas.User);
   assert.ok(schemas.File);
   assert.ok(schemas.FileUploadRequestInput);
+
+  // Tenant & RBAC schemas
+  assert.ok(schemas.Tenant);
+  assert.ok(schemas.TenantMember);
+  assert.ok(schemas.Module);
+  assert.ok(schemas.Permission);
+  assert.ok(schemas.RoleWithPermissions);
+  assert.ok(schemas.TenantModule);
 });

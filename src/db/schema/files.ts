@@ -1,6 +1,7 @@
 import { index, integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { fileStatusEnum } from './enums.js';
 import { users } from './users.js';
+import { tenants } from './tenants.js';
 
 export const files = pgTable(
   'File',
@@ -14,10 +15,12 @@ export const files = pgTable(
     ownerId: uuid('ownerId')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
+    tenantId: uuid('tenantId').references(() => tenants.id, { onDelete: 'cascade' }),
     createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
     index('File_ownerId_createdAt_idx').on(table.ownerId, table.createdAt),
+    index('File_tenantId_createdAt_idx').on(table.tenantId, table.createdAt),
     index('File_status_createdAt_idx').on(table.status, table.createdAt),
   ],
 );

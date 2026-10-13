@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { validate } from '@/middleware/validate.js';
 import { authLimiter } from '@/middleware/rate-limit.js';
-import { optionalAuth } from '@/middleware/auth.js';
+import { requireAuth, optionalAuth } from '@/middleware/auth.js';
 import {
   registerDto,
   loginDto,
@@ -29,5 +29,9 @@ router.post(
   controller.requestEmailVerification,
 );
 router.post('/verify-email/confirm', validate({ body: verifyEmailDto }), controller.verifyEmail);
+
+// --- Active Device Sessions Management ---
+router.get('/sessions', requireAuth, controller.listSessions);
+router.delete('/sessions/:sessionId', requireAuth, controller.revokeSession);
 
 export default router;

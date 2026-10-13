@@ -4,6 +4,10 @@ import { env } from '@/config/env.js';
 import { redis } from '@/config/redis.js';
 import { AppError } from '@/lib/errors.js';
 import { REDIS_PREFIXES, TOKEN_EXPIRATION } from '@/constants/index.js';
+import {
+  createHashedVerificationToken,
+  verifyAndConsumeHashedToken,
+} from './verification.repository.js';
 
 const refreshKey = (userId: string, jti: string): string =>
   `${REDIS_PREFIXES.REFRESH_TOKEN}${userId}:${jti}`;
@@ -72,49 +76,29 @@ export async function revokeAllUserTokens(userId: string): Promise<void> {
 }
 
 export async function createPasswordResetToken(userId: string): Promise<string> {
-  const token = randomUUID();
-  await redis.set(
-    `${REDIS_PREFIXES.PASSWORD_RESET}${token}`,
+  const { rawToken } = await createHashedVerificationToken({
     userId,
-    'EX',
-    TOKEN_EXPIRATION.PASSWORD_RESET_SECONDS,
-  );
-  return token;
+    type: 'PASSWORD_RESET',
+    ttlSeconds: TOKEN_EXPIRATION.PASSWORD_RESET_SECONDS,
+  });
+  return rawToken;
 }
 
 export async function verifyAndConsumePasswordResetToken(token: string): Promise<string> {
-  const key = `${REDIS_PREFIXES.PASSWORD_RESET}${token}`;
-  let userId: string | null = null;
-  if (typeof (redis as any).getdel === 'function') {
-    userId = await (redis as any).getdel(key);
-  } else {
-    userId = await redis.get(key);
-    if (userId) await redis.del(key);
-  }
-  if (!userId) throw AppError.badRequest('Password reset token is invalid or has expired');
-  return userId;
+  const record = await verifyAndConsumeHashedToken(token, 'PASSWORD_RESET');
+  return record.userId;
 }
 
 export async function createEmailVerificationToken(userId: string): Promise<string> {
-  const token = randomUUID();
-  await redis.set(
-    `${REDIS_PREFIXES.EMAIL_VERIFICATION}${token}`,
+  const { rawToken } = await createHashedVerificationToken({
     userId,
-    'EX',
-    TOKEN_EXPIRATION.EMAIL_VERIFICATION_SECONDS,
-  );
-  return token;
+    type: 'EMAIL_VERIFICATION',
+    ttlSeconds: TOKEN_EXPIRATION.EMAIL_VERIFICATION_SECONDS,
+  });
+  return rawToken;
 }
 
 export async function verifyAndConsumeEmailVerificationToken(token: string): Promise<string> {
-  const key = `${REDIS_PREFIXES.EMAIL_VERIFICATION}${token}`;
-  let userId: string | null = null;
-  if (typeof (redis as any).getdel === 'function') {
-    userId = await (redis as any).getdel(key);
-  } else {
-    userId = await redis.get(key);
-    if (userId) await redis.del(key);
-  }
-  if (!userId) throw AppError.badRequest('Email verification token is invalid or has expired');
-  return userId;
+  const record = await verifyAndConsumeHashedToken(token, 'EMAIL_VERIFICATION');
+  return record.userId;
 }

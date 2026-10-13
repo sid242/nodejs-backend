@@ -15,6 +15,20 @@
       "when": 1790863071142,
       "tag": "0001_wild_lily_hollister",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791812622288,
+      "tag": "0002_purple_snowbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791816394548,
+      "tag": "0003_curvy_leech",
+      "breakpoints": true
     }
   ]
 }

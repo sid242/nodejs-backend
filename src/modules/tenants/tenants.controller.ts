@@ -1,0 +1,59 @@
+import type { Request, Response } from 'express';
+import { asyncHandler } from '@/lib/async-handler.js';
+import { AppResponse } from '@/lib/responses.js';
+import * as tenantsService from './tenants.service.js';
+
+export const createTenant = asyncHandler(async (req: Request, res: Response) => {
+  const result = await tenantsService.createTenantOrganization(req.user!.id, req.valid!.body);
+  AppResponse.created(result, 'Tenant organization created successfully').send(res);
+});
+
+export const getMyTenants = asyncHandler(async (req: Request, res: Response) => {
+  const list = await tenantsService.getUserTenants(req.user!.id);
+  AppResponse.ok(list).send(res);
+});
+
+export const getTenant = asyncHandler(async (req: Request, res: Response) => {
+  const tenant = await tenantsService.getTenantDetails(req.tenant!.id);
+  AppResponse.ok(tenant).send(res);
+});
+
+export const updateTenant = asyncHandler(async (req: Request, res: Response) => {
+  const updated = await tenantsService.updateTenantDetails(req.tenant!.id, req.valid!.body);
+  AppResponse.ok(updated, 'Tenant updated successfully').send(res);
+});
+
+export const listMembers = asyncHandler(async (req: Request, res: Response) => {
+  const members = await tenantsService.listMembers(req.tenant!.id);
+  AppResponse.ok(members).send(res);
+});
+
+export const addMember = asyncHandler(async (req: Request, res: Response) => {
+  const { email, role } = req.valid!.body;
+  const result = await tenantsService.addMemberToTenant(req.tenant!.id, req.user!.id, email, role);
+  AppResponse.created(result, 'Member added successfully').send(res);
+});
+
+export const removeMember = asyncHandler(async (req: Request, res: Response) => {
+  const memberId = String(req.params.memberId);
+  await tenantsService.removeMemberFromTenant(req.tenant!.id, req.user!.id, memberId);
+  AppResponse.ok({ message: 'Member removed successfully' }).send(res);
+});
+
+export const updateMemberRole = asyncHandler(async (req: Request, res: Response) => {
+  const memberId = String(req.params.memberId);
+  const result = await tenantsService.updateMemberRole(
+    req.tenant!.id,
+    req.user!.id,
+    memberId,
+    req.valid!.body.role,
+  );
+  AppResponse.ok(result).send(res);
+});
+
+export const getTenantAuditTrail = asyncHandler(async (req: Request, res: Response) => {
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 50;
+  const logs = await tenantsService.getTenantAuditTrail(req.tenant!.id, page, limit);
+  AppResponse.ok(logs).send(res);
+});
