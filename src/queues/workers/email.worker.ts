@@ -8,20 +8,35 @@ import {
 
 // Throwing => BullMQ retries with the backoff defined on the queue.
 export async function processEmail(job: Job): Promise<void> {
-  switch (job.name) {
+  switch (job?.name) {
     case 'welcome': {
       const { subject, html } = renderWelcomeEmail(job.data);
-      return sendEmail({ to: job.data.to, subject, html });
+      return sendEmail({
+        to: job?.data?.to,
+        subject,
+        html,
+        tenantId: job?.data?.tenantId,
+      });
     }
     case 'password-reset': {
       const { subject, html } = renderPasswordResetEmail(job.data);
-      return sendEmail({ to: job.data.to, subject, html });
+      return sendEmail({
+        to: job?.data?.to,
+        subject,
+        html,
+        tenantId: job?.data?.tenantId,
+      });
     }
     case 'verify-email': {
       const { subject, html } = renderVerifyEmail(job.data);
-      return sendEmail({ to: job.data.to, subject, html });
+      return sendEmail({
+        to: job?.data?.to,
+        subject,
+        html,
+        tenantId: job?.data?.tenantId,
+      });
     }
     default:
-      throw new Error(`Unknown email job: ${job.name}`);
+      throw new Error(`Unknown email job: ${job?.name}`);
   }
 }

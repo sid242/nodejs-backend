@@ -57,3 +57,31 @@ export const getTenantAuditTrail = asyncHandler(async (req: Request, res: Respon
   const logs = await tenantsService.getTenantAuditTrail(req.tenant!.id, page, limit);
   AppResponse.ok(logs).send(res);
 });
+
+export const getTenantEmailConfig = asyncHandler(async (req: Request, res: Response) => {
+  const config = await tenantsService.getTenantEmailConfig(req.tenant!.id);
+  AppResponse.ok(config).send(res);
+});
+
+export const upsertTenantEmailConfig = asyncHandler(async (req: Request, res: Response) => {
+  const result = await tenantsService.upsertTenantEmailConfig(
+    req.tenant!.id,
+    req.user!.id,
+    req.valid!.body,
+  );
+  AppResponse.ok(result, 'Tenant email configuration saved successfully').send(res);
+});
+
+export const deleteTenantEmailConfig = asyncHandler(async (req: Request, res: Response) => {
+  const result = await tenantsService.deleteTenantEmailConfig(req.tenant!.id, req.user!.id);
+  AppResponse.ok(result).send(res);
+});
+
+export const testTenantEmailConfig = asyncHandler(async (req: Request, res: Response) => {
+  const result = await tenantsService.testTenantEmailConfig(
+    req.tenant!.id,
+    req.valid?.body ?? {},
+  );
+  AppResponse.ok(result).send(res);
+});
+

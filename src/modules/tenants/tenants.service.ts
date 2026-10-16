@@ -1,5 +1,8 @@
 import { AppError } from '@/lib/errors.js';
 import { tenantsRepo } from './tenants.repository.js';
+import { tenantEmailRepo } from './tenant-email.repository.js';
+import { encrypt, decrypt } from '@/lib/crypto.js';
+import { verifySmtpConnection, invalidateTenantEmailCache } from '@/lib/mailer.js';
 import { rbacRepo } from '@/modules/rbac/rbac.repository.js';
 import * as rbacService from '@/modules/rbac/rbac.service.js';
 import * as authRepo from '@/modules/auth/auth.repository.js';
@@ -7,11 +10,14 @@ import { revokeAllUserTokens } from '@/modules/auth/tokens.js';
 import * as auditRepo from '@/modules/audit/audit.repository.js';
 import { logSecurityEvent } from '@/modules/audit/audit.service.js';
 import { db } from '@/config/db.js';
+import nodemailer from 'nodemailer';
+import type { UpsertTenantEmailConfigDto, TestTenantEmailConfigDto } from './tenants.dto.js';
 import {
   appModules,
   tenantModules,
   type PublicTenant,
   type TenantMember,
+  type PublicTenantEmailConfig,
 } from '@/db/schema/index.js';
 
 export interface CreateTenantDto {
@@ -301,3 +307,207 @@ export async function updateMemberRole(
 export async function getTenantAuditTrail(tenantId: string, page = 1, limit = 50) {
   return auditRepo.findAuditLogs({ tenantId, page, limit });
 }
+
+export async function getTenantEmailConfig(
+  tenantId: string,
+): Promise<PublicTenantEmailConfig | null> {
+  const config = await tenantEmailRepo.findTenantEmailConfig(tenantId);
+  if (!config) {
+    return null;
+  }
+
+  return {
+    id: config.id,
+    tenantId: config.tenantId,
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    user: config.user,
+    fromEmail: config.fromEmail,
+    fromName: config?.fromName ?? null,
+    replyTo: config?.replyTo ?? null,
+    isEnabled: config.isEnabled,
+    hasPassword: true,
+    createdAt: config.createdAt,
+    updatedAt: config.updatedAt,
+  };
+}
+
+export async function upsertTenantEmailConfig(
+  tenantId: string,
+  operatorUserId: string,
+  data: UpsertTenantEmailConfigDto,
+): Promise<PublicTenantEmailConfig> {
+  const existing = await tenantEmailRepo.findTenantEmailConfig(tenantId);
+
+  let passwordEncrypted: string;
+  if (data?.password) {
+    passwordEncrypted = encrypt(data.password);
+  } else if (existing?.passwordEncrypted) {
+    passwordEncrypted = existing.passwordEncrypted;
+  } else {
+    throw AppError.badRequest('Password is required when creating a new email configuration');
+  }
+
+  const record = await tenantEmailRepo.upsertTenantEmailConfig({
+    tenantId,
+    host: data?.host,
+    port: data?.port ?? 587,
+    secure: data?.secure ?? false,
+    user: data?.user,
+    passwordEncrypted,
+    fromEmail: data?.fromEmail,
+    fromName: data?.fromName ?? null,
+    replyTo: data?.replyTo ?? null,
+    isEnabled: data?.isEnabled ?? true,
+  });
+
+  await invalidateTenantEmailCache(tenantId);
+
+  await logSecurityEvent({
+    tenantId,
+    userId: operatorUserId,
+    action: 'TENANT.EMAIL_CONFIG_UPDATED',
+    entityType: 'TenantEmailConfig',
+    entityId: record?.id,
+    metadata: {
+      host: data?.host,
+      port: data?.port ?? 587,
+      user: data?.user,
+      fromEmail: data?.fromEmail,
+    },
+  });
+
+  return {
+    id: record.id,
+    tenantId: record.tenantId,
+    host: record.host,
+    port: record.port,
+    secure: record.secure,
+    user: record.user,
+    fromEmail: record.fromEmail,
+    fromName: record?.fromName ?? null,
+    replyTo: record?.replyTo ?? null,
+    isEnabled: record.isEnabled,
+    hasPassword: true,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  };
+}
+
+export async function deleteTenantEmailConfig(
+  tenantId: string,
+  operatorUserId: string,
+): Promise<{ message: string }> {
+  const existing = await tenantEmailRepo.findTenantEmailConfig(tenantId);
+  if (!existing) {
+    throw AppError.notFound('No custom email configuration found for this tenant');
+  }
+
+  await tenantEmailRepo.deleteTenantEmailConfig(tenantId);
+  await invalidateTenantEmailCache(tenantId);
+
+  await logSecurityEvent({
+    tenantId,
+    userId: operatorUserId,
+    action: 'TENANT.EMAIL_CONFIG_DELETED',
+    entityType: 'TenantEmailConfig',
+    entityId: tenantId,
+  });
+
+  return { message: 'Custom email configuration removed. Organization will use system defaults.' };
+}
+
+export async function testTenantEmailConfig(
+  tenantId: string,
+  data: TestTenantEmailConfigDto,
+): Promise<{ verified: boolean; message: string; testEmailSent: boolean }> {
+  let host = data?.host;
+  let port = data?.port ?? 587;
+  let secure = data?.secure ?? false;
+  let user = data?.user;
+  let pass = data?.password;
+  let fromEmail = data?.fromEmail;
+  let fromName = data?.fromName;
+
+  if (!host || !user || !pass) {
+    const existing = await tenantEmailRepo.findTenantEmailConfig(tenantId);
+    if (!existing) {
+      throw AppError.badRequest(
+        'Incomplete connection parameters provided and no saved email configuration exists for this organization',
+      );
+    }
+
+    host = host ?? existing.host;
+    port = data?.port ?? existing.port;
+    secure = data?.secure ?? existing.secure;
+    user = user ?? existing.user;
+    fromEmail = fromEmail ?? existing.fromEmail;
+    fromName = fromName ?? existing?.fromName ?? undefined;
+
+    if (!pass) {
+      try {
+        pass = decrypt(existing.passwordEncrypted);
+      } catch (err) {
+        throw AppError.badRequest('Failed to decrypt saved SMTP password for testing');
+      }
+    }
+  }
+
+  if (!host || !user || !pass) {
+    throw AppError.badRequest('Host, username, and password are required to test connection');
+  }
+
+  const result = await verifySmtpConnection({
+    host,
+    port,
+    secure,
+    user,
+    pass,
+  });
+
+  if (!result?.success) {
+    return {
+      verified: false,
+      message: result?.message ?? 'SMTP connection failed',
+      testEmailSent: false,
+    };
+  }
+
+  let testEmailSent = false;
+  if (data?.targetEmail) {
+    const transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure,
+      auth: { user, pass },
+    });
+
+    const sender = fromName ? `"${fromName}" <${fromEmail ?? user}>` : (fromEmail ?? user);
+
+    await transporter.sendMail({
+      from: sender,
+      to: data.targetEmail,
+      subject: 'Test Email from Scalable Foundation',
+      text: 'Congratulations! Your custom tenant SMTP configuration is working properly.',
+      html: `
+        <div style="font-family: sans-serif; padding: 20px;">
+          <h2>SMTP Connection Successful</h2>
+          <p>This is a test email confirming that your organization's custom SMTP configuration is operating correctly.</p>
+          <hr />
+          <p style="color: #666; font-size: 12px;">Sent via custom tenant SMTP at ${new Date().toISOString()}</p>
+        </div>
+      `,
+    });
+    testEmailSent = true;
+  }
+
+  return {
+    verified: true,
+    message: testEmailSent
+      ? `SMTP connection verified and test email sent to ${data?.targetEmail}`
+      : 'SMTP connection verified successfully',
+    testEmailSent,
+  };
+}
+

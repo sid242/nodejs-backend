@@ -73,4 +73,39 @@ router.get(
   controller.getTenantAuditTrail,
 );
 
+// Tenant Custom SMTP Settings
+router.get(
+  '/:tenantId/settings/email',
+  requireAuth,
+  requireTenant,
+  requirePermission('tenants:read'),
+  controller.getTenantEmailConfig,
+);
+
+router.put(
+  '/:tenantId/settings/email',
+  requireAuth,
+  requireTenant,
+  requirePermission('tenants:update'),
+  validate({ body: dto.upsertTenantEmailConfigDto }),
+  controller.upsertTenantEmailConfig,
+);
+
+router.post(
+  '/:tenantId/settings/email/test',
+  requireAuth,
+  requireTenant,
+  requirePermission('tenants:update'),
+  validate({ body: dto.testTenantEmailConfigDto }),
+  controller.testTenantEmailConfig,
+);
+
+router.delete(
+  '/:tenantId/settings/email',
+  requireAuth,
+  requireTenant,
+  requirePermission('tenants:update'),
+  controller.deleteTenantEmailConfig,
+);
+
 export default router;

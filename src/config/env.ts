@@ -34,7 +34,20 @@ const schema = z.object({
   S3_FORCE_PATH_STYLE: bool.default('false'),
   S3_MAX_UPLOAD_MB: z.coerce.number().default(10),
   S3_DELETE_CONCURRENCY: z.coerce.number().int().min(1).max(100).default(10),
+
+  // Email Configuration (System Default)
+  EMAIL_PROVIDER: z.enum(['ses', 'smtp']).default('ses'),
   SES_FROM_EMAIL: z.string().optional(),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().default(587),
+  SMTP_SECURE: bool.default('false'),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM_EMAIL: z.string().optional(),
+  SMTP_FROM_NAME: z.string().optional(),
+
+  // Encryption key for tenant credential storage (defaults derived from JWT_ACCESS_SECRET)
+  ENCRYPTION_KEY: z.string().min(16).optional(),
 
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60_000),
   RATE_LIMIT_MAX: z.coerce.number().default(300),
