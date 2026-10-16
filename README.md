@@ -38,7 +38,7 @@ Production-ready, scalable Node.js & TypeScript backend foundation built with **
 
 ```bash
 cp .env.example .env            # set the two JWT secrets (32+ chars)
-npm install                     # install dependencies (Node >= 20.6)
+npm install                     # install dependencies (Node >= 24)
 docker compose up -d            # start local Postgres, Redis, and MinIO (S3)
 npm run db:generate             # generate Drizzle migrations from schema
 npm run db:migrate              # apply database migrations
@@ -61,7 +61,7 @@ Then access the API at `http://localhost:8080`. (In full profile, presigned S3 U
 
 | Concern                    | Location                                                | Notes                                                                                   |
 | :------------------------- | :------------------------------------------------------ | :-------------------------------------------------------------------------------------- |
-| **Language & Runtime**     | `tsconfig.json`, `package.json`                         | 100% TypeScript ESM (`"type": "module"`), Node >=20.6, path alias `@/*`                 |
+| **Language & Runtime**     | `tsconfig.json`, `package.json`                         | 100% TypeScript ESM (`"type": "module"`), Node >=24, path alias `@/*`                   |
 | **Database & ORM**         | `src/db/schema/`, `src/config/db.ts`                    | PostgreSQL with Drizzle ORM, connection pool budget, typed schema definitions           |
 | **Config & Validation**    | `src/config/env.ts`                                     | Strict Zod validation; crashes on missing env; explicit pool, timeouts, and caps        |
 | **Logging**                | `src/config/logger.ts`, `src/middleware/http-logger.ts` | Structured Pino JSON logging, sensitive field redaction, `x-request-id` propagation     |

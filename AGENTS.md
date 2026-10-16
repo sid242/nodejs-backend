@@ -129,6 +129,12 @@ Every new business domain should be placed in `src/modules/<domain>/`:
 - Worker processors are registered in `src/queues/workers/index.ts`.
 - Workers running in `src/worker.ts` can notify connected WebSocket clients in real-time using `emitToUser(userId, event, payload)` or `emitToRoom(room, event, payload)` from `src/sockets/emitter.ts`.
 
+### 3.6 Defensive Coding & Safe Optional Chaining (`?.`)
+
+- Always use optional chaining (`?.`) when accessing properties from any object or performing operations on arrays and collections (e.g., `user?.profile?.name`, `items?.map(...)`, `list?.filter(...)`, `records?.length ?? 0`).
+- Guard against `null` / `undefined` across all data accesses, parameters, and query results to avoid uncaught `TypeError` runtime exceptions (`Cannot read properties of undefined/null`).
+- Pair with nullish coalescing (`??`) to supply safe fallback defaults where appropriate (e.g., `payload?.tags ?? []`, `result?.total ?? 0`).
+
 ---
 
 ## 4. Useful Commands

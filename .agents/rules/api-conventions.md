@@ -2,7 +2,7 @@
 
 ## 1. Module System & Imports
 
-- Target runtime: Node.js >= 20.6 with native ESM (`"type": "module"`).
+- Target runtime: Node.js >= 24 with native ESM (`"type": "module"`).
 - Always use standard ES `import` and `export` statements with full `.js` file extensions:
   ```javascript
   import { AppResponse } from '../../lib/responses.js';
@@ -98,3 +98,12 @@ AppResponse.created(data, 'Resource created').send(res);
   req.log.info({ userId: req.user.id }, 'User updated profile');
   ```
 - Never use `console.log()` or `console.error()`. Use `logger` from `src/config/logger.js` outside of request contexts.
+
+## 6. Defensive Programming & Safe Property Access (`?.`)
+
+- Always use optional chaining (`?.`) when accessing properties from any object or performing operations on arrays and collections:
+  - **Object properties**: `user?.profile?.avatarUrl`, `req?.user?.id`
+  - **Array operations**: `items?.map(...)`, `list?.filter(...)`, `records?.forEach(...)`, `tags?.length ?? 0`
+  - **Method invocations**: `callback?.()`
+- Guard against `null` or `undefined` everywhere to eliminate unexpected runtime `TypeError` exceptions (`Cannot read properties of undefined/null`).
+- Combine with nullish coalescing (`??`) to supply safe fallback values (e.g., `payload?.tags ?? []`, `data?.count ?? 0`).

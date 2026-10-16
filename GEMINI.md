@@ -4,9 +4,10 @@ See the complete repository guidelines and instructions in [AGENTS.md](file:///c
 
 ### Quick Summary
 
-- **Type**: ESM Node.js + TypeScript backend (`"type": "module"`, Node >=20.6)
+- **Type**: ESM Node.js + TypeScript backend (`"type": "module"`, Node >=24)
 - **Path Aliases**: `@/*` mapping directly to `./src/*` across all imports
 - **Frameworks**: Express, Drizzle ORM, BullMQ, Socket.IO, Pino
 - **Layering**: 4-layer architecture (`modules/<name>/[name].routes.ts`, `[name].controller.ts`, `[name].service.ts`, `[name].repository.ts`, and `src/db/schema/`)
 - **Responses**: Always use `AppResponse.ok()` / `AppResponse.created()` and `AppError` subclasses
+- **Defensive Coding**: Always use optional chaining (`?.`) when accessing object properties or executing operations on arrays/collections (`items?.map(...)`, `data?.field`), pairing with nullish coalescing (`??`) for fallbacks
 - **Rules & Skills**: Full set of modular rules and runnable skills are available in `.agents/`

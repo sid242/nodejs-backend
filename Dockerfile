@@ -1,5 +1,5 @@
 # One image, two roles: API (default CMD) and worker (override CMD to `node src/worker.js`).
-FROM node:20-bookworm-slim AS base
+FROM node:24-bookworm-slim AS base
 RUN apt-get update && apt-get install -y --no-install-recommends openssl dumb-init \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
