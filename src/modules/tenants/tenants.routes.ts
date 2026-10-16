@@ -8,6 +8,13 @@ import * as controller from './tenants.controller.js';
 
 const router: Router = Router();
 
+// Public resolution endpoint (supports ?slug=... or ?domain=... or Host header)
+router.get(
+  '/public/resolve',
+  validate({ query: dto.resolvePublicTenantDto }),
+  controller.resolvePublicTenant,
+);
+
 // Global tenant endpoints for logged-in user
 router.post('/', requireAuth, validate({ body: dto.createTenantDto }), controller.createTenant);
 
@@ -106,6 +113,33 @@ router.delete(
   requireTenant,
   requirePermission('tenants:update'),
   controller.deleteTenantEmailConfig,
+);
+
+// Tenant White-Label & Branding Management
+router.get(
+  '/:tenantId/branding',
+  requireAuth,
+  requireTenant,
+  requirePermission('tenants:read'),
+  controller.getTenantBranding,
+);
+
+router.put(
+  '/:tenantId/branding',
+  requireAuth,
+  requireTenant,
+  requirePermission('tenants:update'),
+  validate({ body: dto.updateTenantBrandingDto }),
+  controller.updateTenantBranding,
+);
+
+router.post(
+  '/:tenantId/branding/logo-presigned',
+  requireAuth,
+  requireTenant,
+  requirePermission('tenants:update'),
+  validate({ body: dto.requestBrandingUploadUrlDto }),
+  controller.requestBrandingUploadUrl,
 );
 
 export default router;

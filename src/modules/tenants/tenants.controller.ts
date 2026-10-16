@@ -81,3 +81,35 @@ export const testTenantEmailConfig = asyncHandler(async (req: Request, res: Resp
   const result = await tenantsService.testTenantEmailConfig(req.tenant!.id, req.valid?.body ?? {});
   AppResponse.ok(result).send(res);
 });
+
+export const resolvePublicTenant = asyncHandler(async (req: Request, res: Response) => {
+  const slug = (req.query?.slug as string) ?? undefined;
+  const domain = (req.query?.domain as string) ?? undefined;
+  const host = req.headers['x-forwarded-host']?.toString() ?? req.headers.host;
+
+  const resolved = await tenantsService.resolvePublicTenant({ slug, domain, host });
+  if (!resolved) {
+    AppResponse.ok(null, 'No workspace found for specified domain or slug').send(res);
+    return;
+  }
+  AppResponse.ok(resolved).send(res);
+});
+
+export const getTenantBranding = asyncHandler(async (req: Request, res: Response) => {
+  const branding = await tenantsService.getTenantBranding(req.tenant!.id);
+  AppResponse.ok(branding).send(res);
+});
+
+export const updateTenantBranding = asyncHandler(async (req: Request, res: Response) => {
+  const branding = await tenantsService.updateTenantBranding(
+    req.tenant!.id,
+    req.user!.id,
+    req.valid!.body,
+  );
+  AppResponse.ok(branding, 'Workspace branding updated successfully').send(res);
+});
+
+export const requestBrandingUploadUrl = asyncHandler(async (req: Request, res: Response) => {
+  const post = await tenantsService.generateBrandingUploadUrl(req.tenant!.id, req.valid!.body);
+  AppResponse.created(post, 'Presigned branding upload URL generated').send(res);
+});

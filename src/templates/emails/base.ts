@@ -2,12 +2,26 @@ export interface BaseLayoutOptions {
   title: string;
   previewText?: string;
   bodyContent: string;
+  branding?: {
+    companyName?: string;
+    logoUrl?: string | null;
+    primaryColor?: string;
+    supportEmail?: string | null;
+  };
 }
 
 /**
  * Base email layout wrapper providing responsive styling, card container, and footer.
  */
-export function baseLayout({ title, previewText, bodyContent }: BaseLayoutOptions): string {
+export function baseLayout({
+  title,
+  previewText,
+  bodyContent,
+  branding,
+}: BaseLayoutOptions): string {
+  const companyName = branding?.companyName ?? 'Scalable Platform';
+  const primaryColor = branding?.primaryColor ?? '#2563eb';
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -71,11 +85,11 @@ export function baseLayout({ title, previewText, bodyContent }: BaseLayoutOption
       font-size: 18px;
       font-weight: 700;
       letter-spacing: 2px;
-      color: #2563eb;
+      color: ${primaryColor};
     }
     .button {
       display: inline-block;
-      background-color: #2563eb;
+      background-color: ${primaryColor};
       color: #ffffff !important;
       padding: 12px 24px;
       border-radius: 6px;
@@ -107,14 +121,22 @@ export function baseLayout({ title, previewText, bodyContent }: BaseLayoutOption
         <td align="center">
           <div class="container">
             <div class="header">
-              <h1>Antigravity Backend</h1>
+              ${
+                branding?.logoUrl
+                  ? `<img src="${branding.logoUrl}" alt="${companyName}" height="36" style="display:block;margin:0 auto;max-height:36px;border:0;" />`
+                  : `<h1>${companyName}</h1>`
+              }
             </div>
             <div class="content">
               ${bodyContent}
             </div>
             <div class="footer">
-              <p>© ${new Date().getFullYear()} Antigravity Backend. All rights reserved.</p>
-              <p>This is an automated message, please do not reply directly to this email.</p>
+              <p>© ${new Date().getFullYear()} ${companyName}. All rights reserved.</p>
+              ${
+                branding?.supportEmail
+                  ? `<p>Questions? Contact us at <a href="mailto:${branding.supportEmail}" style="color:${primaryColor};">${branding.supportEmail}</a></p>`
+                  : '<p>This is an automated message, please do not reply directly to this email.</p>'
+              }
             </div>
           </div>
         </td>

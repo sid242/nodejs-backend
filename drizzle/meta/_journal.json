@@ -36,6 +36,13 @@
       "when": 1792134930178,
       "tag": "0004_old_ma_gnuci",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792155197921,
+      "tag": "0005_magenta_onslaught",
+      "breakpoints": true
     }
   ]
 }

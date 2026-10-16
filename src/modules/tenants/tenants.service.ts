@@ -1,8 +1,13 @@
 import { AppError } from '@/lib/errors.js';
 import { tenantsRepo } from './tenants.repository.js';
 import { tenantEmailRepo } from './tenant-email.repository.js';
+import { tenantBrandingRepo } from './tenant-branding.repository.js';
 import { encrypt, decrypt } from '@/lib/crypto.js';
 import { verifySmtpConnection, invalidateTenantEmailCache } from '@/lib/mailer.js';
+import { cache } from '@/lib/cache.js';
+import { createUploadPost } from '@/lib/s3.js';
+import { safeFilename } from '@/lib/utils.js';
+import { env } from '@/config/env.js';
 import { rbacRepo } from '@/modules/rbac/rbac.repository.js';
 import * as rbacService from '@/modules/rbac/rbac.service.js';
 import * as authRepo from '@/modules/auth/auth.repository.js';
@@ -11,13 +16,19 @@ import * as auditRepo from '@/modules/audit/audit.repository.js';
 import { logSecurityEvent } from '@/modules/audit/audit.service.js';
 import { db } from '@/config/db.js';
 import nodemailer from 'nodemailer';
-import type { UpsertTenantEmailConfigDto, TestTenantEmailConfigDto } from './tenants.dto.js';
+import type {
+  UpsertTenantEmailConfigDto,
+  TestTenantEmailConfigDto,
+  UpdateTenantBrandingDto,
+  RequestBrandingUploadUrlDto,
+} from './tenants.dto.js';
 import {
   appModules,
   tenantModules,
   type PublicTenant,
   type TenantMember,
   type PublicTenantEmailConfig,
+  type PublicTenantBranding,
 } from '@/db/schema/index.js';
 
 export interface CreateTenantDto {
@@ -508,5 +519,207 @@ export async function testTenantEmailConfig(
       ? `SMTP connection verified and test email sent to ${data?.targetEmail}`
       : 'SMTP connection verified successfully',
     testEmailSent,
+  };
+}
+
+export interface PublicTenantResolution {
+  tenant: {
+    id: string;
+    name: string;
+    slug: string;
+  };
+  branding: {
+    companyName: string;
+    logoUrl: string | null;
+    logoDarkUrl: string | null;
+    faviconUrl: string | null;
+    primaryColor: string;
+    accentColor: string;
+    borderRadius: string;
+    customDomain: string | null;
+    supportEmail: string | null;
+  };
+}
+
+/**
+ * Resolves a tenant by slug (path /:slug) or subdomain/custom domain with Redis caching.
+ */
+export async function resolvePublicTenant(options: {
+  slug?: string;
+  domain?: string;
+  host?: string;
+}): Promise<PublicTenantResolution | null> {
+  const normalizedSlug = options?.slug?.trim().toLowerCase();
+  const normalizedDomain = options?.domain?.trim().toLowerCase();
+  const rawHost = options?.host?.trim().toLowerCase();
+
+  const cacheKey = `branding:resolve:${normalizedSlug ?? ''}:${normalizedDomain ?? ''}:${rawHost ?? ''}`;
+
+  return cache.wrap(cacheKey, 3600, async () => {
+    let targetTenant: PublicTenant | null = null;
+
+    // 1. Resolve by explicit slug (e.g., example.com/test)
+    if (normalizedSlug) {
+      targetTenant = await tenantsRepo.findTenantBySlug(normalizedSlug);
+    }
+
+    // 2. Resolve by domain or host (e.g., test.example.com or portal.acme.com)
+    const domainToInspect = normalizedDomain ?? rawHost;
+    if (!targetTenant && domainToInspect) {
+      // Clean port if present (e.g., "test.localhost:3000" -> "test.localhost")
+      const hostname = domainToInspect.split(':')[0] ?? domainToInspect;
+
+      // 2a. Check custom domain match
+      const brandingByDomain = await tenantBrandingRepo.findBrandingByCustomDomain(hostname);
+      if (brandingByDomain?.tenantId) {
+        targetTenant = await tenantsRepo.findTenantById(brandingByDomain.tenantId);
+      }
+
+      // 2b. Check subdomain match (e.g., "test.example.com" -> slug: "test")
+      if (!targetTenant) {
+        const parts = hostname.split('.');
+        if (parts.length > 2 || (parts.length === 2 && parts[1] === 'localhost')) {
+          const potentialSubdomain = parts[0];
+          if (potentialSubdomain && potentialSubdomain !== 'www' && potentialSubdomain !== 'api') {
+            targetTenant = await tenantsRepo.findTenantBySlug(potentialSubdomain);
+          }
+        }
+      }
+    }
+
+    if (!targetTenant) {
+      return null;
+    }
+
+    const branding = await tenantBrandingRepo.findBrandingByTenantId(targetTenant.id);
+
+    return {
+      tenant: {
+        id: targetTenant.id,
+        name: targetTenant.name,
+        slug: targetTenant.slug,
+      },
+      branding: {
+        companyName: branding?.companyName ?? targetTenant.name,
+        logoUrl: branding?.logoUrl ?? null,
+        logoDarkUrl: branding?.logoDarkUrl ?? null,
+        faviconUrl: branding?.faviconUrl ?? null,
+        primaryColor: branding?.primaryColor ?? '#4F46E5',
+        accentColor: branding?.accentColor ?? '#06B6D4',
+        borderRadius: branding?.borderRadius ?? '0.5rem',
+        customDomain: branding?.customDomain ?? null,
+        supportEmail: branding?.supportEmail ?? null,
+      },
+    };
+  });
+}
+
+export async function getTenantBranding(tenantId: string): Promise<PublicTenantBranding> {
+  const tenant = await tenantsRepo.findTenantById(tenantId);
+  if (!tenant) {
+    throw AppError.notFound('Tenant not found');
+  }
+
+  const branding = await tenantBrandingRepo.findBrandingByTenantId(tenantId);
+  if (branding) {
+    return branding;
+  }
+
+  // Return default placeholder branding if not configured yet
+  return {
+    id: 'default',
+    tenantId,
+    companyName: tenant.name,
+    logoUrl: null,
+    logoDarkUrl: null,
+    faviconUrl: null,
+    primaryColor: '#4F46E5',
+    accentColor: '#06B6D4',
+    borderRadius: '0.5rem',
+    customDomain: null,
+    customDomainStatus: 'PENDING',
+    supportEmail: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+}
+
+export async function updateTenantBranding(
+  tenantId: string,
+  operatorUserId: string,
+  data: UpdateTenantBrandingDto,
+): Promise<PublicTenantBranding> {
+  const tenant = await tenantsRepo.findTenantById(tenantId);
+  if (!tenant) {
+    throw AppError.notFound('Tenant not found');
+  }
+
+  if (data?.customDomain) {
+    const existingDomain = await tenantBrandingRepo.findBrandingByCustomDomain(data.customDomain);
+    if (existingDomain && existingDomain.tenantId !== tenantId) {
+      throw AppError.conflict('This custom domain is already registered to another workspace');
+    }
+  }
+
+  const updated = await tenantBrandingRepo.upsertTenantBranding({
+    tenantId,
+    companyName: data?.companyName ?? tenant.name,
+    logoUrl: data?.logoUrl,
+    logoDarkUrl: data?.logoDarkUrl,
+    faviconUrl: data?.faviconUrl,
+    primaryColor: data?.primaryColor ?? '#4F46E5',
+    accentColor: data?.accentColor ?? '#06B6D4',
+    borderRadius: data?.borderRadius ?? '0.5rem',
+    customDomain: data?.customDomain ? data.customDomain.toLowerCase() : null,
+    supportEmail: data?.supportEmail,
+  });
+
+  // Invalidate cached branding entries
+  await cache.delByPrefix('branding:resolve:');
+
+  await logSecurityEvent({
+    tenantId,
+    userId: operatorUserId,
+    action: 'TENANT.BRANDING_UPDATED',
+    entityType: 'TenantBranding',
+    entityId: updated.id,
+    metadata: {
+      primaryColor: updated.primaryColor,
+      customDomain: updated.customDomain,
+      companyName: updated.companyName,
+    },
+  });
+
+  return updated;
+}
+
+export async function generateBrandingUploadUrl(
+  tenantId: string,
+  data: RequestBrandingUploadUrlDto,
+): Promise<{ uploadUrl: string; fields: Record<string, string>; key: string; publicUrl: string }> {
+  const tenant = await tenantsRepo.findTenantById(tenantId);
+  if (!tenant) {
+    throw AppError.notFound('Tenant not found');
+  }
+
+  const ext = data?.filename?.split('.').pop() ?? 'png';
+  const cleanExt = safeFilename(ext);
+  const key = `tenants/${tenantId}/branding/${data.type}-${Date.now()}.${cleanExt}`;
+
+  const post = await createUploadPost({
+    key,
+    contentType: data.contentType,
+    expiresIn: 300,
+  });
+
+  const publicUrl = env.S3_ENDPOINT
+    ? `${env.S3_ENDPOINT}/${env.S3_BUCKET}/${key}`
+    : `https://${env.S3_BUCKET}.s3.${env.AWS_REGION}.amazonaws.com/${key}`;
+
+  return {
+    uploadUrl: post.url,
+    fields: post.fields,
+    key,
+    publicUrl,
   };
 }
