@@ -448,7 +448,7 @@ export async function testTenantEmailConfig(
     if (!pass) {
       try {
         pass = decrypt(existing.passwordEncrypted);
-      } catch (err) {
+      } catch {
         throw AppError.badRequest('Failed to decrypt saved SMTP password for testing');
       }
     }
@@ -510,4 +510,3 @@ export async function testTenantEmailConfig(
     testEmailSent,
   };
 }
-

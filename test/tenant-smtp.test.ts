@@ -1,10 +1,16 @@
-import test from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   upsertTenantEmailConfigDto,
   testTenantEmailConfigDto,
 } from '@/modules/tenants/tenants.dto.js';
 import { verifySmtpConnection } from '@/lib/mailer.js';
+import { closeRedisClients } from '@/config/redis.js';
+import { closeDb } from '@/config/db.js';
+
+after(async () => {
+  await Promise.allSettled([closeRedisClients(), closeDb()]);
+});
 
 test('upsertTenantEmailConfigDto validates valid SMTP payload', () => {
   const valid = {

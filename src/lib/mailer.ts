@@ -80,13 +80,16 @@ export async function sendEmail({
   // 1. Check for Tenant-specific custom SMTP configuration
   if (tenantId) {
     try {
-      const tenantConfig = await cache.wrap(
-        `tenant-email:${tenantId}`,
-        300,
-        async () => tenantEmailRepo.findTenantEmailConfig(tenantId),
+      const tenantConfig = await cache.wrap(`tenant-email:${tenantId}`, 300, async () =>
+        tenantEmailRepo.findTenantEmailConfig(tenantId),
       );
 
-      if (tenantConfig?.isEnabled && tenantConfig?.host && tenantConfig?.user && tenantConfig?.passwordEncrypted) {
+      if (
+        tenantConfig?.isEnabled &&
+        tenantConfig?.host &&
+        tenantConfig?.user &&
+        tenantConfig?.passwordEncrypted
+      ) {
         let decryptedPass = '';
         try {
           decryptedPass = decrypt(tenantConfig.passwordEncrypted);
@@ -118,7 +121,10 @@ export async function sendEmail({
             replyTo: tenantConfig?.replyTo ?? undefined,
           });
 
-          logger.info({ to, subject, tenantId, host: tenantConfig.host }, '[mailer] sent via tenant SMTP');
+          logger.info(
+            { to, subject, tenantId, host: tenantConfig.host },
+            '[mailer] sent via tenant SMTP',
+          );
           return;
         }
       }

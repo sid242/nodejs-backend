@@ -78,10 +78,6 @@ export const deleteTenantEmailConfig = asyncHandler(async (req: Request, res: Re
 });
 
 export const testTenantEmailConfig = asyncHandler(async (req: Request, res: Response) => {
-  const result = await tenantsService.testTenantEmailConfig(
-    req.tenant!.id,
-    req.valid?.body ?? {},
-  );
+  const result = await tenantsService.testTenantEmailConfig(req.tenant!.id, req.valid?.body ?? {});
   AppResponse.ok(result).send(res);
 });
-
