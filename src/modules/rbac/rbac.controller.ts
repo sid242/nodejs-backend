@@ -1,7 +1,9 @@
 import type { Request, Response } from 'express';
+
 import { asyncHandler } from '@/lib/async-handler.js';
-import { AppResponse } from '@/lib/responses.js';
 import { AppError } from '@/lib/errors.js';
+import { AppResponse } from '@/lib/responses.js';
+
 import * as rbacRepo from './rbac.repository.js';
 import * as rbacService from './rbac.service.js';
 

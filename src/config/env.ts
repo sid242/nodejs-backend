@@ -47,7 +47,10 @@ const schema = z.object({
   SMTP_FROM_NAME: z.string().optional(),
 
   // Encryption key for tenant credential storage (defaults derived from JWT_ACCESS_SECRET)
-  ENCRYPTION_KEY: z.string().min(16).optional(),
+  ENCRYPTION_KEY: z
+    .string()
+    .transform((val) => (val?.trim() ? val : undefined))
+    .pipe(z.string().min(16).optional()),
 
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60_000),
   RATE_LIMIT_MAX: z.coerce.number().default(300),

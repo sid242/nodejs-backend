@@ -1,6 +1,7 @@
 import { Emitter } from '@socket.io/redis-emitter';
-import { createRedis } from '@/config/redis.js';
+
 import { env } from '@/config/env.js';
+import { createRedis } from '@/config/redis.js';
 
 // Lets ANY process (workers, cron, other services) push events to connected clients via Redis,
 // without running a Socket.IO server itself.

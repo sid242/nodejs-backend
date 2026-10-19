@@ -1,17 +1,18 @@
-import { z } from 'zod';
 import type { OpenAPIRegistry } from '@asteasolutions/zod-to-openapi';
-import {
-  registerDto,
-  loginDto,
-  refreshTokenDto,
-  forgotPasswordDto,
-  resetPasswordDto,
-  requestEmailVerificationDto,
-  verifyEmailDto,
-  impersonateUserDto,
-} from '@/modules/auth/auth.dto.js';
+import { z } from 'zod';
+
 import { errorResponse, successResponse } from '@/docs/helpers.js';
 import { UserSchema } from '@/docs/routes/users.docs.js';
+import {
+  forgotPasswordDto,
+  impersonateUserDto,
+  loginDto,
+  refreshTokenDto,
+  registerDto,
+  requestEmailVerificationDto,
+  resetPasswordDto,
+  verifyEmailDto,
+} from '@/modules/auth/auth.dto.js';
 
 export function registerAuthDocs(registry: OpenAPIRegistry): void {
   const RegisterInput = registry.register('RegisterInput', registerDto);

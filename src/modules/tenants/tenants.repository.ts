@@ -1,13 +1,14 @@
 import { and, desc, eq } from 'drizzle-orm';
+
 import { db } from '@/config/db.js';
 import {
-  tenants,
   tenantMembers,
+  tenants,
   users,
-  type Tenant,
   type NewTenant,
-  type TenantMember,
   type PublicTenant,
+  type Tenant,
+  type TenantMember,
 } from '@/db/schema/index.js';
 
 export async function createTenant(data: NewTenant): Promise<Tenant> {

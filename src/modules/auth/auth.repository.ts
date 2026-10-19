@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
+
 import { db } from '@/config/db.js';
-import { publicUser, users, type User, type PublicUser } from '@/db/schema/index.js';
+import { publicUser, users, type PublicUser, type User } from '@/db/schema/index.js';
 
 export interface CreateUserData {
   email: string;

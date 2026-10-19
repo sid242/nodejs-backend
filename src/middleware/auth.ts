@@ -1,7 +1,8 @@
-import type { Request, Response, NextFunction, RequestHandler } from 'express';
-import { AppError } from '@/lib/errors.js';
-import { verifyAccessToken, isImpersonationSessionActive } from '@/modules/auth/tokens.js';
+import type { NextFunction, Request, RequestHandler, Response } from 'express';
+
 import { ACCESS_TOKEN_COOKIE, AUTH_HEADERS, AUTH_MESSAGES } from '@/constants/index.js';
+import { AppError } from '@/lib/errors.js';
+import { isImpersonationSessionActive, verifyAccessToken } from '@/modules/auth/tokens.js';
 
 export async function requireAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
   let token: string | undefined;

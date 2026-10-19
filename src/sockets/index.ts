@@ -1,14 +1,15 @@
 import type { Server as HttpServer } from 'node:http';
-import { Server, type Socket } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
+import { Server, type Socket } from 'socket.io';
 import { z } from 'zod';
+
 import { env } from '@/config/env.js';
-import { createRedis, redis } from '@/config/redis.js';
 import { logger } from '@/config/logger.js';
-import { parseList } from '@/lib/utils.js';
-import { verifyAccessToken, isImpersonationSessionActive } from '@/modules/auth/tokens.js';
-import { parseCookies } from '@/modules/auth/cookies.js';
+import { createRedis, redis } from '@/config/redis.js';
 import { ACCESS_TOKEN_COOKIE } from '@/constants/index.js';
+import { parseList } from '@/lib/utils.js';
+import { parseCookies } from '@/modules/auth/cookies.js';
+import { isImpersonationSessionActive, verifyAccessToken } from '@/modules/auth/tokens.js';
 
 const roomSchema = z.object({ roomId: z.string().min(1).max(64) });
 const messageSchema = roomSchema.extend({ text: z.string().min(1).max(2000) });

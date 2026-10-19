@@ -1,13 +1,14 @@
 import { Router } from 'express';
-import { validate } from '@/middleware/validate.js';
+
 import { requireAuth, requireRole } from '@/middleware/auth.js';
+import { validate } from '@/middleware/validate.js';
+import * as controller from '@/modules/users/users.controller.js';
 import {
-  updateMeDto,
   listUsersQueryDto,
+  updateMeDto,
   updateUserRoleDto,
   updateUserStatusDto,
 } from '@/modules/users/users.dto.js';
-import * as controller from '@/modules/users/users.controller.js';
 
 const router = Router();
 router.use(requireAuth);

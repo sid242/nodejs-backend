@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import swaggerUi from 'swagger-ui-express';
+
 import { openApiDocument } from '@/docs/openapi.js';
 
 export function docsRouter(): Router {

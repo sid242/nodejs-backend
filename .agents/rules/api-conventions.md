@@ -5,8 +5,8 @@
 - Target runtime: Node.js >= 24 with native ESM (`"type": "module"`).
 - Always use standard ES `import` and `export` statements with full `.js` file extensions:
   ```javascript
-  import { AppResponse } from '../../lib/responses.js';
   import { AppError } from '../../lib/errors.js';
+  import { AppResponse } from '../../lib/responses.js';
   ```
 
 ## 2. API Response Formatting

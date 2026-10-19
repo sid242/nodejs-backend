@@ -1,8 +1,9 @@
 import http from 'node:http';
+
 import { createApp } from '@/app.js';
+import { closeDb } from '@/config/db.js';
 import { env } from '@/config/env.js';
 import { logger } from '@/config/logger.js';
-import { closeDb } from '@/config/db.js';
 import { closeRedisClients } from '@/config/redis.js';
 import { state } from '@/lib/state.js';
 import { closeQueues } from '@/queues/index.js';

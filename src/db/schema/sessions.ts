@@ -1,4 +1,5 @@
 import { boolean, index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+
 import { users } from './users.js';
 
 export const sessions = pgTable(

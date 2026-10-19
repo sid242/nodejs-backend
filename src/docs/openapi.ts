@@ -1,11 +1,12 @@
 import { OpenApiGeneratorV3 } from '@asteasolutions/zod-to-openapi';
-import { registry, bearerAuth, SuccessEnvelope, ErrorEnvelope } from '@/docs/helpers.js';
-import { registerHealthDocs } from '@/docs/routes/health.docs.js';
-import { registerUsersDocs } from '@/docs/routes/users.docs.js';
+
+import { bearerAuth, ErrorEnvelope, registry, SuccessEnvelope } from '@/docs/helpers.js';
 import { registerAuthDocs } from '@/docs/routes/auth.docs.js';
 import { registerFilesDocs } from '@/docs/routes/files.docs.js';
-import { registerTenantsDocs } from '@/docs/routes/tenants.docs.js';
+import { registerHealthDocs } from '@/docs/routes/health.docs.js';
 import { registerRbacDocs } from '@/docs/routes/rbac.docs.js';
+import { registerTenantsDocs } from '@/docs/routes/tenants.docs.js';
+import { registerUsersDocs } from '@/docs/routes/users.docs.js';
 
 // ---------------------------------------------------------------------------
 // Register Domain Documentation Modules

@@ -59,4 +59,7 @@ export const AUTH_MESSAGES = {
   CANNOT_IMPERSONATE_SELF: 'Cannot impersonate yourself',
   CANNOT_IMPERSONATE_ADMIN: 'Cannot impersonate an administrator',
   NOT_IMPERSONATING: 'Not currently in an active impersonation session',
+  PASSWORD_CHANGED_SUCCESS: 'Password changed successfully.',
+  CURRENT_PASSWORD_INCORRECT: 'Current password does not match.',
+  NEW_PASSWORD_SAME: 'New password must be different from your current password.',
 } as const;

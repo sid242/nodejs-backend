@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import type { PresignedPost } from '@aws-sdk/s3-presigned-post';
-import * as fileRepo from '@/modules/files/files.repository.js';
-import { AppError } from '@/lib/errors.js';
-import { safeFilename } from '@/lib/utils.js';
-import { createUploadPost, createDownloadUrl, headObject, deleteObject } from '@/lib/s3.js';
-import { fileQueue } from '@/queues/index.js';
-import { ALLOWED_TYPES, type RequestUploadDto } from '@/modules/files/files.dto.js';
+
 import type { FileRecord } from '@/db/schema/index.js';
+import { AppError } from '@/lib/errors.js';
+import { createDownloadUrl, createUploadPost, deleteObject, headObject } from '@/lib/s3.js';
+import { safeFilename } from '@/lib/utils.js';
+import { ALLOWED_TYPES, type RequestUploadDto } from '@/modules/files/files.dto.js';
+import * as fileRepo from '@/modules/files/files.repository.js';
+import { fileQueue } from '@/queues/index.js';
 
 export { ALLOWED_TYPES };
 
@@ -20,10 +21,12 @@ export interface DownloadUrlResult {
   expiresInSeconds: number;
 }
 
-async function getOwned(userId: string, id: string): Promise<FileRecord> {
+async function getOwned(userId: string, id: string, role?: string): Promise<FileRecord> {
   const file = await fileRepo.findById(id);
-  // 404 (not 403) so we don't leak the existence of other users' files.
-  if (!file || file.ownerId !== userId) throw AppError.notFound('File not found');
+  // 404 (not 403) so we don't leak the existence of other users' files to non-admins.
+  if (!file || (role !== 'ADMIN' && file.ownerId !== userId)) {
+    throw AppError.notFound('File not found');
+  }
   return file;
 }
 
@@ -55,16 +58,25 @@ export async function confirmUpload(userId: string, id: string): Promise<FileRec
   return updated;
 }
 
-export async function getDownloadUrl(userId: string, id: string): Promise<DownloadUrlResult> {
-  const file = await getOwned(userId, id);
+export async function getDownloadUrl(
+  userId: string,
+  id: string,
+  role?: string,
+): Promise<DownloadUrlResult> {
+  const file = await getOwned(userId, id, role);
   if (file.status !== 'UPLOADED') throw AppError.badRequest('File not uploaded yet');
   return { url: await createDownloadUrl(file.key), expiresInSeconds: 300 };
 }
 
-export const listFiles = (userId: string): Promise<FileRecord[]> => fileRepo.findByOwnerId(userId);
+export const listFiles = (userId: string, role?: string): Promise<FileRecord[]> => {
+  if (role === 'ADMIN') {
+    return fileRepo.findAll();
+  }
+  return fileRepo.findByOwnerId(userId);
+};
 
-export async function deleteFile(userId: string, id: string): Promise<void> {
-  const file = await getOwned(userId, id);
+export async function deleteFile(userId: string, id: string, role?: string): Promise<void> {
+  const file = await getOwned(userId, id, role);
   await deleteObject(file.key);
   await fileRepo.deleteById(id);
 }

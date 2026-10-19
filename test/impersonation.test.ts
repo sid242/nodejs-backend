@@ -1,17 +1,18 @@
-import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import {
-  issueImpersonationToken,
-  verifyAccessToken,
-  revokeImpersonationSession,
-  isImpersonationSessionActive,
-} from '../src/modules/auth/tokens.js';
+import { after, test } from 'node:test';
+
+import { closeDb } from '../src/config/db.js';
+import { closeRedisClients } from '../src/config/redis.js';
 import { requireAuth } from '../src/middleware/auth.js';
 import { blockIfImpersonating } from '../src/middleware/impersonate-guard.js';
 import { impersonateUserDto } from '../src/modules/auth/auth.dto.js';
-import { closeRedisClients } from '../src/config/redis.js';
-import { closeDb } from '../src/config/db.js';
+import {
+  isImpersonationSessionActive,
+  issueImpersonationToken,
+  revokeImpersonationSession,
+  verifyAccessToken,
+} from '../src/modules/auth/tokens.js';
 
 after(async () => {
   await Promise.allSettled([closeRedisClients(), closeDb()]);

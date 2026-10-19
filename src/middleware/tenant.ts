@@ -1,7 +1,8 @@
-import type { Request, Response, NextFunction } from 'express';
+import type { NextFunction, Request, Response } from 'express';
+
 import { AppError } from '@/lib/errors.js';
-import * as tenantsRepo from '@/modules/tenants/tenants.repository.js';
 import { resolveUserPermissions, SYSTEM_ROLES } from '@/modules/rbac/rbac.service.js';
+import * as tenantsRepo from '@/modules/tenants/tenants.repository.js';
 
 export async function requireTenant(
   req: Request,

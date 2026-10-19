@@ -1,7 +1,8 @@
 import { index, integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+
 import { fileStatusEnum } from './enums.js';
-import { users } from './users.js';
 import { tenants } from './tenants.js';
+import { users } from './users.js';
 
 export const files = pgTable(
   'File',

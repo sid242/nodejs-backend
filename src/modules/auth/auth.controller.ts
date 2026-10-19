@@ -1,12 +1,13 @@
 import type { Request, Response } from 'express';
-import { asyncHandler } from '@/lib/async-handler.js';
-import { AppResponse } from '@/lib/responses.js';
-import { AppError } from '@/lib/errors.js';
-import { revokeRefreshToken } from '@/modules/auth/tokens.js';
-import { setAuthCookies, clearAuthCookies } from '@/modules/auth/cookies.js';
+
 import { REFRESH_TOKEN_COOKIE } from '@/constants/index.js';
+import { asyncHandler } from '@/lib/async-handler.js';
+import { AppError } from '@/lib/errors.js';
+import { AppResponse } from '@/lib/responses.js';
 import * as service from '@/modules/auth/auth.service.js';
+import { clearAuthCookies, setAuthCookies } from '@/modules/auth/cookies.js';
 import * as sessionsRepo from '@/modules/auth/sessions.repository.js';
+import { revokeRefreshToken } from '@/modules/auth/tokens.js';
 
 export const register = asyncHandler(async (req: Request, res: Response) => {
   const result = await service.register(req.valid?.body);
@@ -50,17 +51,25 @@ export const resetPassword = asyncHandler(async (req: Request, res: Response) =>
   AppResponse.ok(result).send(res);
 });
 
+export const changePassword = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user?.id) {
+    throw AppError.unauthorized();
+  }
+  const result = await service.changePassword(req.user.id, req.valid?.body);
+  AppResponse.ok(result, 'Password changed successfully.').send(res);
+});
+
 export const requestEmailVerification = asyncHandler(async (req: Request, res: Response) => {
   const result = await service.requestEmailVerification({
     userId: req.user?.id,
     email: req.valid?.body?.email,
   });
-  AppResponse.ok(result).send(res);
+  AppResponse.ok(result, result?.message ?? 'Verification email sent').send(res);
 });
 
 export const verifyEmail = asyncHandler(async (req: Request, res: Response) => {
   const result = await service.verifyEmail(req.valid?.body);
-  AppResponse.ok(result).send(res);
+  AppResponse.ok(result, result?.message ?? 'Email verified successfully').send(res);
 });
 
 export const listSessions = asyncHandler(async (req: Request, res: Response) => {

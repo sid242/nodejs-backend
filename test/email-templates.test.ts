@@ -1,9 +1,10 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
+import test from 'node:test';
+
 import {
-  renderWelcomeEmail,
   renderPasswordResetEmail,
   renderVerifyEmail,
+  renderWelcomeEmail,
 } from '@/templates/emails/index.js';
 
 test('renderWelcomeEmail produces valid subject and includes user name', () => {

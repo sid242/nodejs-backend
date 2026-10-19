@@ -9,7 +9,8 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { tenants, tenantMembers } from './tenants.js';
+
+import { tenantMembers, tenants } from './tenants.js';
 
 export const appModules = pgTable(
   'AppModule',

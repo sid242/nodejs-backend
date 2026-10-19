@@ -1,33 +1,35 @@
 import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import * as authRepo from '@/modules/auth/auth.repository.js';
-import { AppError } from '@/lib/errors.js';
+
+import { AUTH_MESSAGES, REDIS_PREFIXES } from '@/constants/index.js';
+import type { PublicUser } from '@/db/schema/index.js';
 import { cache } from '@/lib/cache.js';
-import { emailQueue } from '@/queues/index.js';
+import { AppError } from '@/lib/errors.js';
 import { logSecurityEvent } from '@/modules/audit/audit.service.js';
+import type {
+  ChangePasswordDto,
+  ForgotPasswordDto,
+  ImpersonateUserDto,
+  LoginDto,
+  RegisterDto,
+  ResetPasswordDto,
+  VerifyEmailDto,
+} from '@/modules/auth/auth.dto.js';
+import * as authRepo from '@/modules/auth/auth.repository.js';
 import {
-  issueTokens,
   consumeRefreshToken,
-  createPasswordResetToken,
-  verifyAndConsumePasswordResetToken,
   createEmailVerificationToken,
-  verifyAndConsumeEmailVerificationToken,
-  revokeAllUserTokens,
+  createPasswordResetToken,
   issueImpersonationToken,
+  issueTokens,
+  revokeAllUserTokens,
   revokeImpersonationSession,
+  verifyAndConsumeEmailVerificationToken,
+  verifyAndConsumePasswordResetToken,
   type AuthTokens,
   type ImpersonatorClaim,
 } from '@/modules/auth/tokens.js';
-import type {
-  RegisterDto,
-  LoginDto,
-  ForgotPasswordDto,
-  ResetPasswordDto,
-  VerifyEmailDto,
-  ImpersonateUserDto,
-} from '@/modules/auth/auth.dto.js';
-import type { PublicUser } from '@/db/schema/index.js';
-import { AUTH_MESSAGES, REDIS_PREFIXES } from '@/constants/index.js';
+import { emailQueue } from '@/queues/index.js';
 
 // Compared against when the user doesn't exist, so response time doesn't reveal valid emails.
 const DUMMY_HASH = bcrypt.hashSync('dummy-password', 12);
@@ -131,6 +133,33 @@ export async function resetPassword({
   ]);
 
   return { message: AUTH_MESSAGES.PASSWORD_RESET_SUCCESS };
+}
+
+export async function changePassword(
+  userId: string,
+  { currentPassword, newPassword }: ChangePasswordDto,
+): Promise<{ message: string }> {
+  const user = await authRepo.findById(userId);
+  if (!user || user.deletedAt) {
+    throw AppError.notFound('User not found');
+  }
+
+  const isCurrentValid = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!isCurrentValid) {
+    throw AppError.badRequest(AUTH_MESSAGES.CURRENT_PASSWORD_INCORRECT);
+  }
+
+  const isSame = await bcrypt.compare(newPassword, user.passwordHash);
+  if (isSame) {
+    throw AppError.badRequest(AUTH_MESSAGES.NEW_PASSWORD_SAME);
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  await authRepo.updatePassword(userId, passwordHash);
+
+  await cache.del(`${REDIS_PREFIXES.USER_CACHE}${userId}`);
+
+  return { message: AUTH_MESSAGES.PASSWORD_CHANGED_SUCCESS };
 }
 
 export async function requestEmailVerification(identifier: {

@@ -1,4 +1,5 @@
 import { desc, eq } from 'drizzle-orm';
+
 import { db } from '@/config/db.js';
 import { files, type FileRecord, type NewFileRecord } from '@/db/schema/index.js';
 
@@ -41,6 +42,10 @@ export async function findByOwnerId(ownerId: string, limit = 100): Promise<FileR
     .where(eq(files.ownerId, ownerId))
     .orderBy(desc(files.createdAt))
     .limit(limit);
+}
+
+export async function findAll(limit = 100): Promise<FileRecord[]> {
+  return db.select().from(files).orderBy(desc(files.createdAt)).limit(limit);
 }
 
 export async function deleteById(id: string): Promise<void> {

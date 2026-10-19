@@ -1,8 +1,9 @@
 import { Worker, type Processor, type WorkerOptions } from 'bullmq';
-import { createRedis } from '@/config/redis.js';
-import { logger } from '@/config/logger.js';
+
 import { env } from '@/config/env.js';
-import { QUEUES, maintenanceQueue } from '@/queues/index.js';
+import { logger } from '@/config/logger.js';
+import { createRedis } from '@/config/redis.js';
+import { maintenanceQueue, QUEUES } from '@/queues/index.js';
 import { processEmail } from '@/queues/workers/email.worker.js';
 import { processFile } from '@/queues/workers/file.worker.js';
 import { processMaintenance } from '@/queues/workers/maintenance.worker.js';

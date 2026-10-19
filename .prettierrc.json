@@ -4,5 +4,9 @@
   "printWidth": 100,
   "tabWidth": 2,
   "semi": true,
-  "endOfLine": "lf"
+  "endOfLine": "lf",
+  "plugins": ["@ianvs/prettier-plugin-sort-imports"],
+  "importOrder": ["^(node:.*)$", "<THIRD_PARTY_MODULES>", "", "^@/(.*)$", "", "^[./]"],
+  "importOrderParserPlugins": ["typescript"],
+  "importOrderTypeScriptVersion": "5.0.0"
 }

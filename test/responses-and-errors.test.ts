@@ -1,7 +1,8 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AppResponse } from '@/lib/responses.js';
+import test from 'node:test';
+
 import { AppError } from '@/lib/errors.js';
+import { AppResponse } from '@/lib/responses.js';
 
 test('AppResponse.ok returns 200 envelope with requestId', () => {
   const response = AppResponse.ok({ id: '123', name: 'Alice' }, 'Fetched profile');

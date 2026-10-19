@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { cacheRedis } from '@/config/redis.js';
-import { logger } from '@/config/logger.js';
+
 import { env } from '@/config/env.js';
+import { logger } from '@/config/logger.js';
+import { cacheRedis } from '@/config/redis.js';
 import { sleep } from '@/lib/utils.js';
 
 const PREFIX = 'cache:';

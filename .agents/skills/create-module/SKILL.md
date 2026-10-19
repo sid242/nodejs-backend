@@ -16,7 +16,7 @@ Follow these steps to scaffold a new domain module in `src/modules/<domain>/` ad
 1. Create or update `src/db/schema/<domain>.js`:
 
    ```javascript
-   import { pgTable, text, timestamp, uuid, integer } from 'drizzle-orm/pg-core';
+   import { integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
    export const items = pgTable('Item', {
      id: uuid('id').defaultRandom().primaryKey(),
@@ -82,6 +82,7 @@ Create `src/modules/<domain>/<domain>.repository.js`:
 
 ```javascript
 import { desc, eq } from 'drizzle-orm';
+
 import { db } from '@/config/db.js';
 import { items, publicItem } from '@/db/schema/index.js';
 
@@ -116,9 +117,9 @@ export async function findByUserId(userId, { page, limit }) {
 Create `src/modules/<domain>/<domain>.service.js`:
 
 ```javascript
-import * as itemRepo from '@/modules/<domain>/<domain>.repository.js';
 import { cache } from '@/lib/cache.js';
 import { AppError } from '@/lib/errors.js';
+import * as itemRepo from '@/modules/<domain>/<domain>.repository.js';
 
 export async function createItem(userId, data) {
   const created = await itemRepo.create(userId, data);
@@ -175,14 +176,15 @@ Create `src/modules/<domain>/<domain>.routes.js`:
 
 ```javascript
 import { Router } from 'express';
-import { validate } from '@/middleware/validate.js';
+
 import { requireAuth } from '@/middleware/auth.js';
+import { validate } from '@/middleware/validate.js';
+import * as controller from '@/modules/<domain>/<domain>.controller.js';
 import {
   createItemDto,
-  listItemsQueryDto,
   itemIdParamDto,
+  listItemsQueryDto,
 } from '@/modules/<domain>/<domain>.dto.js';
-import * as controller from '@/modules/<domain>/<domain>.controller.js';
 
 const router = Router();
 router.use(requireAuth);

@@ -1,5 +1,5 @@
-import { Router, type Request, type Response, type NextFunction } from 'express';
 import client from '@prometheus-io/client';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 
 client.collectDefaultMetrics(); // event loop lag, heap, GC, etc.
 

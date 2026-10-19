@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+
 import { asyncHandler } from '@/lib/async-handler.js';
 import { AppResponse } from '@/lib/responses.js';
 import * as service from '@/modules/users/users.service.js';

@@ -1,9 +1,10 @@
 import { eq } from 'drizzle-orm';
+
 import { db } from '@/config/db.js';
 import {
   tenantEmailConfigs,
-  type TenantEmailConfig,
   type NewTenantEmailConfig,
+  type TenantEmailConfig,
 } from '@/db/schema/index.js';
 
 export async function findTenantEmailConfig(tenantId: string): Promise<TenantEmailConfig | null> {

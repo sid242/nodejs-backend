@@ -1,4 +1,5 @@
 import pino from 'pino';
+
 import { env } from '@/config/env.js';
 
 // JSON to stdout in prod (ECS awslogs -> CloudWatch), pretty in dev.

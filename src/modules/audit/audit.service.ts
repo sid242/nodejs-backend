@@ -1,6 +1,7 @@
 import { logger } from '@/config/logger.js';
+import type { AuditLog, NewAuditLog } from '@/db/schema/index.js';
+
 import * as auditRepo from './audit.repository.js';
-import type { NewAuditLog, AuditLog } from '@/db/schema/index.js';
 
 export async function logSecurityEvent(event: NewAuditLog): Promise<void> {
   try {

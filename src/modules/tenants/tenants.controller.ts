@@ -1,6 +1,8 @@
 import type { Request, Response } from 'express';
+
 import { asyncHandler } from '@/lib/async-handler.js';
 import { AppResponse } from '@/lib/responses.js';
+
 import * as tenantsService from './tenants.service.js';
 
 export const createTenant = asyncHandler(async (req: Request, res: Response) => {
@@ -52,10 +54,15 @@ export const updateMemberRole = asyncHandler(async (req: Request, res: Response)
 });
 
 export const getTenantAuditTrail = asyncHandler(async (req: Request, res: Response) => {
-  const page = Number(req.query.page) || 1;
-  const limit = Number(req.query.limit) || 50;
+  const page = Number(req.query?.page) || 1;
+  const limit = Number(req.query?.limit) || 50;
   const logs = await tenantsService.getTenantAuditTrail(req.tenant!.id, page, limit);
   AppResponse.ok(logs).send(res);
+});
+
+export const searchTenantAuditTrail = asyncHandler(async (req: Request, res: Response) => {
+  const result = await tenantsService.searchTenantAuditTrail(req.tenant!.id, req.valid!.body);
+  AppResponse.ok(result).send(res);
 });
 
 export const getTenantEmailConfig = asyncHandler(async (req: Request, res: Response) => {

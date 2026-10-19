@@ -1,6 +1,7 @@
 import { Queue, type DefaultJobOptions } from 'bullmq';
-import { createRedis } from '@/config/redis.js';
+
 import { env } from '@/config/env.js';
+import { createRedis } from '@/config/redis.js';
 
 export const QUEUES = {
   EMAIL: 'email',

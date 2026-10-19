@@ -1,10 +1,11 @@
 import crypto from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
+
 import { db } from '@/config/db.js';
 import { redis } from '@/config/redis.js';
+import { REDIS_PREFIXES } from '@/constants/index.js';
 import { verificationTokens, type VerificationToken } from '@/db/schema/index.js';
 import { AppError } from '@/lib/errors.js';
-import { REDIS_PREFIXES } from '@/constants/index.js';
 
 export function hashToken(rawToken: string): string {
   return crypto.createHash('sha256').update(rawToken).digest('hex');

@@ -1,20 +1,22 @@
 import { and, asc, eq, inArray, isNull, notInArray, or, sql } from 'drizzle-orm';
+
 import { db } from '@/config/db.js';
 import {
   appModules,
   permissions,
-  roles,
   rolePermissions,
+  roles,
   tenantMemberRoles,
   tenantMembers,
   tenantModules,
   type AppModule,
   type NewAppModule,
-  type Permission,
   type NewPermission,
-  type RoleRecord,
   type NewRoleRecord,
+  type Permission,
+  type RoleRecord,
 } from '@/db/schema/index.js';
+
 import type { DomainModuleDefinition } from './modules.types.js';
 
 export type { AppModule, NewAppModule, Permission, NewPermission, RoleRecord, NewRoleRecord };

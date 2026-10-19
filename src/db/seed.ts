@@ -1,10 +1,11 @@
 import bcrypt from 'bcryptjs';
 import { eq } from 'drizzle-orm';
-import { db, closeDb } from '@/config/db.js';
+
+import { closeDb, db } from '@/config/db.js';
+import { logger } from '@/config/logger.js';
 import { closeRedisClients } from '@/config/redis.js';
 import { users } from '@/db/schema/index.js';
 import { seedDefaultRbac } from '@/modules/rbac/rbac.service.js';
-import { logger } from '@/config/logger.js';
 
 async function seed(): Promise<void> {
   const adminEmail = (process.env.ADMIN_EMAIL ?? 'admin@example.com').toLowerCase().trim();

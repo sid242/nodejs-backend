@@ -9,6 +9,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+
 import { membershipStatusEnum, tenantStatusEnum } from './enums.js';
 import { users } from './users.js';
 

@@ -1,12 +1,13 @@
-import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import {
-  upsertTenantEmailConfigDto,
-  testTenantEmailConfigDto,
-} from '@/modules/tenants/tenants.dto.js';
-import { verifySmtpConnection } from '@/lib/mailer.js';
-import { closeRedisClients } from '@/config/redis.js';
+import { after, test } from 'node:test';
+
 import { closeDb } from '@/config/db.js';
+import { closeRedisClients } from '@/config/redis.js';
+import { verifySmtpConnection } from '@/lib/mailer.js';
+import {
+  testTenantEmailConfigDto,
+  upsertTenantEmailConfigDto,
+} from '@/modules/tenants/tenants.dto.js';
 
 after(async () => {
   await Promise.allSettled([closeRedisClients(), closeDb()]);

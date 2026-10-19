@@ -1,5 +1,5 @@
-import { z } from 'zod';
 import type { OpenAPIRegistry } from '@asteasolutions/zod-to-openapi';
+import { z } from 'zod';
 
 export function registerHealthDocs(registry: OpenAPIRegistry): void {
   const HealthLiveResponse = registry.register(

@@ -1,4 +1,5 @@
-import { desc, eq, and, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, inArray, lte, or, sql } from 'drizzle-orm';
+
 import { db } from '@/config/db.js';
 import { auditLogs, type AuditLog, type NewAuditLog } from '@/db/schema/index.js';
 
@@ -11,6 +12,11 @@ export interface AuditLogFilters {
   tenantId?: string;
   userId?: string;
   action?: string;
+  actions?: string[];
+  search?: string;
+  entityType?: string;
+  startDate?: string | Date;
+  endDate?: string | Date;
   limit?: number;
   page?: number;
 }
@@ -29,6 +35,23 @@ export async function findAuditLogs(filters: AuditLogFilters): Promise<{
   if (filters.tenantId) conditions.push(eq(auditLogs.tenantId, filters.tenantId));
   if (filters.userId) conditions.push(eq(auditLogs.userId, filters.userId));
   if (filters.action) conditions.push(eq(auditLogs.action, filters.action));
+  if (filters.actions && filters.actions.length > 0)
+    conditions.push(inArray(auditLogs.action, filters.actions));
+  if (filters.entityType) conditions.push(eq(auditLogs.entityType, filters.entityType));
+  if (filters.startDate) conditions.push(gte(auditLogs.createdAt, new Date(filters.startDate)));
+  if (filters.endDate) conditions.push(lte(auditLogs.createdAt, new Date(filters.endDate)));
+
+  if (filters.search) {
+    const term = `%${filters.search}%`;
+    conditions.push(
+      or(
+        ilike(auditLogs.action, term),
+        ilike(auditLogs.ipAddress, term),
+        ilike(auditLogs.entityType, term),
+        ilike(auditLogs.entityId, term),
+      ),
+    );
+  }
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 

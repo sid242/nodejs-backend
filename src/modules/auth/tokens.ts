@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
+
 import { env } from '@/config/env.js';
 import { redis } from '@/config/redis.js';
-import { AppError } from '@/lib/errors.js';
 import { REDIS_PREFIXES, TOKEN_EXPIRATION } from '@/constants/index.js';
+import { AppError } from '@/lib/errors.js';
+
 import {
   createHashedVerificationToken,
   verifyAndConsumeHashedToken,

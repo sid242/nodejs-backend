@@ -1,7 +1,8 @@
-import { z } from 'zod';
 import type { OpenAPIRegistry } from '@asteasolutions/zod-to-openapi';
-import { fileIdParamDto, requestUploadDto } from '@/modules/files/files.dto.js';
+import { z } from 'zod';
+
 import { bearerAuth, errorResponse, successResponse } from '@/docs/helpers.js';
+import { fileIdParamDto, requestUploadDto } from '@/modules/files/files.dto.js';
 
 export function registerFilesDocs(registry: OpenAPIRegistry): void {
   const FileSchema = registry.register(

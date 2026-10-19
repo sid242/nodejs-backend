@@ -1,5 +1,6 @@
+import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2';
 import nodemailer from 'nodemailer';
-import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
+
 import { env, isProd } from '@/config/env.js';
 import { logger } from '@/config/logger.js';
 import { cache } from '@/lib/cache.js';

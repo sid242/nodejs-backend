@@ -1,6 +1,8 @@
 import { and, desc, eq } from 'drizzle-orm';
+
 import { db } from '@/config/db.js';
 import { sessions, type SessionRecord } from '@/db/schema/index.js';
+
 import { hashToken } from './verification.repository.js';
 
 export interface CreateSessionParams {

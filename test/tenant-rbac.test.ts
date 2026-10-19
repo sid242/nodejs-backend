@@ -1,14 +1,16 @@
-import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { hashToken } from '../src/modules/auth/verification.repository.js';
-import { SYSTEM_PERMISSIONS, SYSTEM_ROLES } from '../src/modules/rbac/rbac.service.js';
-import { SYSTEM_MODULE_DEFINITIONS } from '../src/modules/rbac/modules.registry.js';
-import { requirePermission, requireTenantRole } from '../src/middleware/rbac.js';
-import { AppError } from '../src/lib/errors.js';
-import { closeRedisClients } from '../src/config/redis.js';
+import { after, test } from 'node:test';
+
 import { closeDb } from '../src/config/db.js';
-import * as rbacService from '../src/modules/rbac/rbac.service.js';
+import { closeRedisClients } from '../src/config/redis.js';
+import { AppError } from '../src/lib/errors.js';
+import { requirePermission, requireTenantRole } from '../src/middleware/rbac.js';
+import { hashToken } from '../src/modules/auth/verification.repository.js';
+import { SYSTEM_MODULE_DEFINITIONS } from '../src/modules/rbac/modules.registry.js';
+import * as rbacDto from '../src/modules/rbac/rbac.dto.js';
 import * as rbacRepo from '../src/modules/rbac/rbac.repository.js';
+import { SYSTEM_PERMISSIONS, SYSTEM_ROLES } from '../src/modules/rbac/rbac.service.js';
+import * as rbacService from '../src/modules/rbac/rbac.service.js';
 
 after(async () => {
   await Promise.allSettled([closeRedisClients(), closeDb()]);
@@ -132,8 +134,6 @@ test('requireTenantRole allows user with matching tenant role', () => {
 
   assert.equal(called, true);
 });
-
-import * as rbacDto from '../src/modules/rbac/rbac.dto.js';
 
 test('RBAC module and permission DTO validation contracts', () => {
   // 1. Valid module creation parses with default sortOrder

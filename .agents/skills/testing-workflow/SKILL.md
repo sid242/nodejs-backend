@@ -37,10 +37,11 @@ This project uses the native **Node.js Test Runner** (`node:test`) and strict as
 Create test files inside the `test/` directory using the `*.test.js` naming convention:
 
 ```javascript
-import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AppResponse } from '../src/lib/responses.js';
+import test from 'node:test';
+
 import { AppError } from '../src/lib/errors.js';
+import { AppResponse } from '../src/lib/responses.js';
 
 test('AppResponse returns expected 200 payload structure', () => {
   const res = AppResponse.ok({ count: 5 }, 'Success');
@@ -68,8 +69,8 @@ test('AppError creates 404 not found error', () => {
 Node's `node:test` module includes built-in mocking utilities:
 
 ```javascript
-import test from 'node:test';
 import assert from 'node:assert/strict';
+import test from 'node:test';
 
 test('mocking an asynchronous service dependency', async (t) => {
   const mockFetcher = t.mock.fn(async (id) => ({ id, name: 'Test' }));

@@ -1,7 +1,8 @@
 import { desc, eq, sql } from 'drizzle-orm';
+
 import { db } from '@/config/db.js';
 import { publicUser, users, type PublicUser } from '@/db/schema/index.js';
-import type { UpdateMeDto, ListUsersQueryDto } from '@/modules/users/users.dto.js';
+import type { ListUsersQueryDto, UpdateMeDto } from '@/modules/users/users.dto.js';
 
 export interface PaginatedUsersResult {
   items: PublicUser[];

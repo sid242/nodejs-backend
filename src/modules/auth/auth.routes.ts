@@ -1,19 +1,21 @@
 import { Router } from 'express';
-import { validate } from '@/middleware/validate.js';
-import { authLimiter } from '@/middleware/rate-limit.js';
-import { requireAuth, optionalAuth, requireRole } from '@/middleware/auth.js';
+
+import { optionalAuth, requireAuth, requireRole } from '@/middleware/auth.js';
 import { blockIfImpersonating } from '@/middleware/impersonate-guard.js';
+import { authLimiter } from '@/middleware/rate-limit.js';
+import { validate } from '@/middleware/validate.js';
+import * as controller from '@/modules/auth/auth.controller.js';
 import {
-  registerDto,
+  changePasswordDto,
+  forgotPasswordDto,
+  impersonateUserDto,
   loginDto,
   refreshTokenDto,
-  forgotPasswordDto,
-  resetPasswordDto,
+  registerDto,
   requestEmailVerificationDto,
+  resetPasswordDto,
   verifyEmailDto,
-  impersonateUserDto,
 } from '@/modules/auth/auth.dto.js';
-import * as controller from '@/modules/auth/auth.controller.js';
 
 const router = Router();
 router.use(authLimiter);
@@ -24,6 +26,13 @@ router.post('/refresh', validate({ body: refreshTokenDto }), controller.refresh)
 router.post('/logout', validate({ body: refreshTokenDto }), controller.logout);
 router.post('/forgot-password', validate({ body: forgotPasswordDto }), controller.forgotPassword);
 router.post('/reset-password', validate({ body: resetPasswordDto }), controller.resetPassword);
+router.post(
+  '/change-password',
+  requireAuth,
+  blockIfImpersonating('Change Password'),
+  validate({ body: changePasswordDto }),
+  controller.changePassword,
+);
 router.post(
   '/verify-email/request',
   optionalAuth,

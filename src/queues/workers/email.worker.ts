@@ -1,9 +1,10 @@
 import type { Job } from 'bullmq';
+
 import { sendEmail } from '@/lib/mailer.js';
 import {
-  renderWelcomeEmail,
   renderPasswordResetEmail,
   renderVerifyEmail,
+  renderWelcomeEmail,
 } from '@/templates/emails/index.js';
 
 // Throwing => BullMQ retries with the backoff defined on the queue.

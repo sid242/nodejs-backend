@@ -39,6 +39,13 @@ export const resetPasswordDto = z.object({
 
 export type ResetPasswordDto = z.infer<typeof resetPasswordDto>;
 
+export const changePasswordDto = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: passwordSchema,
+});
+
+export type ChangePasswordDto = z.infer<typeof changePasswordDto>;
+
 export const requestEmailVerificationDto = z
   .object({
     email: emailSchema.optional(),

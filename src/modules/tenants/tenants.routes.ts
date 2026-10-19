@@ -1,10 +1,12 @@
 import { Router } from 'express';
+
 import { requireAuth } from '@/middleware/auth.js';
-import { requireTenant } from '@/middleware/tenant.js';
 import { requirePermission } from '@/middleware/rbac.js';
+import { requireTenant } from '@/middleware/tenant.js';
 import { validate } from '@/middleware/validate.js';
-import * as dto from './tenants.dto.js';
+
 import * as controller from './tenants.controller.js';
+import * as dto from './tenants.dto.js';
 
 const router: Router = Router();
 
@@ -78,6 +80,15 @@ router.get(
   requireTenant,
   requirePermission('audit:read'),
   controller.getTenantAuditTrail,
+);
+
+router.post(
+  '/:tenantId/audit-logs/search',
+  requireAuth,
+  requireTenant,
+  requirePermission('audit:read'),
+  validate({ body: dto.searchAuditLogsDto }),
+  controller.searchTenantAuditTrail,
 );
 
 // Tenant Custom SMTP Settings

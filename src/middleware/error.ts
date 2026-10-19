@@ -1,6 +1,7 @@
-import type { Request, Response, NextFunction } from 'express';
-import { ZodError } from 'zod';
+import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import { ZodError } from 'zod';
+
 import { AppError } from '@/lib/errors.js';
 
 export function notFound(req: Request, res: Response): void {

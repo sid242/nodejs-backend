@@ -1,9 +1,10 @@
 import { Router } from 'express';
-import { validate } from '@/middleware/validate.js';
+
 import { requireAuth } from '@/middleware/auth.js';
 import { uploadLimiter } from '@/middleware/rate-limit.js';
-import { fileIdParamDto, requestUploadDto } from '@/modules/files/files.dto.js';
+import { validate } from '@/middleware/validate.js';
 import * as controller from '@/modules/files/files.controller.js';
+import { fileIdParamDto, requestUploadDto } from '@/modules/files/files.dto.js';
 
 const router = Router();
 router.use(requireAuth);

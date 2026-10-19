@@ -1,12 +1,13 @@
-import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { closeRedisClients } from '../src/config/redis.js';
+import { after, test } from 'node:test';
+
 import { closeDb } from '../src/config/db.js';
+import { closeRedisClients } from '../src/config/redis.js';
 import { rbacRepo } from '../src/modules/rbac/rbac.repository.js';
 import * as rbacService from '../src/modules/rbac/rbac.service.js';
-import * as tenantsService from '../src/modules/tenants/tenants.service.js';
 import { tenantsRepo } from '../src/modules/tenants/tenants.repository.js';
+import * as tenantsService from '../src/modules/tenants/tenants.service.js';
 
 after(async () => {
   await Promise.allSettled([closeRedisClients(), closeDb()]);

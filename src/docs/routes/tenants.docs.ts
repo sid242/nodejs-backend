@@ -1,7 +1,8 @@
-import { z } from 'zod';
 import type { OpenAPIRegistry } from '@asteasolutions/zod-to-openapi';
-import { createTenantDto, updateTenantDto, addMemberDto } from '@/modules/tenants/tenants.dto.js';
+import { z } from 'zod';
+
 import { bearerAuth, errorResponse, successResponse } from '@/docs/helpers.js';
+import { addMemberDto, createTenantDto, updateTenantDto } from '@/modules/tenants/tenants.dto.js';
 
 export const TenantSchema = z.object({
   id: z.string().uuid().openapi({ example: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22' }),

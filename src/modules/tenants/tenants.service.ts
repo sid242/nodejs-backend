@@ -1,35 +1,38 @@
-import { AppError } from '@/lib/errors.js';
-import { tenantsRepo } from './tenants.repository.js';
-import { tenantEmailRepo } from './tenant-email.repository.js';
-import { tenantBrandingRepo } from './tenant-branding.repository.js';
-import { encrypt, decrypt } from '@/lib/crypto.js';
-import { verifySmtpConnection, invalidateTenantEmailCache } from '@/lib/mailer.js';
-import { cache } from '@/lib/cache.js';
-import { createUploadPost } from '@/lib/s3.js';
-import { safeFilename } from '@/lib/utils.js';
-import { env } from '@/config/env.js';
-import { rbacRepo } from '@/modules/rbac/rbac.repository.js';
-import * as rbacService from '@/modules/rbac/rbac.service.js';
-import * as authRepo from '@/modules/auth/auth.repository.js';
-import { revokeAllUserTokens } from '@/modules/auth/tokens.js';
-import * as auditRepo from '@/modules/audit/audit.repository.js';
-import { logSecurityEvent } from '@/modules/audit/audit.service.js';
-import { db } from '@/config/db.js';
 import nodemailer from 'nodemailer';
-import type {
-  UpsertTenantEmailConfigDto,
-  TestTenantEmailConfigDto,
-  UpdateTenantBrandingDto,
-  RequestBrandingUploadUrlDto,
-} from './tenants.dto.js';
+
+import { db } from '@/config/db.js';
+import { env } from '@/config/env.js';
 import {
   appModules,
   tenantModules,
   type PublicTenant,
-  type TenantMember,
-  type PublicTenantEmailConfig,
   type PublicTenantBranding,
+  type PublicTenantEmailConfig,
+  type TenantMember,
 } from '@/db/schema/index.js';
+import { cache } from '@/lib/cache.js';
+import { decrypt, encrypt } from '@/lib/crypto.js';
+import { AppError } from '@/lib/errors.js';
+import { invalidateTenantEmailCache, verifySmtpConnection } from '@/lib/mailer.js';
+import { createUploadPost } from '@/lib/s3.js';
+import { safeFilename } from '@/lib/utils.js';
+import * as auditRepo from '@/modules/audit/audit.repository.js';
+import { logSecurityEvent } from '@/modules/audit/audit.service.js';
+import * as authRepo from '@/modules/auth/auth.repository.js';
+import { revokeAllUserTokens } from '@/modules/auth/tokens.js';
+import { rbacRepo } from '@/modules/rbac/rbac.repository.js';
+import * as rbacService from '@/modules/rbac/rbac.service.js';
+
+import { tenantBrandingRepo } from './tenant-branding.repository.js';
+import { tenantEmailRepo } from './tenant-email.repository.js';
+import type {
+  RequestBrandingUploadUrlDto,
+  SearchAuditLogsDto,
+  TestTenantEmailConfigDto,
+  UpdateTenantBrandingDto,
+  UpsertTenantEmailConfigDto,
+} from './tenants.dto.js';
+import { tenantsRepo } from './tenants.repository.js';
 
 export interface CreateTenantDto {
   name: string;
@@ -317,6 +320,10 @@ export async function updateMemberRole(
 
 export async function getTenantAuditTrail(tenantId: string, page = 1, limit = 50) {
   return auditRepo.findAuditLogs({ tenantId, page, limit });
+}
+
+export async function searchTenantAuditTrail(tenantId: string, filters: SearchAuditLogsDto) {
+  return auditRepo.findAuditLogs({ ...filters, tenantId });
 }
 
 export async function getTenantEmailConfig(

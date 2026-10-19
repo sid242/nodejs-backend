@@ -103,3 +103,17 @@ export const requestBrandingUploadUrlDto = z.object({
 });
 
 export type RequestBrandingUploadUrlDto = z.infer<typeof requestBrandingUploadUrlDto>;
+
+export const searchAuditLogsDto = z.object({
+  search: z.string().trim().optional(),
+  action: z.string().trim().optional(),
+  actions: z.array(z.string().trim()).optional(),
+  entityType: z.string().trim().optional(),
+  status: z.enum(['SUCCESS', 'WARNING', 'FAILED', 'ALL']).optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+
+export type SearchAuditLogsDto = z.infer<typeof searchAuditLogsDto>;

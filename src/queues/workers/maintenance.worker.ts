@@ -1,11 +1,12 @@
 import type { Job } from 'bullmq';
 import { and, asc, eq, inArray, lt } from 'drizzle-orm';
+
 import { db } from '@/config/db.js';
+import { env } from '@/config/env.js';
+import { logger } from '@/config/logger.js';
 import { files } from '@/db/schema/index.js';
 import { deleteObject } from '@/lib/s3.js';
 import { forEachConcurrent } from '@/lib/utils.js';
-import { logger } from '@/config/logger.js';
-import { env } from '@/config/env.js';
 
 export async function processMaintenance(job: Job): Promise<{ removed: number; failed: number }> {
   if (job.name === 'cleanup-pending-files') {

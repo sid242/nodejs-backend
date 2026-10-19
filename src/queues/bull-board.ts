@@ -1,7 +1,8 @@
-import type { Router } from 'express';
 import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter.js';
 import { ExpressAdapter } from '@bull-board/express';
+import type { Router } from 'express';
+
 import { allQueues } from '@/queues/index.js';
 
 export function bullBoardRouter(basePath = '/admin/queues'): Router {

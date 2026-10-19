@@ -1,5 +1,5 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
+import test from 'node:test';
 import jwt from 'jsonwebtoken';
 
 const TEST_ACCESS_SECRET = 'a'.repeat(32);
@@ -186,4 +186,26 @@ test('login requires verified email: unverified user is rejected', async () => {
 
   // Verified user succeeds
   assert.equal(validateEmailVerified({ emailVerifiedAt: new Date() }), true);
+});
+
+test('changePasswordDto validates currentPassword and newPassword rules', async () => {
+  const { changePasswordDto } = await import('../src/modules/auth/auth.dto.js');
+
+  const valid = changePasswordDto.safeParse({
+    currentPassword: 'OldPassword123!',
+    newPassword: 'NewPassword123!',
+  });
+  assert.equal(valid.success, true);
+
+  const shortNew = changePasswordDto.safeParse({
+    currentPassword: 'OldPassword123!',
+    newPassword: 'short',
+  });
+  assert.equal(shortNew.success, false);
+
+  const missingCurrent = changePasswordDto.safeParse({
+    currentPassword: '',
+    newPassword: 'NewPassword123!',
+  });
+  assert.equal(missingCurrent.success, false);
 });
