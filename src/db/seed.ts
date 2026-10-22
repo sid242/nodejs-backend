@@ -9,6 +9,7 @@ import {
   auditLogs,
   emailTemplates,
   platformAuditLogs,
+  platformStaff,
   platformSupportSessions,
   tenantBrandings,
   tenantMemberRoles,
@@ -24,14 +25,17 @@ import { seedDefaultRbac, SYSTEM_ROLES } from '@/modules/rbac/rbac.service.js';
 
 // ==========================================
 // Demo Credentials Catalog (Exported for Documentation)
+// Universal test password for all demo accounts: Password@123456
 // ==========================================
+export const DEMO_PASSWORD = 'Password@123456';
+
 export const DEMO_CREDENTIALS = {
   platform: [
     {
       role: 'Super Administrator',
       roleKey: 'SUPER_ADMIN',
       email: 'superadmin@platform.local',
-      password: 'Platform@123456',
+      password: DEMO_PASSWORD,
       name: 'Platform Super Administrator',
       url: '/platform/login',
     },
@@ -39,7 +43,7 @@ export const DEMO_CREDENTIALS = {
       role: 'Customer Support Staff',
       roleKey: 'SUPPORT_STAFF',
       email: 'support@platform.local',
-      password: 'Support@123456',
+      password: DEMO_PASSWORD,
       name: 'Alex Support Engineer',
       url: '/platform/login',
     },
@@ -47,7 +51,7 @@ export const DEMO_CREDENTIALS = {
       role: 'Technical Operations Support',
       roleKey: 'TECHNICAL_SUPPORT',
       email: 'techops@platform.local',
-      password: 'Techops@123456',
+      password: DEMO_PASSWORD,
       name: 'Sarah Technical Operations',
       url: '/platform/login',
     },
@@ -55,7 +59,7 @@ export const DEMO_CREDENTIALS = {
       role: 'Billing & Finance Staff',
       roleKey: 'BILLING_STAFF',
       email: 'billing@platform.local',
-      password: 'Billing@123456',
+      password: DEMO_PASSWORD,
       name: 'Marcus Billing Specialist',
       url: '/platform/login',
     },
@@ -63,7 +67,7 @@ export const DEMO_CREDENTIALS = {
       role: 'Compliance & Security Auditor',
       roleKey: 'READ_ONLY_AUDITOR',
       email: 'auditor@platform.local',
-      password: 'Auditor@123456',
+      password: DEMO_PASSWORD,
       name: 'Elena Compliance Officer',
       url: '/platform/login',
     },
@@ -79,7 +83,7 @@ export const DEMO_CREDENTIALS = {
           role: 'Tenant Owner',
           tenantRole: 'OWNER',
           email: 'owner@acme.com',
-          password: 'Password@123456',
+          password: DEMO_PASSWORD,
           name: 'Arthur Pendelton',
           url: '/login',
         },
@@ -87,7 +91,7 @@ export const DEMO_CREDENTIALS = {
           role: 'Tenant Administrator',
           tenantRole: 'ADMIN',
           email: 'admin@acme.com',
-          password: 'Password@123456',
+          password: DEMO_PASSWORD,
           name: 'Beatrice Vance',
           url: '/login',
         },
@@ -95,15 +99,23 @@ export const DEMO_CREDENTIALS = {
           role: 'Standard Member',
           tenantRole: 'MEMBER',
           email: 'member@acme.com',
-          password: 'Password@123456',
+          password: DEMO_PASSWORD,
           name: 'Charlie Miller',
+          url: '/login',
+        },
+        {
+          role: 'Operations Agent',
+          tenantRole: 'MEMBER',
+          email: 'agent@acme.com',
+          password: DEMO_PASSWORD,
+          name: 'Aaron Agent',
           url: '/login',
         },
         {
           role: 'Viewer / Read-Only',
           tenantRole: 'VIEWER',
           email: 'viewer@acme.com',
-          password: 'Password@123456',
+          password: DEMO_PASSWORD,
           name: 'Diana Prince',
           url: '/login',
         },
@@ -119,7 +131,7 @@ export const DEMO_CREDENTIALS = {
           role: 'Tenant Owner',
           tenantRole: 'OWNER',
           email: 'owner@nexus.com',
-          password: 'Password@123456',
+          password: DEMO_PASSWORD,
           name: 'Nathaniel Drake',
           url: '/login',
         },
@@ -127,7 +139,7 @@ export const DEMO_CREDENTIALS = {
           role: 'Tenant Administrator',
           tenantRole: 'ADMIN',
           email: 'admin@nexus.com',
-          password: 'Password@123456',
+          password: DEMO_PASSWORD,
           name: 'Olivia Wilde',
           url: '/login',
         },
@@ -169,8 +181,9 @@ async function seed(): Promise<void> {
     }
 
     const existing = await platformRepo.findStaffByEmail(staffDef.email);
+    const passwordHash = await bcrypt.hash(staffDef.password, 12);
+
     if (!existing) {
-      const passwordHash = await bcrypt.hash(staffDef.password, 12);
       const created = await platformRepo.createStaff({
         email: staffDef.email,
         displayName: staffDef.name,
@@ -181,9 +194,52 @@ async function seed(): Promise<void> {
       staffIdMap.set(staffDef.email, created.id);
       logger.info({ email: staffDef.email, role: staffDef.roleKey }, '   ✔ Created platform staff');
     } else {
+      await db
+        .update(platformStaff)
+        .set({
+          displayName: staffDef.name,
+          passwordHash,
+          roleId: role.id,
+          status: 'ACTIVE',
+        })
+        .where(eq(platformStaff.id, existing.id));
       staffIdMap.set(staffDef.email, existing.id);
-      logger.info({ email: staffDef.email }, '   ℹ Platform staff already exists');
+      logger.info(
+        { email: staffDef.email, role: staffDef.roleKey },
+        '   ✔ Synchronized platform staff',
+      );
     }
+  }
+
+  // Provision superadmin into global users table for seamless customer / general app login
+  const [existingPlatformAdminUser] = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, 'superadmin@platform.local'))
+    .limit(1);
+  const adminPasswordHash = await bcrypt.hash(DEMO_PASSWORD, 12);
+
+  if (!existingPlatformAdminUser) {
+    await db.insert(users).values({
+      email: 'superadmin@platform.local',
+      passwordHash: adminPasswordHash,
+      name: 'Platform Super Administrator',
+      role: 'ADMIN',
+      status: 'ACTIVE',
+      emailVerifiedAt: new Date(),
+    });
+    logger.info('   ✔ Provisioned superadmin in global app users catalogue.');
+  } else {
+    await db
+      .update(users)
+      .set({
+        passwordHash: adminPasswordHash,
+        status: 'ACTIVE',
+        role: 'ADMIN',
+        emailVerifiedAt: existingPlatformAdminUser.emailVerifiedAt ?? new Date(),
+      })
+      .where(eq(users.id, existingPlatformAdminUser.id));
+    logger.info('   ✔ Synchronized superadmin in global app users catalogue.');
   }
 
   // ----------------------------------------------------
@@ -258,8 +314,9 @@ async function seed(): Promise<void> {
         .where(eq(users.email, memberDef.email))
         .limit(1);
 
+      const passwordHash = await bcrypt.hash(memberDef.password, 12);
+
       if (!userRecord) {
-        const passwordHash = await bcrypt.hash(memberDef.password, 12);
         const [createdUser] = await db
           .insert(users)
           .values({
@@ -273,6 +330,18 @@ async function seed(): Promise<void> {
           .returning();
         userRecord = createdUser!;
         logger.info({ email: memberDef.email }, '   ✔ Created customer user');
+      } else {
+        await db
+          .update(users)
+          .set({
+            name: memberDef.name,
+            passwordHash,
+            status: 'ACTIVE',
+            role: memberDef.tenantRole === 'OWNER' ? 'ADMIN' : userRecord.role,
+            emailVerifiedAt: userRecord.emailVerifiedAt ?? new Date(),
+          })
+          .where(eq(users.id, userRecord.id));
+        logger.info({ email: memberDef.email }, '   ✔ Synchronized customer user');
       }
       userIdMap.set(memberDef.email, userRecord.id);
 
