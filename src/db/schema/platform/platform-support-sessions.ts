@@ -10,6 +10,8 @@ export const platformSupportSessions = pgTable(
       .notNull()
       .references(() => platformStaff.id, { onDelete: 'cascade' }),
     tenantId: uuid('tenantId').notNull(),
+    targetUserId: uuid('targetUserId'), // optional target customer user being impersonated
+    impersonatedRole: text('impersonatedRole'), // snapshot of assigned role during support session
     reason: text('reason').notNull(), // ticket reference or support reason
     status: text('status').notNull().default('ACTIVE'), // ACTIVE, EXPIRED, TERMINATED
     expiresAt: timestamp('expiresAt', { precision: 3, mode: 'date' }).notNull(),
@@ -20,6 +22,7 @@ export const platformSupportSessions = pgTable(
   (table) => [
     index('PlatformSupportSession_staffId_idx').on(table.staffId),
     index('PlatformSupportSession_tenantId_idx').on(table.tenantId),
+    index('PlatformSupportSession_targetUserId_idx').on(table.targetUserId),
     index('PlatformSupportSession_status_idx').on(table.status),
   ],
 );

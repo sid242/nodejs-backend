@@ -13,7 +13,7 @@
     "start:worker": "node --env-file=.env dist/worker.js",
     "typecheck": "tsc --noEmit",
     "build": "tsup",
-    "test": "tsx --env-file=.env --test",
+    "test": "tsx --env-file=.env --test --test-force-exit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

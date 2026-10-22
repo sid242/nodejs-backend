@@ -4,6 +4,7 @@ import { AppError } from '@/lib/errors.js';
 import * as platformRepo from '@/modules/platform/platform.repository.js';
 import { resolveUserPermissions, SYSTEM_ROLES } from '@/modules/rbac/rbac.service.js';
 import * as tenantsRepo from '@/modules/tenants/tenants.repository.js';
+import * as usersRepo from '@/modules/users/users.repository.js';
 
 export async function resolveTenantContext(
   req: Request,
@@ -64,6 +65,23 @@ export async function resolveTenantContext(
           expiresAt: session.expiresAt,
         };
         req.isImpersonated = true;
+
+        if (session.targetUserId) {
+          const targetUser = await usersRepo.findById(session.targetUserId);
+          if (targetUser) {
+            req.impersonator = {
+              userId: req.user?.id ?? req.staff?.id ?? session.staffId,
+              role: 'SUPPORT_STAFF',
+              reason: session.reason,
+              sessionId: session.id,
+            };
+            req.user = {
+              id: targetUser.id,
+              role: targetUser.role,
+              status: targetUser.status,
+            };
+          }
+        }
       }
     }
 

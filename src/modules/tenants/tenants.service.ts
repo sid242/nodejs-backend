@@ -28,6 +28,7 @@ import {
   revokeAllUserTokens,
   verifyAndConsumeMagicLinkToken,
 } from '@/modules/auth/tokens.js';
+import * as plansService from '@/modules/plans/plans.service.js';
 import { rbacRepo } from '@/modules/rbac/rbac.repository.js';
 import * as rbacService from '@/modules/rbac/rbac.service.js';
 import { emailQueue } from '@/queues/index.js';
@@ -103,7 +104,10 @@ export async function createTenantOrganization(
       .onConflictDoNothing();
   }
 
-  // 5. Record audit event
+  // 5. Assign initial subscription
+  await plansService.assignInitialSubscription(tenant.id, tenant.plan ?? 'FREE');
+
+  // 6. Record audit event
   await logSecurityEvent({
     tenantId: tenant.id,
     userId: creatorUserId,
@@ -180,6 +184,9 @@ export async function addMemberToTenant(
   inviteUrl?: string;
   message?: string;
 }> {
+  // 1. Enforce SaaS Plan Seat Limits
+  await plansService.checkTenantSeatLimit(tenantId);
+
   const normalizedEmail = userEmail.toLowerCase().trim();
   let targetUser = await authRepo.findByEmail(normalizedEmail);
   let isNewUser = false;

@@ -58,13 +58,10 @@ export const updatePlatformRoleDto = z.object({
 });
 export type UpdatePlatformRoleDto = z.infer<typeof updatePlatformRoleDto>;
 
-// ==========================================
-// Audited Support Session DTOs
-// ==========================================
-
 export const startSupportSessionDto = z.object({
   reason: z.string().trim().min(5).max(500),
   durationMinutes: z.coerce.number().int().min(5).max(120).default(30),
+  targetUserId: z.string().uuid().optional(),
 });
 export type StartSupportSessionDto = z.infer<typeof startSupportSessionDto>;
 

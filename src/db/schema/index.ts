@@ -10,3 +10,5 @@ export * from './audit-logs';
 
 export * from './email-templates.js';
 export * from './platform';
+export * from './plans.js';
+export * from './subscriptions.js';

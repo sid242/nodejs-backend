@@ -70,7 +70,7 @@ export async function requirePlatformAuth(
     };
 
     next();
-  } catch (error) {
+  } catch {
     next(AppError.unauthorized('Invalid or expired platform staff token'));
   }
 }

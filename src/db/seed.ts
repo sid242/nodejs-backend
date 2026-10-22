@@ -18,10 +18,11 @@ import {
   tenants,
   users,
 } from '@/db/schema/index.js';
+import { assignInitialSubscription, seedDefaultPlans } from '@/modules/plans/plans.service.js';
 import * as platformRepo from '@/modules/platform/platform.repository.js';
 import { seedPlatformDefaults } from '@/modules/platform/platform.service.js';
 import { rbacRepo } from '@/modules/rbac/rbac.repository.js';
-import { seedDefaultRbac, SYSTEM_ROLES } from '@/modules/rbac/rbac.service.js';
+import { seedDefaultRbac } from '@/modules/rbac/rbac.service.js';
 
 // ==========================================
 // Demo Credentials Catalog (Exported for Documentation)
@@ -563,6 +564,11 @@ async function seed(): Promise<void> {
       }
       logger.info('   ✔ Customer tenant email templates seeded.');
     }
+
+    // 12. Seed default SaaS pricing plans and assign Growth plan to Acme tenant
+    await seedDefaultPlans();
+    await assignInitialSubscription(acmeTenantId, 'GROWTH');
+    logger.info('   ✔ SaaS plans, entitlements, and Acme Growth subscription seeded.');
   }
 
   logger.info('====================================================');

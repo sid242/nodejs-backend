@@ -65,7 +65,7 @@ export async function getTenantDb(tenant?: {
       connect_timeout: 5,
     });
 
-    const dedicatedDrizzle = drizzle({ client: dedicatedClient }) as Database;
+    const dedicatedDrizzle = drizzle({ client: dedicatedClient, schema }) as Database;
     dedicatedPools.set(poolKey, {
       client: dedicatedClient,
       drizzle: dedicatedDrizzle,

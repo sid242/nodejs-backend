@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 
 import { db } from '@/config/db.js';
 import { env } from '@/config/env.js';
-import { platformPermissions, platformRoles } from '@/db/schema/index.js';
+import { platformPermissions } from '@/db/schema/index.js';
 import { AppError } from '@/lib/errors.js';
 
 import type {
@@ -16,11 +16,7 @@ import type {
   UpdatePlatformRoleDto,
   UpdateStaffDto,
 } from './platform.dto.js';
-import {
-  PLATFORM_PERMISSION_CATALOGUE,
-  PLATFORM_PERMISSIONS,
-  SYSTEM_PLATFORM_ROLES,
-} from './platform.permissions.js';
+import { PLATFORM_PERMISSION_CATALOGUE, SYSTEM_PLATFORM_ROLES } from './platform.permissions.js';
 import * as platformRepo from './platform.repository.js';
 
 // ==========================================
@@ -271,6 +267,7 @@ export async function startSupportSession(
   const session = await platformRepo.createSupportSession({
     staffId,
     tenantId,
+    targetUserId: data.targetUserId,
     reason: data.reason,
     status: 'ACTIVE',
     expiresAt,
@@ -286,6 +283,7 @@ export async function startSupportSession(
       sessionId: session.id,
       reason: data.reason,
       durationMinutes: data.durationMinutes,
+      targetUserId: data.targetUserId,
       expiresAt: expiresAt.toISOString(),
     },
     requestId,
@@ -294,6 +292,7 @@ export async function startSupportSession(
   return {
     sessionId: session.id,
     tenantId,
+    targetUserId: session.targetUserId ?? null,
     reason: data.reason,
     expiresAt,
     status: session.status,

@@ -62,7 +62,8 @@ export function requireTenantRole(roleName: string): RequestHandler {
     }
 
     const hasRole = req.membership.roles.some((r) => r.toLowerCase() === roleName.toLowerCase());
-    if (!hasRole && req.user?.role !== 'ADMIN') {
+    const isOwner = req.membership.roles.some((r) => r.toLowerCase() === 'owner');
+    if (!hasRole && !isOwner) {
       return next(AppError.forbidden(`Requires tenant role: ${roleName}`));
     }
 
