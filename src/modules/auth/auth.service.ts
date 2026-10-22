@@ -19,12 +19,14 @@ import * as authRepo from '@/modules/auth/auth.repository.js';
 import {
   consumeRefreshToken,
   createEmailVerificationToken,
+  createMagicLinkToken,
   createPasswordResetToken,
   issueImpersonationToken,
   issueTokens,
   revokeAllUserTokens,
   revokeImpersonationSession,
   verifyAndConsumeEmailVerificationToken,
+  verifyAndConsumeMagicLinkToken,
   verifyAndConsumePasswordResetToken,
   type AuthTokens,
   type ImpersonatorClaim,
@@ -317,4 +319,92 @@ export async function stopImpersonation(
   });
 
   return { message: AUTH_MESSAGES.IMPERSONATION_STOPPED };
+}
+
+export interface MagicLinkRequestResult {
+  message: string;
+  email: string;
+  expiresInMinutes: number;
+  token?: string;
+  magicLinkUrl?: string;
+}
+
+export async function requestMagicLink(email: string): Promise<MagicLinkRequestResult> {
+  const normalizedEmail = email.toLowerCase().trim();
+  let user = await authRepo.findByEmail(normalizedEmail);
+
+  // If user doesn't exist, automatically provision an account in PENDING_VERIFICATION
+  if (!user) {
+    const dummyHash = await bcrypt.hash(randomUUID(), 12);
+    const nameFromEmail = normalizedEmail.split('@')[0] || 'Member';
+    const capitalizedName = nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1);
+    const createdUser = await authRepo.createUser({
+      email: normalizedEmail,
+      name: capitalizedName,
+      passwordHash: dummyHash,
+    });
+    user = await authRepo.findById(createdUser.id);
+  }
+
+  if (!user || user.deletedAt) {
+    throw AppError.unauthorized('Account is not accessible');
+  }
+
+  if (user.status === 'SUSPENDED' || user.status === 'DEACTIVATED') {
+    throw AppError.forbidden(`Account is ${user.status.toLowerCase()}`);
+  }
+
+  const rawToken = await createMagicLinkToken(user.id);
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+  const magicLinkUrl = `${frontendUrl}/magic-link?token=${rawToken}`;
+
+  await emailQueue.add(
+    'magic-link',
+    {
+      to: user.email,
+      name: user.name,
+      token: rawToken,
+      magicLinkUrl,
+    },
+    { jobId: `magic-link-${user.id}-${Date.now()}` },
+  );
+
+  const isDev = process.env.NODE_ENV !== 'production';
+
+  return {
+    message: 'Magic sign-in link has been sent to your email',
+    email: user.email,
+    expiresInMinutes: 15,
+    token: isDev ? rawToken : undefined,
+    magicLinkUrl: isDev ? magicLinkUrl : undefined,
+  };
+}
+
+export async function verifyMagicLink(token: string): Promise<AuthResult> {
+  const userId = await verifyAndConsumeMagicLinkToken(token);
+  const userRecord = await authRepo.findById(userId);
+  if (!userRecord || userRecord.deletedAt) {
+    throw AppError.unauthorized('User account not found');
+  }
+
+  if (userRecord.status === 'SUSPENDED' || userRecord.status === 'DEACTIVATED') {
+    throw AppError.forbidden(`Account is ${userRecord.status.toLowerCase()}`);
+  }
+
+  let finalUser: PublicUser | null = null;
+  // If user was PENDING_VERIFICATION or unverified, mark as ACTIVE and emailVerifiedAt
+  if (!userRecord.emailVerifiedAt || userRecord.status === 'PENDING_VERIFICATION') {
+    finalUser = await authRepo.markEmailVerified(userRecord.id);
+  }
+
+  if (!finalUser) {
+    finalUser = await authRepo.findPublicUserById(userRecord.id);
+  }
+
+  if (!finalUser) {
+    throw AppError.internal('Failed to retrieve user status');
+  }
+
+  await cache.del(`${REDIS_PREFIXES.USER_CACHE}${userId}`);
+  return { user: finalUser, ...(await issueTokens(finalUser)) };
 }

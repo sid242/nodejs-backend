@@ -11,7 +11,8 @@ export const createTenant = asyncHandler(async (req: Request, res: Response) => 
 });
 
 export const getMyTenants = asyncHandler(async (req: Request, res: Response) => {
-  const list = await tenantsService.getUserTenants(req.user!.id);
+  const isSystemAdmin = req.user!.role === 'ADMIN';
+  const list = await tenantsService.getUserTenants(req.user!.id, isSystemAdmin);
   AppResponse.ok(list).send(res);
 });
 
@@ -40,6 +41,11 @@ export const removeMember = asyncHandler(async (req: Request, res: Response) => 
   const memberId = String(req.params.memberId);
   await tenantsService.removeMemberFromTenant(req.tenant!.id, req.user!.id, memberId);
   AppResponse.ok({ message: 'Member removed successfully' }).send(res);
+});
+
+export const acceptInvitation = asyncHandler(async (req: Request, res: Response) => {
+  const result = await tenantsService.acceptTenantInvitation(req.valid!.body.token);
+  AppResponse.ok(result, 'Workspace invitation accepted successfully').send(res);
 });
 
 export const updateMemberRole = asyncHandler(async (req: Request, res: Response) => {

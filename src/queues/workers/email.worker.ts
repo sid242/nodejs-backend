@@ -2,7 +2,9 @@ import type { Job } from 'bullmq';
 
 import { sendEmail } from '@/lib/mailer.js';
 import {
+  renderMagicLinkEmail,
   renderPasswordResetEmail,
+  renderTenantInviteEmail,
   renderVerifyEmail,
   renderWelcomeEmail,
 } from '@/templates/emails/index.js';
@@ -30,6 +32,24 @@ export async function processEmail(job: Job): Promise<void> {
     }
     case 'verify-email': {
       const { subject, html } = renderVerifyEmail(job.data);
+      return sendEmail({
+        to: job?.data?.to,
+        subject,
+        html,
+        tenantId: job?.data?.tenantId,
+      });
+    }
+    case 'magic-link': {
+      const { subject, html } = renderMagicLinkEmail(job.data);
+      return sendEmail({
+        to: job?.data?.to,
+        subject,
+        html,
+        tenantId: job?.data?.tenantId,
+      });
+    }
+    case 'tenant-invite': {
+      const { subject, html } = renderTenantInviteEmail(job.data);
       return sendEmail({
         to: job?.data?.to,
         subject,

@@ -5,26 +5,33 @@ import { AppResponse } from '@/lib/responses.js';
 import * as service from '@/modules/files/files.service.js';
 
 export const listFiles = asyncHandler(async (req: Request, res: Response) => {
-  const files = await service.listFiles(req.user!.id, req.user?.role);
+  const files = await service.listFiles(req.user!.id, req.user?.role, req.tenant?.id);
   AppResponse.ok(files).send(res);
 });
 
 export const requestUpload = asyncHandler(async (req: Request, res: Response) => {
-  const result = await service.requestUpload(req.user!.id, req.valid?.body);
+  const result = await service.requestUpload(req.user!.id, req.valid?.body, req.tenant?.id);
   AppResponse.created(result, 'Upload requested').send(res);
 });
 
 export const confirmUpload = asyncHandler(async (req: Request, res: Response) => {
-  const result = await service.confirmUpload(req.user!.id, req.valid?.params.id);
+  const result = await service.confirmUpload(req.user!.id, req.valid?.params.id, req.tenant?.id);
   AppResponse.ok(result, 'Upload confirmed').send(res);
 });
 
 export const getDownloadUrl = asyncHandler(async (req: Request, res: Response) => {
-  const result = await service.getDownloadUrl(req.user!.id, req.valid?.params.id, req.user?.role);
+  const disposition = req.query.disposition === 'inline' ? 'inline' : 'attachment';
+  const result = await service.getDownloadUrl(
+    req.user!.id,
+    (req.valid?.params?.id ?? req.params.id) as string,
+    req.user?.role,
+    req.tenant?.id,
+    disposition,
+  );
   AppResponse.ok(result).send(res);
 });
 
 export const deleteFile = asyncHandler(async (req: Request, res: Response) => {
-  await service.deleteFile(req.user!.id, req.valid?.params.id, req.user?.role);
+  await service.deleteFile(req.user!.id, req.valid?.params.id, req.user?.role, req.tenant?.id);
   res.status(204).end();
 });

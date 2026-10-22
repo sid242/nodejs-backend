@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 
 import { db } from '@/config/db.js';
 import {
@@ -48,6 +48,22 @@ export async function findUserTenants(userId: string): Promise<PublicTenant[]> {
     .from(tenantMembers)
     .innerJoin(tenants, eq(tenantMembers.tenantId, tenants.id))
     .where(and(eq(tenantMembers.userId, userId), eq(tenantMembers.status, 'ACTIVE')))
+    .orderBy(desc(tenants.createdAt));
+
+  return rows as PublicTenant[];
+}
+export async function findAllActiveTenants(): Promise<PublicTenant[]> {
+  const rows = await db
+    .select({
+      id: tenants.id,
+      name: tenants.name,
+      slug: tenants.slug,
+      status: tenants.status,
+      plan: tenants.plan,
+      createdAt: tenants.createdAt,
+    })
+    .from(tenants)
+    .where(isNull(tenants.deletedAt))
     .orderBy(desc(tenants.createdAt));
 
   return rows as PublicTenant[];
@@ -123,15 +139,34 @@ export async function removeTenantMember(tenantId: string, memberId: string): Pr
   return !!deleted;
 }
 
+export async function updateTenantMemberStatus(
+  memberId: string,
+  status: 'ACTIVE' | 'INVITED' | 'SUSPENDED',
+): Promise<TenantMember | null> {
+  const [record] = await db
+    .update(tenantMembers)
+    .set({ status })
+    .where(eq(tenantMembers.id, memberId))
+    .returning();
+  return record ?? null;
+}
+
+export async function findMembershipsByUserId(userId: string): Promise<TenantMember[]> {
+  return db.select().from(tenantMembers).where(eq(tenantMembers.userId, userId));
+}
+
 export const tenantsRepo = {
   createTenant,
   findTenantById,
   findTenantBySlug,
   updateTenant,
   findUserTenants,
+  findAllActiveTenants,
+  findMembershipsByUserId,
   addTenantMember,
   findTenantMember,
   findTenantMemberById,
   findTenantMembers,
   removeTenantMember,
+  updateTenantMemberStatus,
 };

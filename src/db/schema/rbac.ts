@@ -10,7 +10,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
-import { tenantMembers, tenants } from './tenants.js';
+import { tenantMembers, tenants } from './tenants';
 
 export const appModules = pgTable(
   'AppModule',
@@ -91,6 +91,7 @@ export const roles = pgTable(
   },
   (table) => [
     index('AppRole_tenantId_idx').on(table.tenantId),
+    index('AppRole_tenantId_createdAt_idx').on(table.tenantId, table.createdAt),
     uniqueIndex('AppRole_tenantId_name_idx').on(table.tenantId, table.name),
   ],
 );

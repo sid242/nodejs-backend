@@ -13,8 +13,12 @@ export async function createFile({
   filename,
   contentType,
   ownerId,
+  tenantId,
 }: NewFileRecord): Promise<FileRecord> {
-  const [file] = await db.insert(files).values({ key, filename, contentType, ownerId }).returning();
+  const [file] = await db
+    .insert(files)
+    .values({ key, filename, contentType, ownerId, tenantId })
+    .returning();
   return file as FileRecord;
 }
 
@@ -46,6 +50,15 @@ export async function findByOwnerId(ownerId: string, limit = 100): Promise<FileR
 
 export async function findAll(limit = 100): Promise<FileRecord[]> {
   return db.select().from(files).orderBy(desc(files.createdAt)).limit(limit);
+}
+
+export async function findByTenantId(tenantId: string, limit = 100): Promise<FileRecord[]> {
+  return db
+    .select()
+    .from(files)
+    .where(eq(files.tenantId, tenantId))
+    .orderBy(desc(files.createdAt))
+    .limit(limit);
 }
 
 export async function deleteById(id: string): Promise<void> {

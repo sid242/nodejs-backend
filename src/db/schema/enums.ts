@@ -26,3 +26,16 @@ export const tenantStatusEnum = pgEnum('TenantStatus', [
 ]);
 
 export const membershipStatusEnum = pgEnum('MembershipStatus', ['ACTIVE', 'INVITED', 'SUSPENDED']);
+
+export const emailTemplateCategoryEnum = pgEnum('EmailTemplateCategory', [
+  'MARKETING',
+  'TRANSACTIONAL',
+  'NOTIFICATION',
+  'CUSTOM',
+]);
+
+export const emailTemplateStatusEnum = pgEnum('EmailTemplateStatus', [
+  'DRAFT',
+  'PUBLISHED',
+  'ARCHIVED',
+]);

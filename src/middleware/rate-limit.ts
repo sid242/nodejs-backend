@@ -10,6 +10,8 @@ export interface RateLimiterOptions {
   windowMs?: number;
   limit: number;
   byUser?: boolean;
+  byTenant?: boolean;
+  compositeAuth?: boolean;
 }
 
 /**
@@ -21,6 +23,8 @@ const make = ({
   windowMs = env.RATE_LIMIT_WINDOW_MS,
   limit,
   byUser = false,
+  byTenant = false,
+  compositeAuth = false,
 }: RateLimiterOptions): RequestHandler =>
   rateLimit({
     windowMs,
@@ -29,9 +33,29 @@ const make = ({
     legacyHeaders: false,
     passOnStoreError: true,
     keyGenerator: (req: Request) => {
+      // 1. Composite Auth: IP + normalized email to prevent office NAT lockout and targeted account attacks
+      if (compositeAuth) {
+        const rawEmail =
+          typeof req.body?.email === 'string'
+            ? req.body.email
+            : typeof req.body?.identifier === 'string'
+              ? req.body.identifier
+              : '';
+        const email = rawEmail.trim().toLowerCase();
+        const ip = req.ip || 'anonymous';
+        return email ? `${ip}:${email}` : ip;
+      }
+
+      // 2. Tenant-scoped: isolates rate limits between workspace tenants
+      if (byTenant && req.tenant?.id) {
+        if (req.user?.id) {
+          return `t:${req.tenant.id}:u:${req.user.id}`;
+        }
+        return `t:${req.tenant.id}:${req.ip || 'anonymous'}`;
+      }
+
+      // 3. User-scoped: throttles by authenticated user (preserves impersonation attribution)
       if (byUser) {
-        // Edge case safeguard: When impersonating, throttle against the admin's ID
-        // so the actual user's rate-limit allowance remains intact.
         if (req.impersonator?.userId) {
           return `imp:${req.impersonator.userId}`;
         }
@@ -39,6 +63,8 @@ const make = ({
           return `u:${req.user.id}`;
         }
       }
+
+      // Default: IP-based
       return req.ip || 'anonymous';
     },
     store: new RedisStore({
@@ -47,17 +73,26 @@ const make = ({
     }),
     handler: (req: Request, res: Response) =>
       res.status(429).json({
-        error: { code: 'RATE_LIMITED', message: 'Too many requests, slow down.' },
+        error: {
+          code: 'RATE_LIMITED',
+          message: 'Too many requests, please slow down and try again later.',
+        },
         requestId: req.id,
       }),
   });
 
 export const globalLimiter = make({ name: 'global', limit: env.RATE_LIMIT_MAX });
-// Brute-force protection for login/register/refresh.
+
+// Brute-force & credential-stuffing protection for login/register/refresh using composite IP + Email
 export const authLimiter = make({
   name: 'auth',
   limit: env.AUTH_RATE_LIMIT_MAX,
   windowMs: 15 * 60_000,
+  compositeAuth: true,
 });
+
 // Per-user limit for expensive endpoints (must run after requireAuth).
 export const uploadLimiter = make({ name: 'upload', limit: 30, byUser: true });
+
+// Tenant-level rate limiter for heavy workspace operations
+export const tenantLimiter = make({ name: 'tenant', limit: 120, byTenant: true });

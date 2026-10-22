@@ -21,12 +21,23 @@ function createWorker(
   worker.on('completed', (job) =>
     logger.info({ queue: name, jobId: job.id, job: job.name }, 'job completed'),
   );
-  worker.on('failed', (job, err) =>
+  worker.on('failed', (job, err) => {
+    const isExhausted = job ? job.attemptsMade >= (job.opts?.attempts || 1) : false;
     logger.error(
-      { err, queue: name, jobId: job?.id, job: job?.name, attempt: job?.attemptsMade },
-      'job failed', // hook Sentry/alerts here for jobs that exhausted their attempts
-    ),
-  );
+      {
+        err,
+        queue: name,
+        jobId: job?.id,
+        job: job?.name,
+        attempt: job?.attemptsMade,
+        maxAttempts: job?.opts?.attempts,
+        isExhausted,
+      },
+      isExhausted
+        ? `[ALERT] Job permanently failed in queue "${name}" (exhausted all attempts)`
+        : 'Job attempt failed',
+    );
+  });
   worker.on('error', (err) => logger.error({ err, queue: name }, 'worker error'));
   return worker;
 }

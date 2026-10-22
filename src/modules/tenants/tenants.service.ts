@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
 
 import { db } from '@/config/db.js';
@@ -8,6 +10,7 @@ import {
   type PublicTenant,
   type PublicTenantBranding,
   type PublicTenantEmailConfig,
+  type PublicUser,
   type TenantMember,
 } from '@/db/schema/index.js';
 import { cache } from '@/lib/cache.js';
@@ -19,9 +22,15 @@ import { safeFilename } from '@/lib/utils.js';
 import * as auditRepo from '@/modules/audit/audit.repository.js';
 import { logSecurityEvent } from '@/modules/audit/audit.service.js';
 import * as authRepo from '@/modules/auth/auth.repository.js';
-import { revokeAllUserTokens } from '@/modules/auth/tokens.js';
+import {
+  createMagicLinkToken,
+  issueTokens,
+  revokeAllUserTokens,
+  verifyAndConsumeMagicLinkToken,
+} from '@/modules/auth/tokens.js';
 import { rbacRepo } from '@/modules/rbac/rbac.repository.js';
 import * as rbacService from '@/modules/rbac/rbac.service.js';
+import { emailQueue } from '@/queues/index.js';
 
 import { tenantBrandingRepo } from './tenant-branding.repository.js';
 import { tenantEmailRepo } from './tenant-email.repository.js';
@@ -114,7 +123,13 @@ export async function createTenantOrganization(
   };
 }
 
-export async function getUserTenants(userId: string): Promise<PublicTenant[]> {
+export async function getUserTenants(
+  userId: string,
+  isSystemAdmin?: boolean,
+): Promise<PublicTenant[]> {
+  if (isSystemAdmin) {
+    return tenantsRepo.findAllActiveTenants();
+  }
   return tenantsRepo.findUserTenants(userId);
 }
 
@@ -158,10 +173,33 @@ export async function addMemberToTenant(
   operatorUserId: string,
   userEmail: string,
   roleName: string = rbacService.SYSTEM_ROLES.MEMBER,
-): Promise<{ member: TenantMember; role: string }> {
-  const targetUser = await authRepo.findByEmail(userEmail);
+): Promise<{
+  member: TenantMember;
+  role: string;
+  inviteToken?: string;
+  inviteUrl?: string;
+  message?: string;
+}> {
+  const normalizedEmail = userEmail.toLowerCase().trim();
+  let targetUser = await authRepo.findByEmail(normalizedEmail);
+  let isNewUser = false;
+
   if (!targetUser) {
-    throw AppError.notFound(`User with email "${userEmail}" not found. User must register first.`);
+    // Automatically provision account in PENDING_VERIFICATION so the invitee can join seamlessly
+    const dummyHash = await bcrypt.hash(randomUUID(), 12);
+    const namePart = normalizedEmail.split('@')[0] || 'Member';
+    const name = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+    const created = await authRepo.createUser({
+      email: normalizedEmail,
+      name,
+      passwordHash: dummyHash,
+    });
+    targetUser = await authRepo.findById(created.id);
+    isNewUser = true;
+  }
+
+  if (!targetUser) {
+    throw AppError.internal('Failed to provision user for invitation');
   }
 
   const existing = await tenantsRepo.findTenantMember(tenantId, targetUser.id);
@@ -172,7 +210,7 @@ export async function addMemberToTenant(
   const member = await tenantsRepo.addTenantMember({
     tenantId,
     userId: targetUser.id,
-    status: 'ACTIVE',
+    status: isNewUser ? 'INVITED' : 'ACTIVE',
   });
 
   // Find target role (either custom tenant role or system role)
@@ -186,16 +224,90 @@ export async function addMemberToTenant(
   await rbacRepo.assignRoleToMember(member.id, matchedRole.id);
   await rbacService.invalidateRbacCache(tenantId, targetUser.id);
 
+  // Generate 48-hour invitation magic link token
+  const inviteToken = await createMagicLinkToken(targetUser.id, 48 * 3600);
+  const tenant = await tenantsRepo.findTenantById(tenantId);
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+  const inviteUrl = `${frontendUrl}/accept-invite?token=${inviteToken}&tenant=${tenantId}`;
+
+  await emailQueue.add(
+    'tenant-invite',
+    {
+      to: targetUser.email,
+      name: targetUser.name,
+      tenantName: tenant?.name ?? 'Workspace',
+      roleName: matchedRole.name,
+      token: inviteToken,
+      inviteUrl,
+      tenantId,
+    },
+    { jobId: `invite-${tenantId}-${targetUser.id}-${Date.now()}` },
+  );
+
   await logSecurityEvent({
     tenantId,
     userId: operatorUserId,
-    action: 'MEMBER.ADDED',
+    action: isNewUser ? 'MEMBER.INVITED' : 'MEMBER.ADDED',
     entityType: 'TenantMember',
     entityId: member.id,
-    metadata: { addedUserEmail: userEmail, role: matchedRole.name },
+    metadata: { addedUserEmail: userEmail, role: matchedRole.name, isNewUser },
   });
 
-  return { member, role: matchedRole.name };
+  return {
+    member,
+    role: matchedRole.name,
+    inviteToken,
+    inviteUrl,
+    message: `Invitation successfully sent to ${normalizedEmail}`,
+  };
+}
+
+export async function acceptTenantInvitation(token: string): Promise<{
+  user: PublicUser;
+  accessToken: string;
+  refreshToken: string;
+  activeTenantId?: string;
+}> {
+  const userId = await verifyAndConsumeMagicLinkToken(token);
+  const userRecord = await authRepo.findById(userId);
+  if (!userRecord || userRecord.deletedAt) {
+    throw AppError.unauthorized('User not found');
+  }
+
+  if (userRecord.status === 'SUSPENDED' || userRecord.status === 'DEACTIVATED') {
+    throw AppError.forbidden(`Account is ${userRecord.status.toLowerCase()}`);
+  }
+
+  let finalUser: PublicUser | null = null;
+  // Activate user if pending verification
+  if (!userRecord.emailVerifiedAt || userRecord.status === 'PENDING_VERIFICATION') {
+    finalUser = await authRepo.markEmailVerified(userRecord.id);
+  }
+
+  if (!finalUser) {
+    finalUser = await authRepo.findPublicUserById(userRecord.id);
+  }
+
+  if (!finalUser) {
+    throw AppError.internal('Failed to retrieve user status');
+  }
+
+  // Activate any INVITED tenant memberships for this user
+  const memberships = await tenantsRepo.findMembershipsByUserId(userId);
+  let activeTenantId: string | undefined = undefined;
+  for (const m of memberships) {
+    if (m.status === 'INVITED') {
+      await tenantsRepo.updateTenantMemberStatus(m.id, 'ACTIVE');
+      await rbacService.invalidateRbacCache(m.tenantId, userId);
+      activeTenantId = m.tenantId;
+    } else if (m.status === 'ACTIVE' && !activeTenantId) {
+      activeTenantId = m.tenantId;
+    }
+  }
+
+  const tokens = await issueTokens(finalUser);
+
+  return { user: finalUser, ...tokens, activeTenantId };
 }
 
 export async function removeMemberFromTenant(

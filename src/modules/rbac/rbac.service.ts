@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { db } from '@/config/db.js';
 import { roles } from '@/db/schema/index.js';
@@ -123,6 +123,14 @@ export async function createCustomTenantRole(
   description: string | undefined,
   permissionKeys: string[],
 ): Promise<{ id: string; name: string; permissions: string[] }> {
+  const allPerms = await rbacRepo.findAllPermissions();
+  const permsMap = new Map(allPerms.map((p) => [p.key, p.id]));
+
+  const unknownKeys = permissionKeys.filter((k) => !permsMap.has(k));
+  if (unknownKeys.length > 0) {
+    throw AppError.badRequest(`Unknown permission key(s): ${unknownKeys.join(', ')}`);
+  }
+
   const role = await rbacRepo.createRole({
     tenantId,
     name,
@@ -130,9 +138,7 @@ export async function createCustomTenantRole(
     isSystem: false,
   });
 
-  const allPerms = await rbacRepo.findAllPermissions();
-  const permsMap = new Map(allPerms.map((p) => [p.key, p.id]));
-  const permIds = permissionKeys.map((k) => permsMap.get(k)).filter((id): id is string => !!id);
+  const permIds = permissionKeys.map((k) => permsMap.get(k)!);
 
   await rbacRepo.setRolePermissions(role.id, permIds);
   await invalidateRbacCache(tenantId);
@@ -161,7 +167,13 @@ export async function updateCustomTenantRole(
   if (data.permissions) {
     const allPerms = await rbacRepo.findAllPermissions();
     const permsMap = new Map(allPerms.map((p) => [p.key, p.id]));
-    const permIds = data.permissions.map((k) => permsMap.get(k)).filter((id): id is string => !!id);
+
+    const unknownKeys = data.permissions.filter((k) => !permsMap.has(k));
+    if (unknownKeys.length > 0) {
+      throw AppError.badRequest(`Unknown permission key(s): ${unknownKeys.join(', ')}`);
+    }
+
+    const permIds = data.permissions.map((k) => permsMap.get(k)!);
 
     await rbacRepo.setRolePermissions(roleId, permIds);
     finalPermissions = data.permissions;

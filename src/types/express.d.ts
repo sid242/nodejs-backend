@@ -6,18 +6,36 @@ export interface AuthenticatedUser {
   status?: string;
 }
 
+export interface AuthenticatedStaff {
+  id: string;
+  email: string;
+  displayName?: string;
+  roleId: string;
+  roleKey: string;
+  permissions: string[];
+}
+
 export interface AuthenticatedTenant {
   id: string;
   name: string;
   slug: string;
   status: 'ACTIVE' | 'SUSPENDED' | 'TRIALING' | 'DEACTIVATED';
   plan: string;
+  databaseMode?: 'shared' | 'dedicated';
 }
 
 export interface TenantMembershipContext {
   id: string;
   status: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
   roles: string[];
+}
+
+export interface PlatformSupportSessionContext {
+  sessionId: string;
+  staffId: string;
+  tenantId: string;
+  reason: string;
+  expiresAt: Date;
 }
 
 export interface ImpersonatorContext {
@@ -38,6 +56,8 @@ declare global {
     interface Request {
       id?: string;
       user?: AuthenticatedUser;
+      staff?: AuthenticatedStaff;
+      supportSession?: PlatformSupportSessionContext;
       impersonator?: ImpersonatorContext;
       isImpersonated?: boolean;
       tenant?: AuthenticatedTenant;

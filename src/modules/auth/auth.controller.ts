@@ -103,3 +103,13 @@ export const stopImpersonation = asyncHandler(async (req: Request, res: Response
   });
   AppResponse.ok(result, 'Impersonation session stopped successfully').send(res);
 });
+
+export const requestMagicLink = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.requestMagicLink(req.valid!.body.email);
+  AppResponse.ok(result, result.message).send(res);
+});
+
+export const verifyMagicLink = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.verifyMagicLink(req.valid!.body.token);
+  AppResponse.ok(result, 'Authenticated successfully via magic link').send(res);
+});

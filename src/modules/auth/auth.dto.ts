@@ -67,3 +67,15 @@ export const impersonateUserDto = z.object({
 });
 
 export type ImpersonateUserDto = z.infer<typeof impersonateUserDto>;
+
+export const requestMagicLinkDto = z.object({
+  email: emailSchema,
+});
+
+export type RequestMagicLinkDto = z.infer<typeof requestMagicLinkDto>;
+
+export const verifyMagicLinkDto = z.object({
+  token: z.string().min(1),
+});
+
+export type VerifyMagicLinkDto = z.infer<typeof verifyMagicLinkDto>;

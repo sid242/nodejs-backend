@@ -1,7 +1,7 @@
 import { index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
-import { tenants } from './tenants.js';
-import { users } from './users.js';
+import { tenants } from './tenants';
+import { users } from './users';
 
 export const auditLogs = pgTable(
   'AuditLog',
@@ -18,7 +18,18 @@ export const auditLogs = pgTable(
     createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
+    index('AuditLog_tenantId_createdAt_idx').on(table.tenantId, table.createdAt),
     index('AuditLog_tenantId_action_idx').on(table.tenantId, table.action),
+    index('AuditLog_tenantId_userId_createdAt_idx').on(
+      table.tenantId,
+      table.userId,
+      table.createdAt,
+    ),
+    index('AuditLog_tenantId_entityType_entityId_idx').on(
+      table.tenantId,
+      table.entityType,
+      table.entityId,
+    ),
     index('AuditLog_userId_action_idx').on(table.userId, table.action),
     index('AuditLog_createdAt_idx').on(table.createdAt),
   ],

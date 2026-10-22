@@ -117,3 +117,9 @@ export const searchAuditLogsDto = z.object({
 });
 
 export type SearchAuditLogsDto = z.infer<typeof searchAuditLogsDto>;
+
+export const acceptInviteDto = z.object({
+  token: z.string().min(1),
+});
+
+export type AcceptInviteDto = z.infer<typeof acceptInviteDto>;

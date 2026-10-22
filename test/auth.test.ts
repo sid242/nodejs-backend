@@ -209,3 +209,54 @@ test('changePasswordDto validates currentPassword and newPassword rules', async 
   });
   assert.equal(missingCurrent.success, false);
 });
+
+test('issueTokens generates valid access and refresh tokens and stores in Redis', async () => {
+  const { issueTokens, verifyAccessToken, consumeRefreshToken } =
+    await import('../src/modules/auth/tokens.js');
+  const user = { id: 'test-usr-1', role: 'ADMIN' };
+  const tokens = await issueTokens(user);
+
+  assert.ok(tokens.accessToken);
+  assert.ok(tokens.refreshToken);
+
+  const payload = verifyAccessToken(tokens.accessToken);
+  assert.equal(payload.sub, user.id);
+  assert.equal(payload.role, user.role);
+
+  // Consume (single-use rotation)
+  const consumedUserId = await consumeRefreshToken(tokens.refreshToken);
+  assert.equal(consumedUserId, user.id);
+
+  // Replay should fail
+  await assert.rejects(
+    () => consumeRefreshToken(tokens.refreshToken),
+    (err: any) => err.message.includes('revoked or already used'),
+  );
+});
+
+test('revokeRefreshToken explicitly revokes refresh token from Redis', async () => {
+  const { issueTokens, revokeRefreshToken, consumeRefreshToken } =
+    await import('../src/modules/auth/tokens.js');
+  const user = { id: 'test-usr-2', role: 'USER' };
+  const tokens = await issueTokens(user);
+
+  await revokeRefreshToken(tokens.refreshToken);
+
+  await assert.rejects(
+    () => consumeRefreshToken(tokens.refreshToken),
+    (err: any) => err.message.includes('revoked or already used'),
+  );
+});
+
+test('revokeAllUserTokens revokes all active refresh tokens for that user', async () => {
+  const { issueTokens, revokeAllUserTokens, consumeRefreshToken } =
+    await import('../src/modules/auth/tokens.js');
+  const user = { id: 'test-usr-3', role: 'USER' };
+  const t1 = await issueTokens(user);
+  const t2 = await issueTokens(user);
+
+  await revokeAllUserTokens(user.id);
+
+  await assert.rejects(() => consumeRefreshToken(t1.refreshToken));
+  await assert.rejects(() => consumeRefreshToken(t2.refreshToken));
+});

@@ -1,8 +1,8 @@
 import { index, integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
-import { fileStatusEnum } from './enums.js';
-import { tenants } from './tenants.js';
-import { users } from './users.js';
+import { fileStatusEnum } from './enums';
+import { tenants } from './tenants';
+import { users } from './users';
 
 export const files = pgTable(
   'File',
@@ -22,6 +22,7 @@ export const files = pgTable(
   (table) => [
     index('File_ownerId_createdAt_idx').on(table.ownerId, table.createdAt),
     index('File_tenantId_createdAt_idx').on(table.tenantId, table.createdAt),
+    index('File_tenantId_status_createdAt_idx').on(table.tenantId, table.status, table.createdAt),
     index('File_status_createdAt_idx').on(table.status, table.createdAt),
   ],
 );

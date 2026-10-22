@@ -1,9 +1,12 @@
 // Application-facing schema boundary. Add domain modules here as the data model grows.
-export * from './enums.js';
-export * from './users.js';
-export * from './files.js';
-export * from './verification-tokens.js';
-export * from './sessions.js';
-export * from './tenants.js';
-export * from './rbac.js';
-export * from './audit-logs.js';
+export * from './enums';
+export * from './users';
+export * from './files';
+export * from './verification-tokens';
+export * from './sessions';
+export * from './tenants';
+export * from './rbac';
+export * from './audit-logs';
+
+export * from './email-templates.js';
+export * from './platform';

@@ -183,3 +183,56 @@ test('removeMemberFromTenant blocks removing the last remaining OWNER', async ()
   (rbacRepo as any).getMemberRoles = origGetRoles;
   (rbacRepo as any).countTenantOwners = origCountOwners;
 });
+
+test('createCustomTenantRole and updateCustomTenantRole reject unknown permission keys with 400', async () => {
+  const tenantId = randomUUID();
+  const roleId = randomUUID();
+
+  const origFindAllPermissions = rbacRepo.findAllPermissions;
+  const origFindRoleById = rbacRepo.findRoleById;
+
+  (rbacRepo as any).findAllPermissions = async () => [
+    { id: '1', key: 'files:read', name: 'Read files', action: 'read', moduleId: 'm1' },
+    { id: '2', key: 'files:write', name: 'Write files', action: 'write', moduleId: 'm1' },
+  ];
+
+  (rbacRepo as any).findRoleById = async (id: string) => ({
+    id,
+    tenantId,
+    name: 'CustomRole',
+    isSystem: false,
+  });
+
+  // 1. Rejects unknown permission in createCustomTenantRole
+  await assert.rejects(
+    async () => {
+      await rbacService.createCustomTenantRole(tenantId, 'Role1', 'desc', [
+        'files:read',
+        'invalid:unknown:perm',
+      ]);
+    },
+    (err: any) => {
+      assert.equal(err.status, 400);
+      assert.ok(err.message.includes('Unknown permission key(s): invalid:unknown:perm'));
+      return true;
+    },
+  );
+
+  // 2. Rejects unknown permission in updateCustomTenantRole
+  await assert.rejects(
+    async () => {
+      await rbacService.updateCustomTenantRole(tenantId, roleId, {
+        permissions: ['invalid:another:perm'],
+      });
+    },
+    (err: any) => {
+      assert.equal(err.status, 400);
+      assert.ok(err.message.includes('Unknown permission key(s): invalid:another:perm'));
+      return true;
+    },
+  );
+
+  // Restore mocks
+  (rbacRepo as any).findAllPermissions = origFindAllPermissions;
+  (rbacRepo as any).findRoleById = origFindRoleById;
+});

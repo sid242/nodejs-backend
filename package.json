@@ -9,10 +9,10 @@
   "scripts": {
     "dev": "tsx watch --env-file=.env src/server.ts",
     "dev:worker": "tsx watch --env-file=.env src/worker.ts",
-    "start": "node --env-file=.env dist/src/server.js",
-    "start:worker": "node --env-file=.env dist/src/worker.js",
+    "start": "node --env-file=.env dist/server.js",
+    "start:worker": "node --env-file=.env dist/worker.js",
     "typecheck": "tsc --noEmit",
-    "build": "tsc",
+    "build": "tsup",
     "test": "tsx --env-file=.env --test",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -77,6 +77,7 @@
     "lint-staged": "^15.5.2",
     "pino-pretty": "^13.0.0",
     "prettier": "^3.9.9",
+    "tsup": "^9.0.0",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.71.1"

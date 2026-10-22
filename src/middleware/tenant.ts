@@ -1,16 +1,17 @@
 import type { NextFunction, Request, Response } from 'express';
 
 import { AppError } from '@/lib/errors.js';
+import * as platformRepo from '@/modules/platform/platform.repository.js';
 import { resolveUserPermissions, SYSTEM_ROLES } from '@/modules/rbac/rbac.service.js';
 import * as tenantsRepo from '@/modules/tenants/tenants.repository.js';
 
-export async function requireTenant(
+export async function resolveTenantContext(
   req: Request,
   _res: Response,
   next: NextFunction,
 ): Promise<void> {
-  if (!req.user) {
-    return next(AppError.unauthorized('Authentication required to access tenant resources'));
+  if (!req.user && !req.staff) {
+    return next();
   }
 
   // 1. Identify tenant from header, path params, or query
@@ -21,11 +22,7 @@ export async function requireTenant(
     (typeof req.query.tenantId === 'string' ? req.query.tenantId : undefined);
 
   if (!tenantIdentifier) {
-    return next(
-      AppError.badRequest(
-        'Tenant identifier missing (provide x-tenant-id header or tenantId parameter)',
-      ),
-    );
+    return next();
   }
 
   try {
@@ -43,12 +40,45 @@ export async function requireTenant(
       return next(AppError.forbidden(`Tenant is currently ${tenant.status.toLowerCase()}`));
     }
 
-    // 3. Verify user membership in tenant (unless global system ADMIN)
-    const isSystemAdmin = req.user.role === 'ADMIN';
-    const member = await tenantsRepo.findTenantMember(tenant.id, req.user.id);
+    // 3. Check for an active, audited support delegation session
+    const supportSessionHeader = req.headers['x-support-session-id'];
+    const supportSessionId = Array.isArray(supportSessionHeader)
+      ? supportSessionHeader[0]
+      : supportSessionHeader;
 
-    if (!member && !isSystemAdmin) {
-      return next(AppError.forbidden('You are not a member of this tenant'));
+    let activeSupportSession = null;
+    if (supportSessionId) {
+      const session = await platformRepo.findSupportSessionById(supportSessionId);
+      if (
+        session &&
+        session.status === 'ACTIVE' &&
+        session.tenantId === tenant.id &&
+        new Date(session.expiresAt) > new Date()
+      ) {
+        activeSupportSession = session;
+        req.supportSession = {
+          sessionId: session.id,
+          staffId: session.staffId,
+          tenantId: session.tenantId,
+          reason: session.reason,
+          expiresAt: session.expiresAt,
+        };
+        req.isImpersonated = true;
+      }
+    }
+
+    // 4. Verify user membership in tenant (Strict isolation: no blanket platform staff bypass)
+    let member = null;
+    if (req.user?.id) {
+      member = await tenantsRepo.findTenantMember(tenant.id, req.user.id);
+    }
+
+    if (!member && !activeSupportSession) {
+      return next(
+        AppError.forbidden(
+          'You are not a member of this tenant. Support staff require an active, audited support session.',
+        ),
+      );
     }
 
     if (member && member.status !== 'ACTIVE') {
@@ -57,12 +87,19 @@ export async function requireTenant(
       );
     }
 
-    // 4. Resolve dynamic RBAC permissions (cached)
-    const { roles, permissions } = await resolveUserPermissions(tenant.id, req.user.id);
+    // 5. Resolve permissions
+    let effectivePermissions: string[] = [];
+    let roles: string[] = [];
 
-    // If user is system admin, grant all permissions
-    const effectivePermissions =
-      isSystemAdmin || roles.includes(SYSTEM_ROLES.OWNER) ? ['*'] : permissions;
+    if (activeSupportSession) {
+      // Under audited support delegation, staff access is granted with specific support scope
+      roles = ['SUPPORT_STAFF'];
+      effectivePermissions = ['*']; // Full troubleshooting scope bounded by support session
+    } else if (member && req.user?.id) {
+      const resolved = await resolveUserPermissions(tenant.id, req.user.id);
+      roles = resolved.roles;
+      effectivePermissions = roles.includes(SYSTEM_ROLES.OWNER) ? ['*'] : resolved.permissions;
+    }
 
     req.tenant = {
       id: tenant.id,
@@ -70,6 +107,7 @@ export async function requireTenant(
       slug: tenant.slug,
       status: tenant.status,
       plan: tenant.plan,
+      databaseMode: (tenant as any).databaseMode ?? 'shared',
     };
 
     if (member) {
@@ -85,4 +123,26 @@ export async function requireTenant(
   } catch (error) {
     next(error);
   }
+}
+
+export async function requireTenant(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  if (!req.user && !req.staff) {
+    return next(AppError.unauthorized('Authentication required to access tenant resources'));
+  }
+
+  await resolveTenantContext(req, res, (err) => {
+    if (err) return next(err);
+    if (!req.tenant) {
+      return next(
+        AppError.badRequest(
+          'Tenant identifier missing (provide x-tenant-id header or tenantId parameter)',
+        ),
+      );
+    }
+    next();
+  });
 }

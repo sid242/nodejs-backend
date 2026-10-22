@@ -16,7 +16,7 @@ router.use(requireAuth);
 router.get('/me', controller.getMe);
 router.patch('/me', validate({ body: updateMeDto }), controller.updateMe);
 
-// --- System Admin Endpoints ---
+// --- Tenant/System User Administration Endpoints ---
 router.get('/', requireRole('ADMIN'), validate({ query: listUsersQueryDto }), controller.listUsers);
 router.get('/:userId', requireRole('ADMIN'), controller.getUser);
 router.patch(

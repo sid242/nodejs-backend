@@ -52,6 +52,7 @@ export async function optionalAuth(
     if (token) {
       const payload = verifyAccessToken(token);
       req.user = { id: payload.sub as string, role: (payload as any).role };
+
       if ((payload as any).impersonator) {
         const imp = (payload as any).impersonator;
         const isActive = await isImpersonationSessionActive(imp.sessionId);

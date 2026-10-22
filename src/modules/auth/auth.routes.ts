@@ -13,8 +13,10 @@ import {
   refreshTokenDto,
   registerDto,
   requestEmailVerificationDto,
+  requestMagicLinkDto,
   resetPasswordDto,
   verifyEmailDto,
+  verifyMagicLinkDto,
 } from '@/modules/auth/auth.dto.js';
 
 const router = Router();
@@ -22,6 +24,16 @@ router.use(authLimiter);
 
 router.post('/register', validate({ body: registerDto }), controller.register);
 router.post('/login', validate({ body: loginDto }), controller.login);
+router.post(
+  '/magic-link/request',
+  validate({ body: requestMagicLinkDto }),
+  controller.requestMagicLink,
+);
+router.post(
+  '/magic-link/verify',
+  validate({ body: verifyMagicLinkDto }),
+  controller.verifyMagicLink,
+);
 router.post('/refresh', validate({ body: refreshTokenDto }), controller.refresh);
 router.post('/logout', validate({ body: refreshTokenDto }), controller.logout);
 router.post('/forgot-password', validate({ body: forgotPasswordDto }), controller.forgotPassword);

@@ -21,12 +21,39 @@ export interface DownloadUrlResult {
   expiresInSeconds: number;
 }
 
-async function getOwned(userId: string, id: string, role?: string): Promise<FileRecord> {
+async function getOwned(
+  userId: string,
+  id: string,
+  role?: string,
+  tenantId?: string,
+): Promise<FileRecord> {
   const file = await fileRepo.findById(id);
-  // 404 (not 403) so we don't leak the existence of other users' files to non-admins.
-  if (!file || (role !== 'ADMIN' && file.ownerId !== userId)) {
+  // 404 (not 403) so we don't leak the existence of other users'/tenants' files.
+  if (!file) {
     throw AppError.notFound('File not found');
   }
+
+  // Global ADMIN can access any file across the platform
+  if (role === 'ADMIN') {
+    return file;
+  }
+
+  // If the file belongs to a tenant workspace
+  if (file.tenantId) {
+    if (tenantId && file.tenantId !== tenantId) {
+      throw AppError.notFound('File not found');
+    }
+    if (!tenantId && file.ownerId !== userId) {
+      throw AppError.notFound('File not found');
+    }
+    return file;
+  }
+
+  // Personal / non-tenant file: only the owner has access
+  if (file.ownerId !== userId) {
+    throw AppError.notFound('File not found');
+  }
+
   return file;
 }
 
@@ -34,16 +61,30 @@ async function getOwned(userId: string, id: string, role?: string): Promise<File
 export async function requestUpload(
   userId: string,
   { filename, contentType }: RequestUploadDto,
+  tenantId?: string,
 ): Promise<RequestUploadResult> {
-  const key = `uploads/${userId}/${randomUUID()}-${safeFilename(filename)}`;
-  const file = await fileRepo.createFile({ key, filename, contentType, ownerId: userId });
+  const key = tenantId
+    ? `uploads/tenants/${tenantId}/${randomUUID()}-${safeFilename(filename)}`
+    : `uploads/${userId}/${randomUUID()}-${safeFilename(filename)}`;
+
+  const file = await fileRepo.createFile({
+    key,
+    filename,
+    contentType,
+    ownerId: userId,
+    tenantId: tenantId ?? null,
+  });
   const upload = await createUploadPost({ key, contentType });
   return { fileId: file.id, upload }; // client POSTs { ...upload.fields, file } to upload.url
 }
 
 /** Step 3: after the browser finished uploading to S3, verify the object exists and kick off processing. */
-export async function confirmUpload(userId: string, id: string): Promise<FileRecord> {
-  const file = await getOwned(userId, id);
+export async function confirmUpload(
+  userId: string,
+  id: string,
+  tenantId?: string,
+): Promise<FileRecord> {
+  const file = await getOwned(userId, id, undefined, tenantId);
   if (file.status === 'UPLOADED') return file;
 
   const head = await headObject(file.key).catch(() => null);
@@ -54,7 +95,11 @@ export async function confirmUpload(userId: string, id: string): Promise<FileRec
     size: head.ContentLength,
   });
   if (!updated) throw AppError.notFound('File not found');
-  await fileQueue.add('process', { fileId: id, ownerId: userId }, { jobId: `process-${id}` });
+  await fileQueue.add(
+    'process',
+    { fileId: id, ownerId: userId, tenantId: file.tenantId },
+    { jobId: `process-${id}` },
+  );
   return updated;
 }
 
@@ -62,21 +107,41 @@ export async function getDownloadUrl(
   userId: string,
   id: string,
   role?: string,
+  tenantId?: string,
+  disposition: 'attachment' | 'inline' = 'attachment',
 ): Promise<DownloadUrlResult> {
-  const file = await getOwned(userId, id, role);
+  const file = await getOwned(userId, id, role, tenantId);
   if (file.status !== 'UPLOADED') throw AppError.badRequest('File not uploaded yet');
-  return { url: await createDownloadUrl(file.key), expiresInSeconds: 300 };
+  return {
+    url: await createDownloadUrl(file.key, 300, {
+      filename: file.filename,
+      disposition,
+    }),
+    expiresInSeconds: 300,
+  };
 }
 
-export const listFiles = (userId: string, role?: string): Promise<FileRecord[]> => {
+export const listFiles = (
+  userId: string,
+  role?: string,
+  tenantId?: string,
+): Promise<FileRecord[]> => {
+  if (tenantId) {
+    return fileRepo.findByTenantId(tenantId);
+  }
   if (role === 'ADMIN') {
     return fileRepo.findAll();
   }
   return fileRepo.findByOwnerId(userId);
 };
 
-export async function deleteFile(userId: string, id: string, role?: string): Promise<void> {
-  const file = await getOwned(userId, id, role);
+export async function deleteFile(
+  userId: string,
+  id: string,
+  role?: string,
+  tenantId?: string,
+): Promise<void> {
+  const file = await getOwned(userId, id, role, tenantId);
   await deleteObject(file.key);
   await fileRepo.deleteById(id);
 }

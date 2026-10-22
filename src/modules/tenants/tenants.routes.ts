@@ -17,6 +17,13 @@ router.get(
   controller.resolvePublicTenant,
 );
 
+// Public invitation acceptance (authenticates invitee via single-use magic token)
+router.post(
+  '/invitations/accept',
+  validate({ body: dto.acceptInviteDto }),
+  controller.acceptInvitation,
+);
+
 // Global tenant endpoints for logged-in user
 router.post('/', requireAuth, validate({ body: dto.createTenantDto }), controller.createTenant);
 
