@@ -71,9 +71,9 @@ const hexColorRegex = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 export const updateTenantBrandingDto = z.object({
   companyName: z.string().trim().max(100).optional(),
-  logoUrl: z.string().trim().url().optional().or(z.literal('')),
-  logoDarkUrl: z.string().trim().url().optional().or(z.literal('')),
-  faviconUrl: z.string().trim().url().optional().or(z.literal('')),
+  logoUrl: z.string().trim().url().optional().or(z.literal('')).nullable(),
+  logoDarkUrl: z.string().trim().url().optional().or(z.literal('')).nullable(),
+  faviconUrl: z.string().trim().url().optional().or(z.literal('')).nullable(),
   primaryColor: z.string().trim().regex(hexColorRegex, 'Invalid hex color code').optional(),
   accentColor: z.string().trim().regex(hexColorRegex, 'Invalid hex color code').optional(),
   borderRadius: z.string().trim().max(20).optional(),
@@ -89,17 +89,36 @@ export const updateTenantBrandingDto = z.object({
 
 export type UpdateTenantBrandingDto = z.infer<typeof updateTenantBrandingDto>;
 
+export const ALLOWED_BRANDING_MIME_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/webp',
+  'image/svg+xml',
+  'image/x-icon',
+  'image/vnd.microsoft.icon',
+  'image/ico',
+  'image/icon',
+  'image/x-ico',
+  'application/octet-stream',
+  'application/x-ico',
+] as const;
+
 export const requestBrandingUploadUrlDto = z.object({
   type: z.enum(['logo', 'logo-dark', 'favicon']),
   filename: z.string().trim().min(1),
-  contentType: z.enum([
-    'image/png',
-    'image/jpeg',
-    'image/webp',
-    'image/svg+xml',
-    'image/x-icon',
-    'image/vnd.microsoft.icon',
-  ]),
+  contentType: z
+    .string()
+    .trim()
+    .refine(
+      (val) =>
+        (ALLOWED_BRANDING_MIME_TYPES as readonly string[]).includes(val) ||
+        val.startsWith('image/'),
+      {
+        message:
+          'Invalid content type. Must be a valid image format (PNG, JPEG, WebP, SVG, or ICO).',
+      },
+    ),
 });
 
 export type RequestBrandingUploadUrlDto = z.infer<typeof requestBrandingUploadUrlDto>;
@@ -136,4 +155,3 @@ export const verifyCustomDomainDto = z.object({
 });
 
 export type VerifyCustomDomainDto = z.infer<typeof verifyCustomDomainDto>;
-

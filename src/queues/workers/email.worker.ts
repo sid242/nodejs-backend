@@ -4,6 +4,7 @@ import { sendEmail } from '@/lib/mailer.js';
 import {
   renderMagicLinkEmail,
   renderPasswordResetEmail,
+  renderStaffCredentialsEmail,
   renderTenantInviteEmail,
   renderVerifyEmail,
   renderWelcomeEmail,
@@ -55,6 +56,14 @@ export async function processEmail(job: Job): Promise<void> {
         subject,
         html,
         tenantId: job?.data?.tenantId,
+      });
+    }
+    case 'staff-credentials': {
+      const { subject, html } = renderStaffCredentialsEmail(job.data);
+      return sendEmail({
+        to: job?.data?.to,
+        subject,
+        html,
       });
     }
     default:

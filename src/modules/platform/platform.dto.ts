@@ -146,4 +146,3 @@ export const updatePlatformTenantSubscriptionDto = z.object({
 export type UpdatePlatformTenantSubscriptionDto = z.infer<
   typeof updatePlatformTenantSubscriptionDto
 >;
-

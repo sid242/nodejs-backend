@@ -155,6 +155,11 @@ export const getTenant = asyncHandler(async (req: Request, res: Response) => {
   AppResponse.ok(result).send(res);
 });
 
+export const listTenantMembers = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.listTenantMembers(req.params.id as string);
+  AppResponse.ok(result).send(res);
+});
+
 export const provisionTenant = asyncHandler(async (req: Request, res: Response) => {
   const result = await service.provisionTenant(
     req.staff!.id,
@@ -208,4 +213,3 @@ export const updateTenantSubscription = asyncHandler(async (req: Request, res: R
   );
   AppResponse.ok(result, 'Tenant subscription updated successfully').send(res);
 });
-

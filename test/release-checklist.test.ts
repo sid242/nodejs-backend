@@ -5,17 +5,15 @@ import { eq, inArray } from 'drizzle-orm';
 
 import { closeDb, db } from '../src/config/db.js';
 import { closeRedisClients } from '../src/config/redis.js';
-import {
-  platformStaff,
-  tenantMembers,
-  tenants,
-  users,
-} from '../src/db/schema/index.js';
+import { platformStaff, tenantMembers, tenants, users } from '../src/db/schema/index.js';
 import { AppError } from '../src/lib/errors.js';
-import { resolveTenantContext } from '../src/middleware/tenant.js';
 import { requirePlatformAuth, requirePlatformPermission } from '../src/middleware/platform.js';
+import { resolveTenantContext } from '../src/middleware/tenant.js';
 import * as authRepo from '../src/modules/auth/auth.repository.js';
-import { createMagicLinkToken, verifyAndConsumeMagicLinkToken } from '../src/modules/auth/tokens.js';
+import {
+  createMagicLinkToken,
+  verifyAndConsumeMagicLinkToken,
+} from '../src/modules/auth/tokens.js';
 import * as plansService from '../src/modules/plans/plans.service.js';
 import * as platformService from '../src/modules/platform/platform.service.js';
 import { rbacRepo } from '../src/modules/rbac/rbac.repository.js';
@@ -105,17 +103,14 @@ test('Release Checklist 4: Duplicate Tenant Slugs are Rejected', async () => {
   if (existing && staff) {
     await assert.rejects(
       async () => {
-        await platformService.provisionTenant(
-          staff.id,
-          {
-            name: 'Conflicting Workspace',
-            slug: existing.slug,
-            ownerEmail: `new-${Date.now()}@example.com`,
-            plan: 'PRO',
-            databaseMode: 'shared',
-            timezone: 'UTC',
-          },
-        );
+        await platformService.provisionTenant(staff.id, {
+          name: 'Conflicting Workspace',
+          slug: existing.slug,
+          ownerEmail: `new-${Date.now()}@example.com`,
+          plan: 'PRO',
+          databaseMode: 'shared',
+          timezone: 'UTC',
+        });
       },
       (err: any) => {
         assert.equal(err.status, 409);
@@ -172,7 +167,7 @@ test('Release Checklist 6 & 7: Expired or Single-Use Invitation Tokens Cannot be
         assert.equal(err.status, 400);
         assert.ok(
           err.message.includes('already been used') ||
-          err.message.includes('invalid or has expired'),
+            err.message.includes('invalid or has expired'),
         );
         return true;
       },

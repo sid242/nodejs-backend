@@ -1,17 +1,17 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, test } from 'node:test';
 
-import { randomUUID } from 'node:crypto';
 import { closeDb, db } from '@/config/db.js';
 import { closeRedisClients } from '@/config/redis.js';
 import { users } from '@/db/schema/index.js';
+import { tenantBrandingRepo } from '@/modules/tenants/tenant-branding.repository.js';
 import {
   requestBrandingUploadUrlDto,
   resolvePublicTenantDto,
   updateTenantBrandingDto,
   verifyCustomDomainDto,
 } from '@/modules/tenants/tenants.dto.js';
-import { tenantBrandingRepo } from '@/modules/tenants/tenant-branding.repository.js';
 import { tenantsRepo } from '@/modules/tenants/tenants.repository.js';
 import * as tenantsService from '@/modules/tenants/tenants.service.js';
 
@@ -67,6 +67,25 @@ test('requestBrandingUploadUrlDto enforces allowed image MIME types and categori
   };
   const parsed = requestBrandingUploadUrlDto.safeParse(validLogo);
   assert.equal(parsed.success, true);
+
+  // Favicons with standard and browser-specific MIME types
+  for (const contentType of [
+    'image/x-icon',
+    'image/vnd.microsoft.icon',
+    'image/ico',
+    'image/icon',
+    'image/x-ico',
+    'application/octet-stream',
+    'image/svg+xml',
+    'image/png',
+  ]) {
+    const faviconTest = requestBrandingUploadUrlDto.safeParse({
+      type: 'favicon',
+      filename: 'favicon.ico',
+      contentType,
+    });
+    assert.equal(faviconTest.success, true, `Expected ${contentType} to be valid`);
+  }
 
   // Reject non-image or executable content types
   const invalidType = {
@@ -127,7 +146,9 @@ test('verifyTenantCustomDomain enforces configured domain and transitions status
     },
     (err: any) => {
       assert.equal(err.status, 400);
-      assert.ok(err.message.includes('resolve DNS TXT record') || err.message.includes('did not match'));
+      assert.ok(
+        err.message.includes('resolve DNS TXT record') || err.message.includes('did not match'),
+      );
       return true;
     },
   );
@@ -140,4 +161,3 @@ test('verifyTenantCustomDomain enforces configured domain and transitions status
   const refreshed = await tenantBrandingRepo.findBrandingByTenantId(tenant.id);
   assert.equal(refreshed?.customDomainStatus, 'ACTIVE');
 });
-

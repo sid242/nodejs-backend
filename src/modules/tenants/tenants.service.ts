@@ -546,7 +546,6 @@ export async function transferTenantOwnership(
   };
 }
 
-
 export async function getTenantAuditTrail(tenantId: string, page = 1, limit = 50) {
   return auditRepo.findAuditLogs({ tenantId, page, limit });
 }
@@ -938,13 +937,42 @@ export async function generateBrandingUploadUrl(
     throw AppError.notFound('Tenant not found');
   }
 
-  const ext = data?.filename?.split('.').pop() ?? 'png';
+  const ext = data?.filename?.split('.').pop()?.toLowerCase() ?? 'png';
   const cleanExt = safeFilename(ext);
   const key = `tenants/${tenantId}/branding/${data.type}-${Date.now()}.${cleanExt}`;
 
+  // Normalize content-type for S3 policy condition and browser compatibility
+  let normalizedContentType = data?.contentType ?? 'image/png';
+  if (
+    ['ico', 'icon'].includes(cleanExt) ||
+    [
+      'image/x-icon',
+      'image/vnd.microsoft.icon',
+      'image/ico',
+      'image/icon',
+      'image/x-ico',
+      'application/x-ico',
+      'application/octet-stream',
+    ].includes(normalizedContentType)
+  ) {
+    normalizedContentType = 'image/x-icon';
+  } else if (cleanExt === 'svg' || normalizedContentType === 'image/svg+xml') {
+    normalizedContentType = 'image/svg+xml';
+  } else if (
+    ['jpg', 'jpeg'].includes(cleanExt) ||
+    normalizedContentType === 'image/jpeg' ||
+    normalizedContentType === 'image/jpg'
+  ) {
+    normalizedContentType = 'image/jpeg';
+  } else if (cleanExt === 'png' || normalizedContentType === 'image/png') {
+    normalizedContentType = 'image/png';
+  } else if (cleanExt === 'webp' || normalizedContentType === 'image/webp') {
+    normalizedContentType = 'image/webp';
+  }
+
   const post = await createUploadPost({
     key,
-    contentType: data.contentType,
+    contentType: normalizedContentType,
     expiresIn: 300,
   });
 

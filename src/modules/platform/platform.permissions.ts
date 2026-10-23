@@ -103,7 +103,8 @@ export const PLATFORM_PERMISSION_CATALOGUE: PlatformPermissionDefinition[] = [
   {
     key: PLATFORM_PERMISSIONS.TENANTS_MANAGE,
     name: 'Manage & Provision Tenants',
-    description: 'Provision new tenant workspaces, configure database modes, or update tenant metadata',
+    description:
+      'Provision new tenant workspaces, configure database modes, or update tenant metadata',
     resource: 'tenants',
     action: 'manage',
   },

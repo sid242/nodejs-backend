@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 
 import { db } from '@/config/db.js';
 import { env } from '@/config/env.js';
+import { logger } from '@/config/logger.js';
 import {
   appModules,
   platformPermissions,
@@ -12,7 +13,11 @@ import {
 } from '@/db/schema/index.js';
 import { AppError } from '@/lib/errors.js';
 import * as authRepo from '@/modules/auth/auth.repository.js';
-import { createMagicLinkToken } from '@/modules/auth/tokens.js';
+import {
+  createMagicLinkToken,
+  issueImpersonationToken,
+  type ImpersonatorClaim,
+} from '@/modules/auth/tokens.js';
 import * as plansService from '@/modules/plans/plans.service.js';
 import { rbacRepo } from '@/modules/rbac/rbac.repository.js';
 import * as rbacService from '@/modules/rbac/rbac.service.js';
@@ -131,6 +136,27 @@ export async function createStaff(actorStaffId: string, data: CreateStaffDto, re
     metadata: { email: created.email, roleKey: role.key },
     requestId,
   });
+
+  // Dispatch onboarding email with credentials and platform portal login link
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const loginUrl = `${frontendUrl}/platform/login`;
+
+  try {
+    await emailQueue.add(
+      'staff-credentials',
+      {
+        to: created.email,
+        name: created.displayName,
+        email: created.email,
+        password: data.password,
+        roleName: role.name,
+        loginUrl,
+      },
+      { jobId: `staff-credentials-${created.id}-${Date.now()}` },
+    );
+  } catch (emailErr) {
+    logger.error({ err: emailErr, staffId: created.id }, 'Failed to queue staff credentials email');
+  }
 
   return created;
 }
@@ -281,14 +307,41 @@ export async function startSupportSession(
 ) {
   const expiresAt = new Date(Date.now() + data.durationMinutes * 60 * 1000);
 
+  // If no targetUserId specified, target the first active member of this tenant
+  let targetUserId = data.targetUserId;
+  if (!targetUserId) {
+    const members = await platformRepo.findTenantMembers(tenantId);
+    targetUserId = members[0]?.userId;
+  }
+
   const session = await platformRepo.createSupportSession({
     staffId,
     tenantId,
-    targetUserId: data.targetUserId,
+    targetUserId,
     reason: data.reason,
     status: 'ACTIVE',
     expiresAt,
   });
+
+  // Issue impersonation token so the staff can seamlessly enter the customer dashboard
+  let accessToken: string | undefined;
+  if (targetUserId) {
+    const targetUser = await authRepo.findById(targetUserId);
+    if (targetUser) {
+      const impersonatorClaim: ImpersonatorClaim = {
+        userId: staffId,
+        role: 'SUPER_ADMIN',
+        reason: data.reason,
+        sessionId: session.id,
+      };
+      const tokenResult = await issueImpersonationToken(
+        { id: targetUser.id, role: targetUser.role },
+        impersonatorClaim,
+        data.durationMinutes,
+      );
+      accessToken = tokenResult.accessToken;
+    }
+  }
 
   await platformRepo.logPlatformAction({
     actorStaffId: staffId,
@@ -300,7 +353,7 @@ export async function startSupportSession(
       sessionId: session.id,
       reason: data.reason,
       durationMinutes: data.durationMinutes,
-      targetUserId: data.targetUserId,
+      targetUserId,
       expiresAt: expiresAt.toISOString(),
     },
     requestId,
@@ -309,11 +362,16 @@ export async function startSupportSession(
   return {
     sessionId: session.id,
     tenantId,
-    targetUserId: session.targetUserId ?? null,
+    targetUserId: targetUserId ?? null,
+    accessToken,
     reason: data.reason,
     expiresAt,
     status: session.status,
   };
+}
+
+export async function listTenantMembers(tenantId: string) {
+  return platformRepo.findTenantMembers(tenantId);
 }
 
 export async function endSupportSession(
@@ -576,7 +634,9 @@ export async function updateTenant(
     ...(data?.notes
       ? {
           metadata: {
-            ...(typeof existing.metadata === 'object' && existing.metadata ? existing.metadata : {}),
+            ...(typeof existing.metadata === 'object' && existing.metadata
+              ? existing.metadata
+              : {}),
             notes: data.notes,
           },
         }
@@ -677,9 +737,7 @@ export async function updateTenantSubscription(
     ...(data?.planId ? { planId: data.planId } : {}),
     ...(data?.seatCount !== undefined ? { seatCount: data.seatCount } : {}),
     ...(data?.status ? { status: data.status } : {}),
-    ...(data?.cancelAtPeriodEnd !== undefined
-      ? { cancelAtPeriodEnd: data.cancelAtPeriodEnd }
-      : {}),
+    ...(data?.cancelAtPeriodEnd !== undefined ? { cancelAtPeriodEnd: data.cancelAtPeriodEnd } : {}),
     ...(data?.currentPeriodEnd ? { currentPeriodEnd: new Date(data.currentPeriodEnd) } : {}),
   });
 
@@ -697,4 +755,3 @@ export async function updateTenantSubscription(
 
   return updated;
 }
-

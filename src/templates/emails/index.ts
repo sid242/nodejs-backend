@@ -11,3 +11,7 @@ export {
 export { renderVerifyEmail, type RenderVerifyEmailOptions } from './verify-email.js';
 export { renderMagicLinkEmail, type RenderMagicLinkEmailOptions } from './magic-link.js';
 export { renderTenantInviteEmail, type RenderTenantInviteEmailOptions } from './tenant-invite.js';
+export {
+  renderStaffCredentialsEmail,
+  type RenderStaffCredentialsEmailOptions,
+} from './staff-credentials.js';

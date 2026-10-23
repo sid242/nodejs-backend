@@ -141,6 +141,12 @@ router.get(
   controller.getTenant,
 );
 
+router.get(
+  '/tenants/:id/members',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.TENANTS_READ),
+  controller.listTenantMembers,
+);
+
 router.patch(
   '/tenants/:id',
   requirePlatformPermission(PLATFORM_PERMISSIONS.TENANTS_MANAGE),
@@ -176,4 +182,3 @@ router.patch(
 );
 
 export default router;
-

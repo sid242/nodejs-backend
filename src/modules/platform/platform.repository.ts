@@ -12,7 +12,9 @@ import {
   publicPlatformStaff,
   subscriptions,
   tenantBrandings,
+  tenantMembers,
   tenants,
+  users,
   type NewPlatformAuditLog,
   type NewPlatformRole,
   type NewPlatformStaff,
@@ -392,9 +394,7 @@ export async function findTenantsPaginated(filters: ListPlatformTenantsQueryDto)
   }
   if (filters?.search) {
     const searchPattern = `%${filters.search.toLowerCase()}%`;
-    conditions.push(
-      or(ilike(tenants.name, searchPattern), ilike(tenants.slug, searchPattern))!,
-    );
+    conditions.push(or(ilike(tenants.name, searchPattern), ilike(tenants.slug, searchPattern))!);
   }
 
   const whereClause = and(...conditions);
@@ -414,14 +414,16 @@ export async function findTenantsPaginated(filters: ListPlatformTenantsQueryDto)
           sql<number>`(SELECT count(*)::int FROM "TenantMember" tm WHERE tm."tenantId" = "Tenant"."id" AND tm."status" IN ('ACTIVE', 'INVITED'))`.as(
             'memberCount',
           ),
-        ownerEmail:
-          sql<string | null>`(SELECT u."email" FROM "TenantMember" tm JOIN "User" u ON tm."userId" = u."id" JOIN "TenantMemberRole" tmr ON tmr."memberId" = tm."id" JOIN "AppRole" r ON tmr."roleId" = r."id" WHERE tm."tenantId" = "Tenant"."id" AND lower(r."name") = 'owner' LIMIT 1)`.as(
-            'ownerEmail',
-          ),
-        ownerName:
-          sql<string | null>`(SELECT u."name" FROM "TenantMember" tm JOIN "User" u ON tm."userId" = u."id" JOIN "TenantMemberRole" tmr ON tmr."memberId" = tm."id" JOIN "AppRole" r ON tmr."roleId" = r."id" WHERE tm."tenantId" = "Tenant"."id" AND lower(r."name") = 'owner' LIMIT 1)`.as(
-            'ownerName',
-          ),
+        ownerEmail: sql<
+          string | null
+        >`(SELECT u."email" FROM "TenantMember" tm JOIN "User" u ON tm."userId" = u."id" JOIN "TenantMemberRole" tmr ON tmr."memberId" = tm."id" JOIN "AppRole" r ON tmr."roleId" = r."id" WHERE tm."tenantId" = "Tenant"."id" AND lower(r."name") = 'owner' LIMIT 1)`.as(
+          'ownerEmail',
+        ),
+        ownerName: sql<
+          string | null
+        >`(SELECT u."name" FROM "TenantMember" tm JOIN "User" u ON tm."userId" = u."id" JOIN "TenantMemberRole" tmr ON tmr."memberId" = tm."id" JOIN "AppRole" r ON tmr."roleId" = r."id" WHERE tm."tenantId" = "Tenant"."id" AND lower(r."name") = 'owner' LIMIT 1)`.as(
+          'ownerName',
+        ),
         subscriptionId: subscriptions.id,
         subscriptionStatus: subscriptions.status,
         seatCount: subscriptions.seatCount,
@@ -465,14 +467,16 @@ export async function findTenantDetailById(id: string) {
         sql<number>`(SELECT count(*)::int FROM "TenantMember" tm WHERE tm."tenantId" = "Tenant"."id" AND tm."status" IN ('ACTIVE', 'INVITED'))`.as(
           'memberCount',
         ),
-      ownerEmail:
-        sql<string | null>`(SELECT u."email" FROM "TenantMember" tm JOIN "User" u ON tm."userId" = u."id" JOIN "TenantMemberRole" tmr ON tmr."memberId" = tm."id" JOIN "AppRole" r ON tmr."roleId" = r."id" WHERE tm."tenantId" = "Tenant"."id" AND lower(r."name") = 'owner' LIMIT 1)`.as(
-          'ownerEmail',
-        ),
-      ownerName:
-        sql<string | null>`(SELECT u."name" FROM "TenantMember" tm JOIN "User" u ON tm."userId" = u."id" JOIN "TenantMemberRole" tmr ON tmr."memberId" = tm."id" JOIN "AppRole" r ON tmr."roleId" = r."id" WHERE tm."tenantId" = "Tenant"."id" AND lower(r."name") = 'owner' LIMIT 1)`.as(
-          'ownerName',
-        ),
+      ownerEmail: sql<
+        string | null
+      >`(SELECT u."email" FROM "TenantMember" tm JOIN "User" u ON tm."userId" = u."id" JOIN "TenantMemberRole" tmr ON tmr."memberId" = tm."id" JOIN "AppRole" r ON tmr."roleId" = r."id" WHERE tm."tenantId" = "Tenant"."id" AND lower(r."name") = 'owner' LIMIT 1)`.as(
+        'ownerEmail',
+      ),
+      ownerName: sql<
+        string | null
+      >`(SELECT u."name" FROM "TenantMember" tm JOIN "User" u ON tm."userId" = u."id" JOIN "TenantMemberRole" tmr ON tmr."memberId" = tm."id" JOIN "AppRole" r ON tmr."roleId" = r."id" WHERE tm."tenantId" = "Tenant"."id" AND lower(r."name") = 'owner' LIMIT 1)`.as(
+        'ownerName',
+      ),
     })
     .from(tenants)
     .where(and(eq(tenants.id, id), isNull(tenants.deletedAt)))
@@ -554,10 +558,7 @@ export async function findSubscriptionByTenantId(tenantId: string) {
   return subscription ?? null;
 }
 
-export async function updateTenantSubscription(
-  tenantId: string,
-  data: Partial<NewSubscription>,
-) {
+export async function updateTenantSubscription(tenantId: string, data: Partial<NewSubscription>) {
   const [updated] = await db
     .update(subscriptions)
     .set({
@@ -569,3 +570,25 @@ export async function updateTenantSubscription(
   return updated ?? null;
 }
 
+export async function findTenantMembers(tenantId: string) {
+  return db
+    .select({
+      id: tenantMembers.id,
+      userId: users.id,
+      name: users.name,
+      email: users.email,
+      status: tenantMembers.status,
+      joinedAt: tenantMembers.joinedAt,
+      roleName: sql<string>`coalesce((
+        SELECT r."name"
+        FROM "TenantMemberRole" tmr
+        JOIN "AppRole" r ON tmr."roleId" = r."id"
+        WHERE tmr."memberId" = ${tenantMembers.id}
+        LIMIT 1
+      ), 'Member')`,
+    })
+    .from(tenantMembers)
+    .innerJoin(users, eq(tenantMembers.userId, users.id))
+    .where(eq(tenantMembers.tenantId, tenantId))
+    .orderBy(desc(tenantMembers.joinedAt));
+}

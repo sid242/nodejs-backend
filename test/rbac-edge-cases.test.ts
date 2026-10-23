@@ -348,4 +348,3 @@ test('transferTenantOwnership transfers OWNER role and demotes former owner to A
   (rbacRepo as any).assignRoleToMember = origAssignRole;
   (rbacRepo as any).removeRoleFromMember = origRemoveRole;
 });
-

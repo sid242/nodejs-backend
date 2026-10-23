@@ -90,7 +90,6 @@ router.post(
   controller.transferOwnership,
 );
 
-
 router.get(
   '/:tenantId/audit-logs',
   requireAuth,

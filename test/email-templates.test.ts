@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   renderPasswordResetEmail,
+  renderStaffCredentialsEmail,
   renderVerifyEmail,
   renderWelcomeEmail,
 } from '@/templates/emails/index.js';
@@ -36,4 +37,20 @@ test('renderVerifyEmail contains verification token and 24 hour expiry', () => {
   assert.ok(result.html.includes('verify-token-67890'));
   assert.ok(result.html.includes('Charlie'));
   assert.ok(result.html.includes('24 hours'));
+});
+
+test('renderStaffCredentialsEmail includes login URL, credentials, and role', () => {
+  const result = renderStaffCredentialsEmail({
+    name: 'Dave Operator',
+    email: 'dave@platform.local',
+    password: 'InitialPassword123!',
+    roleName: 'Support Specialist',
+    loginUrl: 'https://platform.example.com/platform/login',
+  });
+  assert.ok(result.subject.includes('Access Credentials'));
+  assert.ok(result.html.includes('Dave Operator'));
+  assert.ok(result.html.includes('dave@platform.local'));
+  assert.ok(result.html.includes('InitialPassword123!'));
+  assert.ok(result.html.includes('Support Specialist'));
+  assert.ok(result.html.includes('https://platform.example.com/platform/login'));
 });

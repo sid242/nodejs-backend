@@ -5,6 +5,7 @@ import { after, test } from 'node:test';
 import { closeDb, db } from '../src/config/db.js';
 import { closeRedisClients } from '../src/config/redis.js';
 import { platformStaff } from '../src/db/schema/index.js';
+import { createMagicLinkToken } from '../src/modules/auth/tokens.js';
 import {
   listPlatformTenantsQueryDto,
   provisionTenantDto,
@@ -14,7 +15,6 @@ import * as platformRepo from '../src/modules/platform/platform.repository.js';
 import * as platformService from '../src/modules/platform/platform.service.js';
 import { tenantsRepo } from '../src/modules/tenants/tenants.repository.js';
 import * as tenantsService from '../src/modules/tenants/tenants.service.js';
-import { createMagicLinkToken } from '../src/modules/auth/tokens.js';
 
 after(async () => {
   await Promise.allSettled([closeRedisClients(), closeDb()]);
@@ -240,4 +240,3 @@ test('invitation tokens are explicitly bound to workspace and prevent cross-tena
   assert.equal(memAAfter?.status, 'ACTIVE');
   assert.equal(memBAfter?.status, 'INVITED');
 });
-
