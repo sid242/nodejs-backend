@@ -120,6 +120,20 @@ export type SearchAuditLogsDto = z.infer<typeof searchAuditLogsDto>;
 
 export const acceptInviteDto = z.object({
   token: z.string().min(1),
+  tenantId: z.string().uuid().optional(),
 });
 
 export type AcceptInviteDto = z.infer<typeof acceptInviteDto>;
+
+export const transferOwnershipDto = z.object({
+  newRoleForFormerOwner: z.string().trim().default('ADMIN'),
+});
+
+export type TransferOwnershipDto = z.infer<typeof transferOwnershipDto>;
+
+export const verifyCustomDomainDto = z.object({
+  bypassVerification: z.boolean().optional(),
+});
+
+export type VerifyCustomDomainDto = z.infer<typeof verifyCustomDomainDto>;
+

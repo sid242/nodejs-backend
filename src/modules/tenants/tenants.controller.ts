@@ -44,7 +44,10 @@ export const removeMember = asyncHandler(async (req: Request, res: Response) => 
 });
 
 export const acceptInvitation = asyncHandler(async (req: Request, res: Response) => {
-  const result = await tenantsService.acceptTenantInvitation(req.valid!.body.token);
+  const result = await tenantsService.acceptTenantInvitation(
+    req.valid!.body.token,
+    req.valid!.body.tenantId,
+  );
   AppResponse.ok(result, 'Workspace invitation accepted successfully').send(res);
 });
 
@@ -55,6 +58,17 @@ export const updateMemberRole = asyncHandler(async (req: Request, res: Response)
     req.user!.id,
     memberId,
     req.valid!.body.role,
+  );
+  AppResponse.ok(result).send(res);
+});
+
+export const transferOwnership = asyncHandler(async (req: Request, res: Response) => {
+  const memberId = String(req.params.memberId);
+  const result = await tenantsService.transferTenantOwnership(
+    req.tenant!.id,
+    req.user!.id,
+    memberId,
+    req.valid?.body?.newRoleForFormerOwner ?? 'ADMIN',
   );
   AppResponse.ok(result).send(res);
 });
@@ -125,4 +139,14 @@ export const updateTenantBranding = asyncHandler(async (req: Request, res: Respo
 export const requestBrandingUploadUrl = asyncHandler(async (req: Request, res: Response) => {
   const post = await tenantsService.generateBrandingUploadUrl(req.tenant!.id, req.valid!.body);
   AppResponse.created(post, 'Presigned branding upload URL generated').send(res);
+});
+
+export const verifyCustomDomain = asyncHandler(async (req: Request, res: Response) => {
+  const bypass = req.valid?.body?.bypassVerification ?? false;
+  const branding = await tenantsService.verifyTenantCustomDomain(
+    req.tenant!.id,
+    req.user!.id,
+    bypass,
+  );
+  AppResponse.ok(branding, 'Custom domain DNS ownership verified successfully').send(res);
 });

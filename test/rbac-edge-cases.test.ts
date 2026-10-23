@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, test } from 'node:test';
 
-import { closeDb } from '../src/config/db.js';
+import { closeDb, db } from '../src/config/db.js';
 import { closeRedisClients } from '../src/config/redis.js';
+import { users } from '../src/db/schema/index.js';
 import { rbacRepo } from '../src/modules/rbac/rbac.repository.js';
 import * as rbacService from '../src/modules/rbac/rbac.service.js';
 import { tenantsRepo } from '../src/modules/tenants/tenants.repository.js';
@@ -236,3 +237,115 @@ test('createCustomTenantRole and updateCustomTenantRole reject unknown permissio
   (rbacRepo as any).findAllPermissions = origFindAllPermissions;
   (rbacRepo as any).findRoleById = origFindRoleById;
 });
+
+test('transferTenantOwnership transfers OWNER role and demotes former owner to ADMIN atomically', async () => {
+  const [existingUser] = await db.select({ id: users.id }).from(users).limit(1);
+  let formerOwnerUserId: string = existingUser?.id ?? '';
+  if (!formerOwnerUserId) {
+    const [created] = await db
+      .insert(users)
+      .values({
+        email: `owner-${Date.now()}@example.com`,
+        passwordHash: 'dummyhash',
+        name: 'Owner User',
+      })
+      .returning({ id: users.id });
+    formerOwnerUserId = created?.id ?? randomUUID();
+  }
+
+  const realTenant = await tenantsRepo.createTenant({
+    name: 'Transfer Tenant',
+    slug: `transfer-${Date.now()}`,
+    plan: 'FREE',
+  });
+  const tenantId = realTenant.id;
+  const formerOwnerMemberId = randomUUID();
+  const newOwnerUserId = randomUUID();
+  const newOwnerMemberId = randomUUID();
+
+  const origFindMemberById = tenantsRepo.findTenantMemberById;
+  const origFindMember = tenantsRepo.findTenantMember;
+  const origGetMemberRoles = rbacRepo.getMemberRoles;
+  const origFindRolesByTenant = rbacRepo.findRolesByTenant;
+  const origAssignRole = rbacRepo.assignRoleToMember;
+  const origRemoveRole = rbacRepo.removeRoleFromMember;
+
+  const assignedRoles: { memberId: string; roleId: string }[] = [];
+  const removedRoles: { memberId: string; roleId: string }[] = [];
+
+  const ownerRoleId = 'role-owner-id';
+  const adminRoleId = 'role-admin-id';
+
+  (tenantsRepo as any).findTenantMemberById = async (id: string) => {
+    if (id === newOwnerMemberId) {
+      return { id: newOwnerMemberId, tenantId, userId: newOwnerUserId, status: 'ACTIVE' };
+    }
+    return null;
+  };
+
+  (tenantsRepo as any).findTenantMember = async (tId: string, uId: string) => {
+    if (tId === tenantId && uId === formerOwnerUserId) {
+      return { id: formerOwnerMemberId, tenantId, userId: formerOwnerUserId, status: 'ACTIVE' };
+    }
+    return null;
+  };
+
+  (rbacRepo as any).getMemberRoles = async (memberId: string) => {
+    if (memberId === formerOwnerMemberId) {
+      return [{ id: ownerRoleId, name: 'OWNER' }];
+    }
+    return [{ id: adminRoleId, name: 'ADMIN' }];
+  };
+
+  (rbacRepo as any).findRolesByTenant = async () => [
+    { id: ownerRoleId, name: 'OWNER' },
+    { id: adminRoleId, name: 'ADMIN' },
+  ];
+
+  (rbacRepo as any).assignRoleToMember = async (memberId: string, roleId: string) => {
+    assignedRoles.push({ memberId, roleId });
+  };
+
+  (rbacRepo as any).removeRoleFromMember = async (memberId: string, roleId: string) => {
+    removedRoles.push({ memberId, roleId });
+  };
+
+  // Case 1: Cannot transfer to yourself
+  await assert.rejects(
+    async () => {
+      await tenantsService.transferTenantOwnership(
+        tenantId,
+        formerOwnerUserId,
+        formerOwnerMemberId,
+      );
+    },
+    (err: any) => {
+      assert.equal(err.status, 404);
+      return true;
+    },
+  );
+
+  // Case 2: Successful ownership transfer
+  const result = await tenantsService.transferTenantOwnership(
+    tenantId,
+    formerOwnerUserId,
+    newOwnerMemberId,
+    'ADMIN',
+  );
+
+  assert.equal(result.newOwnerId, newOwnerUserId);
+  assert.equal(result.formerOwnerRole, 'ADMIN');
+  assert.ok(assignedRoles.some((r) => r.memberId === newOwnerMemberId && r.roleId === ownerRoleId));
+  assert.ok(
+    assignedRoles.some((r) => r.memberId === formerOwnerMemberId && r.roleId === adminRoleId),
+  );
+
+  // Restore mocks
+  (tenantsRepo as any).findTenantMemberById = origFindMemberById;
+  (tenantsRepo as any).findTenantMember = origFindMember;
+  (rbacRepo as any).getMemberRoles = origGetMemberRoles;
+  (rbacRepo as any).findRolesByTenant = origFindRolesByTenant;
+  (rbacRepo as any).assignRoleToMember = origAssignRole;
+  (rbacRepo as any).removeRoleFromMember = origRemoveRole;
+});
+

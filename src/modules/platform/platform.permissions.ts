@@ -16,6 +16,7 @@ export const PLATFORM_PERMISSIONS = {
 
   // Tenant Lifecycle Oversight
   TENANTS_READ: 'tenants::read',
+  TENANTS_MANAGE: 'tenants::manage',
   TENANTS_SUSPEND: 'tenants::suspend',
 
   // Audited Customer Support Delegation
@@ -98,6 +99,13 @@ export const PLATFORM_PERMISSION_CATALOGUE: PlatformPermissionDefinition[] = [
     description: 'Inspect customer tenant metadata, database modes, and plans',
     resource: 'tenants',
     action: 'read',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.TENANTS_MANAGE,
+    name: 'Manage & Provision Tenants',
+    description: 'Provision new tenant workspaces, configure database modes, or update tenant metadata',
+    resource: 'tenants',
+    action: 'manage',
   },
   {
     key: PLATFORM_PERMISSIONS.TENANTS_SUSPEND,

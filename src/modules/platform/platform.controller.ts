@@ -140,3 +140,72 @@ export const queryAuditLogs = asyncHandler(async (req: Request, res: Response) =
   const result = await service.queryAuditLogs(req.valid?.query);
   AppResponse.ok(result).send(res);
 });
+
+// ==========================================
+// 5. Tenant Oversight & Provisioning Handlers
+// ==========================================
+
+export const listTenants = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.listTenants(req.valid?.query);
+  AppResponse.ok(result).send(res);
+});
+
+export const getTenant = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.getTenantById(req.params.id as string);
+  AppResponse.ok(result).send(res);
+});
+
+export const provisionTenant = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.provisionTenant(
+    req.staff!.id,
+    req.valid?.body,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.created(result, 'Tenant workspace provisioned successfully').send(res);
+});
+
+export const updateTenant = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.updateTenant(
+    req.staff!.id,
+    req.params.id as string,
+    req.valid?.body,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.ok(result, 'Tenant workspace updated successfully').send(res);
+});
+
+export const suspendTenant = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.suspendTenant(
+    req.staff!.id,
+    req.params.id as string,
+    req.valid?.body?.reason,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.ok(result, 'Tenant workspace suspended').send(res);
+});
+
+export const activateTenant = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.activateTenant(
+    req.staff!.id,
+    req.params.id as string,
+    req.valid?.body?.reason,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.ok(result, 'Tenant workspace reactivated').send(res);
+});
+
+export const getTenantSubscription = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.getTenantSubscription(req.params.id as string);
+  AppResponse.ok(result).send(res);
+});
+
+export const updateTenantSubscription = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.updateTenantSubscription(
+    req.staff!.id,
+    req.params.id as string,
+    req.valid?.body,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.ok(result, 'Tenant subscription updated successfully').send(res);
+});
+

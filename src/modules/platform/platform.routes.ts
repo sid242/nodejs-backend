@@ -118,4 +118,62 @@ router.get(
   controller.queryAuditLogs,
 );
 
+// ==========================================
+// 5. Tenant Oversight & Provisioning
+// ==========================================
+router.get(
+  '/tenants',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.TENANTS_READ),
+  validate({ query: dto.listPlatformTenantsQueryDto }),
+  controller.listTenants,
+);
+
+router.post(
+  '/tenants',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.TENANTS_MANAGE),
+  validate({ body: dto.provisionTenantDto }),
+  controller.provisionTenant,
+);
+
+router.get(
+  '/tenants/:id',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.TENANTS_READ),
+  controller.getTenant,
+);
+
+router.patch(
+  '/tenants/:id',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.TENANTS_MANAGE),
+  validate({ body: dto.updatePlatformTenantDto }),
+  controller.updateTenant,
+);
+
+router.post(
+  '/tenants/:id/suspend',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.TENANTS_SUSPEND),
+  validate({ body: dto.suspendTenantDto }),
+  controller.suspendTenant,
+);
+
+router.post(
+  '/tenants/:id/activate',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.TENANTS_SUSPEND),
+  validate({ body: dto.activateTenantDto }),
+  controller.activateTenant,
+);
+
+router.get(
+  '/tenants/:id/subscription',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_READ),
+  controller.getTenantSubscription,
+);
+
+router.patch(
+  '/tenants/:id/subscription',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_MANAGE),
+  validate({ body: dto.updatePlatformTenantSubscriptionDto }),
+  controller.updateTenantSubscription,
+);
+
 export default router;
+

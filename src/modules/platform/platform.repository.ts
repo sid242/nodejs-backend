@@ -1,7 +1,8 @@
-import { and, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 
 import { db } from '@/config/db.js';
 import {
+  plans,
   platformAuditLogs,
   platformPermissions,
   platformRolePermissions,
@@ -9,16 +10,22 @@ import {
   platformStaff,
   platformSupportSessions,
   publicPlatformStaff,
+  subscriptions,
+  tenantBrandings,
+  tenants,
   type NewPlatformAuditLog,
   type NewPlatformRole,
   type NewPlatformStaff,
   type NewPlatformSupportSession,
+  type NewSubscription,
+  type NewTenant,
   type PlatformPermission,
   type PlatformRole,
   type PlatformStaff,
 } from '@/db/schema/index.js';
 
 import type {
+  ListPlatformTenantsQueryDto,
   ListStaffQueryDto,
   QueryPlatformAuditLogsDto,
   UpdateStaffDto,
@@ -366,3 +373,199 @@ export async function queryPlatformAuditLogs(filters: QueryPlatformAuditLogsDto)
     limit: filters.limit,
   };
 }
+
+// ==========================================
+// 5. Platform Tenant Lifecycle & Oversight Queries
+// ==========================================
+
+export async function findTenantsPaginated(filters: ListPlatformTenantsQueryDto) {
+  const conditions = [isNull(tenants.deletedAt)];
+
+  if (filters?.status) {
+    conditions.push(eq(tenants.status, filters.status));
+  }
+  if (filters?.plan) {
+    conditions.push(eq(tenants.plan, filters.plan));
+  }
+  if (filters?.databaseMode) {
+    conditions.push(eq(tenants.databaseMode, filters.databaseMode));
+  }
+  if (filters?.search) {
+    const searchPattern = `%${filters.search.toLowerCase()}%`;
+    conditions.push(
+      or(ilike(tenants.name, searchPattern), ilike(tenants.slug, searchPattern))!,
+    );
+  }
+
+  const whereClause = and(...conditions);
+
+  const [items, totalResult] = await Promise.all([
+    db
+      .select({
+        id: tenants.id,
+        name: tenants.name,
+        slug: tenants.slug,
+        status: tenants.status,
+        plan: tenants.plan,
+        databaseMode: tenants.databaseMode,
+        createdAt: tenants.createdAt,
+        updatedAt: tenants.updatedAt,
+        memberCount:
+          sql<number>`(SELECT count(*)::int FROM "TenantMember" tm WHERE tm."tenantId" = "Tenant"."id" AND tm."status" IN ('ACTIVE', 'INVITED'))`.as(
+            'memberCount',
+          ),
+        ownerEmail:
+          sql<string | null>`(SELECT u."email" FROM "TenantMember" tm JOIN "User" u ON tm."userId" = u."id" JOIN "TenantMemberRole" tmr ON tmr."memberId" = tm."id" JOIN "AppRole" r ON tmr."roleId" = r."id" WHERE tm."tenantId" = "Tenant"."id" AND lower(r."name") = 'owner' LIMIT 1)`.as(
+            'ownerEmail',
+          ),
+        ownerName:
+          sql<string | null>`(SELECT u."name" FROM "TenantMember" tm JOIN "User" u ON tm."userId" = u."id" JOIN "TenantMemberRole" tmr ON tmr."memberId" = tm."id" JOIN "AppRole" r ON tmr."roleId" = r."id" WHERE tm."tenantId" = "Tenant"."id" AND lower(r."name") = 'owner' LIMIT 1)`.as(
+            'ownerName',
+          ),
+        subscriptionId: subscriptions.id,
+        subscriptionStatus: subscriptions.status,
+        seatCount: subscriptions.seatCount,
+        trialEndsAt: subscriptions.trialEndsAt,
+      })
+      .from(tenants)
+      .leftJoin(subscriptions, eq(tenants.id, subscriptions.tenantId))
+      .where(whereClause)
+      .orderBy(desc(tenants.createdAt))
+      .offset((filters.page - 1) * filters.limit)
+      .limit(filters.limit),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(tenants)
+      .where(whereClause),
+  ]);
+
+  return {
+    items,
+    total: totalResult[0]?.count ?? 0,
+    page: filters.page,
+    limit: filters.limit,
+  };
+}
+
+export async function findTenantDetailById(id: string) {
+  const [tenant] = await db
+    .select({
+      id: tenants.id,
+      name: tenants.name,
+      slug: tenants.slug,
+      status: tenants.status,
+      plan: tenants.plan,
+      databaseMode: tenants.databaseMode,
+      schemaVersion: tenants.schemaVersion,
+      metadata: tenants.metadata,
+      createdAt: tenants.createdAt,
+      updatedAt: tenants.updatedAt,
+      deletedAt: tenants.deletedAt,
+      memberCount:
+        sql<number>`(SELECT count(*)::int FROM "TenantMember" tm WHERE tm."tenantId" = "Tenant"."id" AND tm."status" IN ('ACTIVE', 'INVITED'))`.as(
+          'memberCount',
+        ),
+      ownerEmail:
+        sql<string | null>`(SELECT u."email" FROM "TenantMember" tm JOIN "User" u ON tm."userId" = u."id" JOIN "TenantMemberRole" tmr ON tmr."memberId" = tm."id" JOIN "AppRole" r ON tmr."roleId" = r."id" WHERE tm."tenantId" = "Tenant"."id" AND lower(r."name") = 'owner' LIMIT 1)`.as(
+          'ownerEmail',
+        ),
+      ownerName:
+        sql<string | null>`(SELECT u."name" FROM "TenantMember" tm JOIN "User" u ON tm."userId" = u."id" JOIN "TenantMemberRole" tmr ON tmr."memberId" = tm."id" JOIN "AppRole" r ON tmr."roleId" = r."id" WHERE tm."tenantId" = "Tenant"."id" AND lower(r."name") = 'owner' LIMIT 1)`.as(
+          'ownerName',
+        ),
+    })
+    .from(tenants)
+    .where(and(eq(tenants.id, id), isNull(tenants.deletedAt)))
+    .limit(1);
+
+  if (!tenant) return null;
+
+  const [subscription, branding] = await Promise.all([
+    db
+      .select({
+        id: subscriptions.id,
+        planId: subscriptions.planId,
+        planName: plans.name,
+        planCode: plans.key,
+        status: subscriptions.status,
+        seatCount: subscriptions.seatCount,
+        currentPeriodStart: subscriptions.currentPeriodStart,
+        currentPeriodEnd: subscriptions.currentPeriodEnd,
+        cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd,
+        trialEndsAt: subscriptions.trialEndsAt,
+      })
+      .from(subscriptions)
+      .leftJoin(plans, eq(subscriptions.planId, plans.id))
+      .where(eq(subscriptions.tenantId, id))
+      .limit(1),
+    db
+      .select({
+        companyName: tenantBrandings.companyName,
+        logoUrl: tenantBrandings.logoUrl,
+        primaryColor: tenantBrandings.primaryColor,
+        accentColor: tenantBrandings.accentColor,
+        customDomain: tenantBrandings.customDomain,
+        customDomainStatus: tenantBrandings.customDomainStatus,
+        supportEmail: tenantBrandings.supportEmail,
+      })
+      .from(tenantBrandings)
+      .where(eq(tenantBrandings.tenantId, id))
+      .limit(1),
+  ]);
+
+  return {
+    ...tenant,
+    subscription: subscription[0] ?? null,
+    branding: branding[0] ?? null,
+  };
+}
+
+export async function updateTenantPlatformFields(id: string, data: Partial<NewTenant>) {
+  const [updated] = await db
+    .update(tenants)
+    .set({
+      ...data,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(tenants.id, id), isNull(tenants.deletedAt)))
+    .returning();
+  return updated ?? null;
+}
+
+export async function findSubscriptionByTenantId(tenantId: string) {
+  const [subscription] = await db
+    .select({
+      id: subscriptions.id,
+      tenantId: subscriptions.tenantId,
+      planId: subscriptions.planId,
+      status: subscriptions.status,
+      seatCount: subscriptions.seatCount,
+      currentPeriodStart: subscriptions.currentPeriodStart,
+      currentPeriodEnd: subscriptions.currentPeriodEnd,
+      cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd,
+      trialEndsAt: subscriptions.trialEndsAt,
+      planCode: plans.key,
+      planName: plans.name,
+    })
+    .from(subscriptions)
+    .leftJoin(plans, eq(subscriptions.planId, plans.id))
+    .where(eq(subscriptions.tenantId, tenantId))
+    .limit(1);
+  return subscription ?? null;
+}
+
+export async function updateTenantSubscription(
+  tenantId: string,
+  data: Partial<NewSubscription>,
+) {
+  const [updated] = await db
+    .update(subscriptions)
+    .set({
+      ...data,
+      updatedAt: new Date(),
+    })
+    .where(eq(subscriptions.tenantId, tenantId))
+    .returning();
+  return updated ?? null;
+}
+

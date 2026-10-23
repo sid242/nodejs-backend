@@ -1,19 +1,36 @@
+import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 import { db } from '@/config/db.js';
 import { env } from '@/config/env.js';
-import { platformPermissions } from '@/db/schema/index.js';
+import {
+  appModules,
+  platformPermissions,
+  tenantBrandings,
+  tenantModules,
+} from '@/db/schema/index.js';
 import { AppError } from '@/lib/errors.js';
+import * as authRepo from '@/modules/auth/auth.repository.js';
+import { createMagicLinkToken } from '@/modules/auth/tokens.js';
+import * as plansService from '@/modules/plans/plans.service.js';
+import { rbacRepo } from '@/modules/rbac/rbac.repository.js';
+import * as rbacService from '@/modules/rbac/rbac.service.js';
+import { tenantsRepo } from '@/modules/tenants/tenants.repository.js';
+import { emailQueue } from '@/queues/index.js';
 
 import type {
   CreatePlatformRoleDto,
   CreateStaffDto,
+  ListPlatformTenantsQueryDto,
   ListStaffQueryDto,
   LoginStaffDto,
+  ProvisionTenantDto,
   QueryPlatformAuditLogsDto,
   StartSupportSessionDto,
   UpdatePlatformRoleDto,
+  UpdatePlatformTenantDto,
+  UpdatePlatformTenantSubscriptionDto,
   UpdateStaffDto,
 } from './platform.dto.js';
 import { PLATFORM_PERMISSION_CATALOGUE, SYSTEM_PLATFORM_ROLES } from './platform.permissions.js';
@@ -378,3 +395,306 @@ export async function seedPlatformDefaults(): Promise<void> {
     }
   }
 }
+
+// ==========================================
+// 6. Platform Tenant Oversight & Provisioning
+// ==========================================
+
+export async function listTenants(filters: ListPlatformTenantsQueryDto) {
+  return platformRepo.findTenantsPaginated(filters);
+}
+
+export async function getTenantById(id: string) {
+  const tenant = await platformRepo.findTenantDetailById(id);
+  if (!tenant) throw AppError.notFound('Tenant organization not found');
+  return tenant;
+}
+
+export async function provisionTenant(
+  actorStaffId: string,
+  data: ProvisionTenantDto,
+  requestId?: string,
+) {
+  const normalizedSlug = data.slug.toLowerCase().trim();
+  const existing = await tenantsRepo.findTenantBySlug(normalizedSlug);
+  if (existing) {
+    throw AppError.conflict(`A workspace with slug "${normalizedSlug}" already exists`);
+  }
+
+  // 1. Create tenant organization record
+  const tenant = await tenantsRepo.createTenant({
+    name: data.name.trim(),
+    slug: normalizedSlug,
+    plan: data.plan ?? 'FREE',
+    status: 'ACTIVE',
+    databaseMode: data.databaseMode ?? 'shared',
+    metadata: {
+      country: data?.country ?? null,
+      timezone: data?.timezone ?? 'UTC',
+      notes: data?.notes ?? null,
+      provisionedByStaffId: actorStaffId,
+    },
+  });
+
+  // 2. Resolve or provision owner user account
+  const normalizedEmail = data.ownerEmail.toLowerCase().trim();
+  let ownerUser = await authRepo.findByEmail(normalizedEmail);
+  let isNewUser = false;
+
+  if (!ownerUser) {
+    const dummyHash = await bcrypt.hash(randomUUID(), 12);
+    const namePart = normalizedEmail.split('@')[0] || 'Owner';
+    const name = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+    const created = await authRepo.createUser({
+      email: normalizedEmail,
+      name,
+      passwordHash: dummyHash,
+    });
+    ownerUser = await authRepo.findById(created.id);
+    isNewUser = true;
+  }
+
+  if (!ownerUser) {
+    throw AppError.internal('Failed to provision owner account for new workspace');
+  }
+
+  // 3. Add owner as invited tenant member (activated upon accepting the magic link onboarding URL)
+  const member = await tenantsRepo.addTenantMember({
+    tenantId: tenant.id,
+    userId: ownerUser.id,
+    status: 'INVITED',
+  });
+
+  // 4. Look up or seed OWNER system role
+  const systemRoles = await rbacRepo.findRolesByTenant(null);
+  let ownerRole = systemRoles.find((r) => r.name === rbacService.SYSTEM_ROLES.OWNER);
+
+  if (!ownerRole) {
+    await rbacService.seedDefaultRbac();
+    const refreshed = await rbacRepo.findRolesByTenant(null);
+    ownerRole = refreshed.find((r) => r.name === rbacService.SYSTEM_ROLES.OWNER);
+  }
+
+  if (ownerRole) {
+    await rbacRepo.assignRoleToMember(member.id, ownerRole.id);
+  }
+
+  // 5. Provision default tenant modules
+  const allModules = await db.select({ id: appModules.id }).from(appModules);
+  if (allModules.length > 0) {
+    await db
+      .insert(tenantModules)
+      .values(
+        allModules.map((m) => ({
+          tenantId: tenant.id,
+          moduleId: m.id,
+          isEnabled: true,
+        })),
+      )
+      .onConflictDoNothing();
+  }
+
+  // 6. Assign initial subscription
+  await plansService.assignInitialSubscription(tenant.id, tenant.plan ?? 'FREE');
+
+  // 7. Seed default branding record
+  await db
+    .insert(tenantBrandings)
+    .values({
+      tenantId: tenant.id,
+      companyName: tenant.name,
+      primaryColor: '#4F46E5',
+      accentColor: '#06B6D4',
+      borderRadius: '0.5rem',
+      customDomainStatus: 'PENDING',
+    })
+    .onConflictDoNothing();
+
+  // 8. Generate 48-hour invitation token and dispatch invitation email
+  const inviteToken = await createMagicLinkToken(ownerUser.id, 48 * 3600, tenant.id);
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const inviteUrl = `${frontendUrl}/accept-invitation?token=${inviteToken}&tenant=${tenant.id}`;
+
+  await emailQueue.add(
+    'tenant-invite',
+    {
+      to: ownerUser.email,
+      name: ownerUser.name,
+      tenantName: tenant.name,
+      roleName: 'Owner',
+      token: inviteToken,
+      inviteUrl,
+      tenantId: tenant.id,
+    },
+    { jobId: `provision-${tenant.id}-${ownerUser.id}-${Date.now()}` },
+  );
+
+  // 9. Write immutable platform audit log
+  await platformRepo.logPlatformAction({
+    actorStaffId,
+    action: 'tenant.provisioned',
+    targetType: 'tenant',
+    targetId: tenant.id,
+    tenantId: tenant.id,
+    metadata: {
+      name: tenant.name,
+      slug: tenant.slug,
+      ownerEmail: normalizedEmail,
+      plan: tenant.plan,
+      isNewUser,
+      databaseMode: tenant.databaseMode,
+    },
+    requestId,
+  });
+
+  return {
+    tenant,
+    owner: {
+      id: ownerUser.id,
+      email: ownerUser.email,
+      name: ownerUser.name,
+      isNewUser,
+    },
+    inviteUrl,
+    inviteToken,
+  };
+}
+
+export async function updateTenant(
+  actorStaffId: string,
+  id: string,
+  data: UpdatePlatformTenantDto,
+  requestId?: string,
+) {
+  const existing = await platformRepo.findTenantDetailById(id);
+  if (!existing) throw AppError.notFound('Tenant not found');
+
+  const updated = await platformRepo.updateTenantPlatformFields(id, {
+    ...(data?.name ? { name: data.name.trim() } : {}),
+    ...(data?.plan ? { plan: data.plan } : {}),
+    ...(data?.databaseMode ? { databaseMode: data.databaseMode } : {}),
+    ...(data?.notes
+      ? {
+          metadata: {
+            ...(typeof existing.metadata === 'object' && existing.metadata ? existing.metadata : {}),
+            notes: data.notes,
+          },
+        }
+      : {}),
+  });
+
+  if (!updated) throw AppError.notFound('Failed to update tenant');
+
+  await platformRepo.logPlatformAction({
+    actorStaffId,
+    action: 'tenant.updated',
+    targetType: 'tenant',
+    targetId: id,
+    tenantId: id,
+    metadata: { changes: data },
+    requestId,
+  });
+
+  return updated;
+}
+
+export async function suspendTenant(
+  actorStaffId: string,
+  id: string,
+  reason: string,
+  requestId?: string,
+) {
+  const existing = await platformRepo.findTenantDetailById(id);
+  if (!existing) throw AppError.notFound('Tenant not found');
+
+  if (existing.status === 'SUSPENDED') {
+    throw AppError.badRequest('Tenant organization is already suspended');
+  }
+
+  const updated = await platformRepo.updateTenantPlatformFields(id, {
+    status: 'SUSPENDED',
+  });
+
+  await platformRepo.logPlatformAction({
+    actorStaffId,
+    action: 'tenant.suspended',
+    targetType: 'tenant',
+    targetId: id,
+    tenantId: id,
+    metadata: { reason, previousStatus: existing.status },
+    requestId,
+  });
+
+  return updated;
+}
+
+export async function activateTenant(
+  actorStaffId: string,
+  id: string,
+  reason?: string,
+  requestId?: string,
+) {
+  const existing = await platformRepo.findTenantDetailById(id);
+  if (!existing) throw AppError.notFound('Tenant not found');
+
+  if (existing.status === 'ACTIVE') {
+    throw AppError.badRequest('Tenant organization is already active');
+  }
+
+  const updated = await platformRepo.updateTenantPlatformFields(id, {
+    status: 'ACTIVE',
+  });
+
+  await platformRepo.logPlatformAction({
+    actorStaffId,
+    action: 'tenant.activated',
+    targetType: 'tenant',
+    targetId: id,
+    tenantId: id,
+    metadata: { reason, previousStatus: existing.status },
+    requestId,
+  });
+
+  return updated;
+}
+
+export async function getTenantSubscription(tenantId: string) {
+  const subscription = await platformRepo.findSubscriptionByTenantId(tenantId);
+  if (!subscription) throw AppError.notFound('No subscription record found for this tenant');
+  return subscription;
+}
+
+export async function updateTenantSubscription(
+  actorStaffId: string,
+  tenantId: string,
+  data: UpdatePlatformTenantSubscriptionDto,
+  requestId?: string,
+) {
+  const existing = await platformRepo.findSubscriptionByTenantId(tenantId);
+  if (!existing) throw AppError.notFound('No subscription record found for this tenant');
+
+  const updated = await platformRepo.updateTenantSubscription(tenantId, {
+    ...(data?.planId ? { planId: data.planId } : {}),
+    ...(data?.seatCount !== undefined ? { seatCount: data.seatCount } : {}),
+    ...(data?.status ? { status: data.status } : {}),
+    ...(data?.cancelAtPeriodEnd !== undefined
+      ? { cancelAtPeriodEnd: data.cancelAtPeriodEnd }
+      : {}),
+    ...(data?.currentPeriodEnd ? { currentPeriodEnd: new Date(data.currentPeriodEnd) } : {}),
+  });
+
+  if (!updated) throw AppError.notFound('Failed to update tenant subscription');
+
+  await platformRepo.logPlatformAction({
+    actorStaffId,
+    action: 'tenant.subscription_updated',
+    targetType: 'tenant',
+    targetId: tenantId,
+    tenantId,
+    metadata: { changes: data },
+    requestId,
+  });
+
+  return updated;
+}
+

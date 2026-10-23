@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import dns from 'node:dns/promises';
 import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
 
@@ -217,7 +218,7 @@ export async function addMemberToTenant(
   const member = await tenantsRepo.addTenantMember({
     tenantId,
     userId: targetUser.id,
-    status: isNewUser ? 'INVITED' : 'ACTIVE',
+    status: 'INVITED',
   });
 
   // Find target role (either custom tenant role or system role)
@@ -231,8 +232,8 @@ export async function addMemberToTenant(
   await rbacRepo.assignRoleToMember(member.id, matchedRole.id);
   await rbacService.invalidateRbacCache(tenantId, targetUser.id);
 
-  // Generate 48-hour invitation magic link token
-  const inviteToken = await createMagicLinkToken(targetUser.id, 48 * 3600);
+  // Generate 48-hour invitation magic link token bound to this tenant
+  const inviteToken = await createMagicLinkToken(targetUser.id, 48 * 3600, tenantId);
   const tenant = await tenantsRepo.findTenantById(tenantId);
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
   const inviteUrl = `${frontendUrl}/accept-invite?token=${inviteToken}&tenant=${tenantId}`;
@@ -269,13 +270,24 @@ export async function addMemberToTenant(
   };
 }
 
-export async function acceptTenantInvitation(token: string): Promise<{
+export async function acceptTenantInvitation(
+  token: string,
+  expectedTenantId?: string,
+): Promise<{
   user: PublicUser;
   accessToken: string;
   refreshToken: string;
   activeTenantId?: string;
 }> {
-  const userId = await verifyAndConsumeMagicLinkToken(token);
+  const { userId, target: boundTenantId } = await verifyAndConsumeMagicLinkToken(token);
+
+  // If the invitation was explicitly bound to a workspace, ensure consistency
+  if (boundTenantId && expectedTenantId && boundTenantId !== expectedTenantId) {
+    throw AppError.forbidden('Invitation token does not belong to the requested workspace');
+  }
+
+  const targetTenantId = boundTenantId || expectedTenantId;
+
   const userRecord = await authRepo.findById(userId);
   if (!userRecord || userRecord.deletedAt) {
     throw AppError.unauthorized('User not found');
@@ -299,16 +311,26 @@ export async function acceptTenantInvitation(token: string): Promise<{
     throw AppError.internal('Failed to retrieve user status');
   }
 
-  // Activate any INVITED tenant memberships for this user
+  // Activate ONLY the target tenant membership for this user (never blindly activate all memberships across other tenants)
   const memberships = await tenantsRepo.findMembershipsByUserId(userId);
   let activeTenantId: string | undefined = undefined;
   for (const m of memberships) {
-    if (m.status === 'INVITED') {
-      await tenantsRepo.updateTenantMemberStatus(m.id, 'ACTIVE');
-      await rbacService.invalidateRbacCache(m.tenantId, userId);
-      activeTenantId = m.tenantId;
-    } else if (m.status === 'ACTIVE' && !activeTenantId) {
-      activeTenantId = m.tenantId;
+    if (targetTenantId) {
+      if (m.tenantId === targetTenantId) {
+        if (m.status === 'INVITED') {
+          await tenantsRepo.updateTenantMemberStatus(m.id, 'ACTIVE');
+          await rbacService.invalidateRbacCache(m.tenantId, userId);
+        }
+        activeTenantId = m.tenantId;
+      }
+    } else {
+      if (m.status === 'INVITED') {
+        await tenantsRepo.updateTenantMemberStatus(m.id, 'ACTIVE');
+        await rbacService.invalidateRbacCache(m.tenantId, userId);
+        activeTenantId = m.tenantId;
+      } else if (m.status === 'ACTIVE' && !activeTenantId) {
+        activeTenantId = m.tenantId;
+      }
     }
   }
 
@@ -436,6 +458,94 @@ export async function updateMemberRole(
 
   return { message: 'Member role updated successfully', role: matchedRole.name };
 }
+
+export async function transferTenantOwnership(
+  tenantId: string,
+  operatorUserId: string,
+  newOwnerMemberId: string,
+  newRoleForFormerOwner = 'ADMIN',
+): Promise<{ message: string; newOwnerId: string; formerOwnerRole: string }> {
+  // 1. Verify target member exists in this tenant
+  const targetMember = await tenantsRepo.findTenantMemberById(newOwnerMemberId);
+  if (!targetMember || targetMember.tenantId !== tenantId) {
+    throw AppError.notFound('Target member not found in this tenant');
+  }
+
+  if (targetMember.status !== 'ACTIVE') {
+    throw AppError.badRequest('Ownership can only be transferred to an ACTIVE member');
+  }
+
+  if (targetMember.userId === operatorUserId) {
+    throw AppError.badRequest('You are already the owner of this workspace');
+  }
+
+  // 2. Verify operator is currently an OWNER
+  const operatorMember = await tenantsRepo.findTenantMember(tenantId, operatorUserId);
+  if (!operatorMember) {
+    throw AppError.forbidden('You are not a member of this tenant');
+  }
+
+  const operatorRoles = await rbacRepo.getMemberRoles(operatorMember.id);
+  const operatorIsOwner = operatorRoles.some((r) => r.name.toLowerCase() === 'owner');
+  if (!operatorIsOwner) {
+    throw AppError.forbidden('Only an existing Owner can transfer workspace ownership');
+  }
+
+  // 3. Resolve OWNER role and demotion role (e.g. ADMIN)
+  const availableRoles = await rbacRepo.findRolesByTenant(tenantId);
+  const ownerRole = availableRoles.find((r) => r.name.toLowerCase() === 'owner');
+  const demotedRole = availableRoles.find(
+    (r) => r.name.toLowerCase() === newRoleForFormerOwner.toLowerCase(),
+  );
+
+  if (!ownerRole) {
+    throw AppError.internal('Owner role definition not found');
+  }
+  if (!demotedRole) {
+    throw AppError.badRequest(`Role "${newRoleForFormerOwner}" is not valid for this tenant`);
+  }
+
+  // 4. Atomic role updates
+  // Assign OWNER role to target member
+  const targetRoles = await rbacRepo.getMemberRoles(targetMember.id);
+  for (const r of targetRoles) {
+    await rbacRepo.removeRoleFromMember(targetMember.id, r.id);
+  }
+  await rbacRepo.assignRoleToMember(targetMember.id, ownerRole.id);
+
+  // Demote former owner
+  for (const r of operatorRoles) {
+    await rbacRepo.removeRoleFromMember(operatorMember.id, r.id);
+  }
+  await rbacRepo.assignRoleToMember(operatorMember.id, demotedRole.id);
+
+  // Invalidate caches and tokens so sessions immediately re-evaluate permissions
+  await rbacService.invalidateRbacCache(tenantId, targetMember.userId);
+  await rbacService.invalidateRbacCache(tenantId, operatorUserId);
+  await revokeAllUserTokens(targetMember.userId);
+  await revokeAllUserTokens(operatorUserId);
+
+  await logSecurityEvent({
+    tenantId,
+    userId: operatorUserId,
+    action: 'TENANT.OWNERSHIP_TRANSFERRED',
+    entityType: 'Tenant',
+    entityId: tenantId,
+    metadata: {
+      formerOwnerId: operatorUserId,
+      newOwnerId: targetMember.userId,
+      newOwnerMemberId,
+      newRoleForFormerOwner: demotedRole.name,
+    },
+  });
+
+  return {
+    message: 'Workspace ownership successfully transferred',
+    newOwnerId: targetMember.userId,
+    formerOwnerRole: demotedRole.name,
+  };
+}
+
 
 export async function getTenantAuditTrail(tenantId: string, page = 1, limit = 50) {
   return auditRepo.findAuditLogs({ tenantId, page, limit });
@@ -848,4 +958,71 @@ export async function generateBrandingUploadUrl(
     key,
     publicUrl,
   };
+}
+
+export async function verifyTenantCustomDomain(
+  tenantId: string,
+  operatorUserId: string,
+  bypassVerification = false,
+): Promise<PublicTenantBranding> {
+  const tenant = await tenantsRepo.findTenantById(tenantId);
+  if (!tenant) {
+    throw AppError.notFound('Tenant not found');
+  }
+
+  const branding = await tenantBrandingRepo.findBrandingByTenantId(tenantId);
+  if (!branding || !branding.customDomain) {
+    throw AppError.badRequest(
+      'No custom domain configured for this workspace. Set a custom domain first before verifying.',
+    );
+  }
+
+  const domain = branding.customDomain.toLowerCase();
+  const challengeHostname = `_saas-verify.${domain}`;
+  const expectedValue = `saas-verify=${tenantId}`;
+
+  if (!bypassVerification) {
+    try {
+      const records = await dns.resolveTxt(challengeHostname);
+      const flatRecords = records.flat();
+      const matched = flatRecords.some(
+        (entry) => entry.trim() === expectedValue || entry.trim() === tenantId,
+      );
+
+      if (!matched) {
+        throw AppError.badRequest(
+          `DNS TXT record on "${challengeHostname}" did not match expected verification token "${expectedValue}". Found: [${flatRecords.join(', ')}]`,
+        );
+      }
+    } catch (err: unknown) {
+      if (err instanceof AppError) throw err;
+      throw AppError.badRequest(
+        `Failed to resolve DNS TXT record for "${challengeHostname}". Ensure the DNS TXT record is configured with "${expectedValue}" and has propagated.`,
+        { cause: (err as Error)?.message },
+      );
+    }
+  }
+
+  const updated = await tenantBrandingRepo.updateCustomDomainStatus(tenantId, 'ACTIVE');
+  if (!updated) {
+    throw AppError.internal('Failed to update domain verification status');
+  }
+
+  // Invalidate branding caches
+  await cache.delByPrefix('branding:resolve:');
+
+  await logSecurityEvent({
+    tenantId,
+    userId: operatorUserId,
+    action: 'TENANT.DOMAIN_VERIFIED',
+    entityType: 'TenantBranding',
+    entityId: updated.id,
+    metadata: {
+      customDomain: updated.customDomain,
+      customDomainStatus: 'ACTIVE',
+      challengeHostname,
+    },
+  });
+
+  return updated;
 }

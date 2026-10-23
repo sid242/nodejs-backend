@@ -53,9 +53,22 @@ export async function deleteTenantBranding(tenantId: string): Promise<boolean> {
   return !!deleted;
 }
 
+export async function updateCustomDomainStatus(
+  tenantId: string,
+  status: string,
+): Promise<TenantBranding | null> {
+  const [updated] = await db
+    .update(tenantBrandings)
+    .set({ customDomainStatus: status, updatedAt: new Date() })
+    .where(eq(tenantBrandings.tenantId, tenantId))
+    .returning();
+  return updated ?? null;
+}
+
 export const tenantBrandingRepo = {
   findBrandingByTenantId,
   findBrandingByCustomDomain,
   upsertTenantBranding,
+  updateCustomDomainStatus,
   deleteTenantBranding,
 };

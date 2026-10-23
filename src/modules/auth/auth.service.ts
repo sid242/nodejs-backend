@@ -381,7 +381,7 @@ export async function requestMagicLink(email: string): Promise<MagicLinkRequestR
 }
 
 export async function verifyMagicLink(token: string): Promise<AuthResult> {
-  const userId = await verifyAndConsumeMagicLinkToken(token);
+  const { userId } = await verifyAndConsumeMagicLinkToken(token);
   const userRecord = await authRepo.findById(userId);
   if (!userRecord || userRecord.deletedAt) {
     throw AppError.unauthorized('User account not found');

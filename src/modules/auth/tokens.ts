@@ -105,18 +105,30 @@ export async function verifyAndConsumeEmailVerificationToken(token: string): Pro
   return record.userId;
 }
 
-export async function createMagicLinkToken(userId: string, ttlSeconds = 15 * 60): Promise<string> {
+export interface MagicLinkVerificationResult {
+  userId: string;
+  target?: string | null;
+}
+
+export async function createMagicLinkToken(
+  userId: string,
+  ttlSeconds = 15 * 60,
+  target?: string,
+): Promise<string> {
   const { rawToken } = await createHashedVerificationToken({
     userId,
     type: 'MAGIC_LINK',
+    target,
     ttlSeconds,
   });
   return rawToken;
 }
 
-export async function verifyAndConsumeMagicLinkToken(token: string): Promise<string> {
+export async function verifyAndConsumeMagicLinkToken(
+  token: string,
+): Promise<MagicLinkVerificationResult> {
   const record = await verifyAndConsumeHashedToken(token, 'MAGIC_LINK');
-  return record.userId;
+  return { userId: record.userId, target: record.target };
 }
 
 export interface ImpersonatorClaim {

@@ -86,3 +86,64 @@ export const queryPlatformAuditLogsDto = z.object({
   endDate: z.string().datetime().optional(),
 });
 export type QueryPlatformAuditLogsDto = z.infer<typeof queryPlatformAuditLogsDto>;
+
+// ==========================================
+// Platform Tenant Lifecycle & Provisioning DTOs
+// ==========================================
+
+export const listPlatformTenantsQueryDto = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().trim().optional(),
+  status: z.enum(['ACTIVE', 'SUSPENDED', 'TRIALING', 'DEACTIVATED']).optional(),
+  plan: z.string().trim().optional(),
+  databaseMode: z.enum(['shared', 'dedicated']).optional(),
+});
+export type ListPlatformTenantsQueryDto = z.infer<typeof listPlatformTenantsQueryDto>;
+
+export const provisionTenantDto = z.object({
+  name: z.string().trim().min(2).max(100),
+  slug: z
+    .string()
+    .trim()
+    .min(2)
+    .max(50)
+    .regex(/^[a-z0-9-]+$/, 'Slug must consist of lowercase alphanumeric characters and hyphens'),
+  ownerEmail: z.string().trim().email(),
+  plan: z.string().trim().default('FREE'),
+  country: z.string().trim().max(100).optional(),
+  timezone: z.string().trim().default('UTC'),
+  databaseMode: z.enum(['shared', 'dedicated']).default('shared'),
+  notes: z.string().trim().max(500).optional(),
+});
+export type ProvisionTenantDto = z.infer<typeof provisionTenantDto>;
+
+export const updatePlatformTenantDto = z.object({
+  name: z.string().trim().min(2).max(100).optional(),
+  plan: z.string().trim().optional(),
+  databaseMode: z.enum(['shared', 'dedicated']).optional(),
+  notes: z.string().trim().max(500).optional(),
+});
+export type UpdatePlatformTenantDto = z.infer<typeof updatePlatformTenantDto>;
+
+export const suspendTenantDto = z.object({
+  reason: z.string().trim().min(3).max(500),
+});
+export type SuspendTenantDto = z.infer<typeof suspendTenantDto>;
+
+export const activateTenantDto = z.object({
+  reason: z.string().trim().max(500).optional(),
+});
+export type ActivateTenantDto = z.infer<typeof activateTenantDto>;
+
+export const updatePlatformTenantSubscriptionDto = z.object({
+  planId: z.string().uuid().optional(),
+  seatCount: z.coerce.number().int().min(1).optional(),
+  status: z.enum(['ACTIVE', 'TRIALING', 'PAST_DUE', 'CANCELED', 'EXPIRED']).optional(),
+  cancelAtPeriodEnd: z.boolean().optional(),
+  currentPeriodEnd: z.string().datetime().optional(),
+});
+export type UpdatePlatformTenantSubscriptionDto = z.infer<
+  typeof updatePlatformTenantSubscriptionDto
+>;
+

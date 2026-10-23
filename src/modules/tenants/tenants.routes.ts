@@ -81,6 +81,16 @@ router.patch(
   controller.updateMemberRole,
 );
 
+router.post(
+  '/:tenantId/members/:memberId/transfer-ownership',
+  requireAuth,
+  requireTenant,
+  requirePermission('roles:assign'),
+  validate({ body: dto.transferOwnershipDto }),
+  controller.transferOwnership,
+);
+
+
 router.get(
   '/:tenantId/audit-logs',
   requireAuth,
@@ -158,6 +168,15 @@ router.post(
   requirePermission('tenants:update'),
   validate({ body: dto.requestBrandingUploadUrlDto }),
   controller.requestBrandingUploadUrl,
+);
+
+router.post(
+  '/:tenantId/branding/domain/verify',
+  requireAuth,
+  requireTenant,
+  requirePermission('tenants:update'),
+  validate({ body: dto.verifyCustomDomainDto }),
+  controller.verifyCustomDomain,
 );
 
 export default router;
