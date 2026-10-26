@@ -16,7 +16,10 @@ export async function createTenant(data: NewTenant): Promise<Tenant> {
   return record!;
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export async function findTenantById(id: string): Promise<Tenant | null> {
+  if (!id || !UUID_REGEX.test(id)) return null;
   const [record] = await db.select().from(tenants).where(eq(tenants.id, id)).limit(1);
   return record ?? null;
 }

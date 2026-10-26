@@ -128,13 +128,7 @@ export async function createTenantOrganization(
   };
 }
 
-export async function getUserTenants(
-  userId: string,
-  isSystemAdmin?: boolean,
-): Promise<PublicTenant[]> {
-  if (isSystemAdmin) {
-    return tenantsRepo.findAllActiveTenants();
-  }
+export async function getUserTenants(userId: string): Promise<PublicTenant[]> {
   return tenantsRepo.findUserTenants(userId);
 }
 
@@ -896,17 +890,26 @@ export async function updateTenantBranding(
     }
   }
 
+  const existing = await tenantBrandingRepo.findBrandingByTenantId(tenantId);
+
   const updated = await tenantBrandingRepo.upsertTenantBranding({
     tenantId,
-    companyName: data?.companyName ?? tenant.name,
-    logoUrl: data?.logoUrl,
-    logoDarkUrl: data?.logoDarkUrl,
-    faviconUrl: data?.faviconUrl,
-    primaryColor: data?.primaryColor ?? '#4F46E5',
-    accentColor: data?.accentColor ?? '#06B6D4',
-    borderRadius: data?.borderRadius ?? '0.5rem',
-    customDomain: data?.customDomain ? data.customDomain.toLowerCase() : null,
-    supportEmail: data?.supportEmail,
+    companyName: data?.companyName ?? existing?.companyName ?? tenant.name,
+    logoUrl: data?.logoUrl !== undefined ? data.logoUrl : (existing?.logoUrl ?? null),
+    logoDarkUrl:
+      data?.logoDarkUrl !== undefined ? data.logoDarkUrl : (existing?.logoDarkUrl ?? null),
+    faviconUrl: data?.faviconUrl !== undefined ? data.faviconUrl : (existing?.faviconUrl ?? null),
+    primaryColor: data?.primaryColor ?? existing?.primaryColor ?? '#4F46E5',
+    accentColor: data?.accentColor ?? existing?.accentColor ?? '#06B6D4',
+    borderRadius: data?.borderRadius ?? existing?.borderRadius ?? '0.5rem',
+    customDomain:
+      data?.customDomain !== undefined
+        ? data.customDomain
+          ? data.customDomain.toLowerCase()
+          : null
+        : (existing?.customDomain ?? null),
+    supportEmail:
+      data?.supportEmail !== undefined ? data.supportEmail : (existing?.supportEmail ?? null),
   });
 
   // Invalidate cached branding entries

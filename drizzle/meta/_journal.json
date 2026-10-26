@@ -71,6 +71,13 @@
       "when": 1792677318495,
       "tag": "0009_happy_smiling_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792998548962,
+      "tag": "0010_sleepy_sage",
+      "breakpoints": true
     }
   ]
 }

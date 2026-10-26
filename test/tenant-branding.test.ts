@@ -19,7 +19,7 @@ after(async () => {
   await Promise.allSettled([closeRedisClients(), closeDb()]);
 });
 
-test('resolvePublicTenantDto validates slug or domain query parameters', () => {
+test('resolvePublicTenantDto validates slug, domain, or host query parameters', () => {
   const bySlug = resolvePublicTenantDto.safeParse({ slug: 'acme-corp' });
   assert.equal(bySlug.success, true);
   if (bySlug.success) {
@@ -30,6 +30,12 @@ test('resolvePublicTenantDto validates slug or domain query parameters', () => {
   assert.equal(byDomain.success, true);
   if (byDomain.success) {
     assert.equal(byDomain.data.domain, 'portal.acme.com');
+  }
+
+  const byHost = resolvePublicTenantDto.safeParse({ host: 'acme-corp.localhost:3000' });
+  assert.equal(byHost.success, true);
+  if (byHost.success) {
+    assert.equal(byHost.data.host, 'acme-corp.localhost:3000');
   }
 });
 

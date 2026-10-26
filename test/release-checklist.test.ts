@@ -27,8 +27,17 @@ after(async () => {
 test('Release Checklist 1 & 2: Cross-Tenant Isolation & Header Tampering Prevention', async () => {
   // Scenario: Real tenant A and real tenant B exist. User is a member of A only.
   // User attempts to query tenant B using x-tenant-id header. Must throw 403 Forbidden.
-  const [user] = await db.select().from(users).limit(1);
-  assert.ok(user, 'Seeded user required');
+  const uniqueEmail = `iso-user-${Date.now()}@example.com`;
+  const [user] = await db
+    .insert(users)
+    .values({
+      email: uniqueEmail,
+      name: 'Isolation Test User',
+      passwordHash: '$2a$12$dummyhashforisolationtesting00000000000000000000000',
+      status: 'ACTIVE',
+    })
+    .returning();
+  assert.ok(user, 'Created test user required');
 
   const tenantA = await tenantsRepo.createTenant({
     name: 'Isolation Tenant A',
@@ -64,9 +73,19 @@ test('Release Checklist 1 & 2: Cross-Tenant Isolation & Header Tampering Prevent
     assert.ok(caughtError instanceof AppError);
     assert.equal(caughtError.status, 403);
     assert.ok(caughtError.message.includes('not a member of this tenant'));
+
+    // Verify tenant list isolation: User must ONLY see their own active memberships
+    const userTenants = await tenantsService.getUserTenants(user.id);
+    const tenantIds = userTenants.map((t) => t.id);
+    assert.ok(tenantIds.includes(tenantA.id), 'User must see their own tenant A');
+    assert.ok(
+      !tenantIds.includes(tenantB.id),
+      'User must never see other tenant B in their tenant list',
+    );
   } finally {
     await db.delete(tenantMembers).where(eq(tenantMembers.id, memberA.id));
     await db.delete(tenants).where(inArray(tenants.id, [tenantA.id, tenantB.id]));
+    await db.delete(users).where(eq(users.id, user.id));
   }
 });
 
@@ -122,22 +141,34 @@ test('Release Checklist 4: Duplicate Tenant Slugs are Rejected', async () => {
 });
 
 test('Release Checklist 5: Duplicate Active Memberships are Prevented', async () => {
-  const [user] = await db.select().from(users).limit(1);
-  const [tenant] = await db.select().from(tenants).limit(1);
+  const uniqueEmail = `dup-member-${Date.now()}@example.com`;
+  const [testUser] = await db
+    .insert(users)
+    .values({
+      email: uniqueEmail,
+      name: 'Duplicate Test User',
+      passwordHash: '$2a$12$dummyhashforduplicatetesting00000000000000000000000',
+      status: 'ACTIVE',
+    })
+    .returning();
+  assert.ok(testUser, 'Created test user required');
 
-  if (user && tenant) {
-    let existingMember = await tenantsRepo.findTenantMember(tenant.id, user.id);
-    if (!existingMember) {
-      existingMember = await tenantsRepo.addTenantMember({
-        tenantId: tenant.id,
-        userId: user.id,
-        status: 'ACTIVE',
-      });
-    }
+  const testTenant = await tenantsRepo.createTenant({
+    name: 'Duplicate Test Tenant',
+    slug: `dup-test-${Date.now()}`,
+    plan: 'PRO',
+  });
+
+  try {
+    await tenantsRepo.addTenantMember({
+      tenantId: testTenant.id,
+      userId: testUser.id,
+      status: 'ACTIVE',
+    });
 
     await assert.rejects(
       async () => {
-        await tenantsService.addMemberToTenant(tenant.id, user.id, user.email);
+        await tenantsService.addMemberToTenant(testTenant.id, testUser.id, testUser.email);
       },
       (err: any) => {
         assert.equal(err.status, 409);
@@ -145,18 +176,33 @@ test('Release Checklist 5: Duplicate Active Memberships are Prevented', async ()
         return true;
       },
     );
+  } finally {
+    await db.delete(tenantMembers).where(eq(tenantMembers.userId, testUser.id));
+    await db.delete(tenants).where(eq(tenants.id, testTenant.id));
+    await db.delete(users).where(eq(users.id, testUser.id));
   }
 });
 
 test('Release Checklist 6 & 7: Expired or Single-Use Invitation Tokens Cannot be Reused', async () => {
-  const [user] = await db.select().from(users).limit(1);
-  const [tenant] = await db.select().from(tenants).limit(1);
+  const uniqueEmail = `magic-token-${Date.now()}@example.com`;
+  const [testUser] = await db
+    .insert(users)
+    .values({
+      email: uniqueEmail,
+      name: 'Magic Token Test User',
+      passwordHash: '$2a$12$dummyhashformagictokentesting0000000000000000000000',
+      status: 'ACTIVE',
+    })
+    .returning();
+  assert.ok(testUser, 'Created test user required');
 
-  if (user && tenant) {
-    const token = await createMagicLinkToken(user.id, 60, tenant.id);
+  const dummyTenantId = randomUUID();
+
+  try {
+    const token = await createMagicLinkToken(testUser.id, 60, dummyTenantId);
     const consumed = await verifyAndConsumeMagicLinkToken(token);
-    assert.equal(consumed.userId, user.id);
-    assert.equal(consumed.target, tenant.id);
+    assert.equal(consumed.userId, testUser.id);
+    assert.equal(consumed.target, dummyTenantId);
 
     // Immediate second consumption MUST FAIL
     await assert.rejects(
@@ -172,6 +218,8 @@ test('Release Checklist 6 & 7: Expired or Single-Use Invitation Tokens Cannot be
         return true;
       },
     );
+  } finally {
+    await db.delete(users).where(eq(users.id, testUser.id));
   }
 });
 

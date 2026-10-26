@@ -28,6 +28,21 @@ export const createEmailTemplateDto = z.object({
   category: z.enum(emailTemplateCategories).default('CUSTOM'),
   status: z.enum(emailTemplateStatuses).default('DRAFT'),
   description: z.string().trim().max(500).optional(),
+  senderName: z.string().trim().max(100).optional().nullable(),
+  fromEmail: z
+    .string()
+    .trim()
+    .email('Invalid from email address')
+    .optional()
+    .nullable()
+    .or(z.literal('')),
+  replyTo: z
+    .string()
+    .trim()
+    .email('Invalid reply-to email address')
+    .optional()
+    .nullable()
+    .or(z.literal('')),
   htmlContent: z.string().min(1, 'HTML content is required'),
   designJson: z.any().optional(),
   variables: z.array(z.string()).optional(),

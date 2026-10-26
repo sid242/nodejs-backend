@@ -69,6 +69,9 @@ export async function createTemplate(
     category: data.category,
     status: data.status,
     description: data.description,
+    senderName: data.senderName,
+    fromEmail: data.fromEmail,
+    replyTo: data.replyTo,
     htmlContent: data.htmlContent,
     designJson: data.designJson,
     variables: detectedVariables,
@@ -123,6 +126,9 @@ export async function testSendTemplate(
     subject: renderedSubject,
     html: renderedHtml,
     tenantId,
+    fromName: template.senderName ?? undefined,
+    fromEmail: template.fromEmail ?? undefined,
+    replyTo: template.replyTo ?? undefined,
   });
 
   return {

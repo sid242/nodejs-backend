@@ -15,6 +15,9 @@ export interface SendEmailOptions {
   html: string;
   text?: string;
   tenantId?: string;
+  fromName?: string;
+  fromEmail?: string;
+  replyTo?: string;
 }
 
 export interface SmtpConnectionOptions {
@@ -77,6 +80,9 @@ export async function sendEmail({
   html,
   text,
   tenantId,
+  fromName,
+  fromEmail,
+  replyTo,
 }: SendEmailOptions): Promise<void> {
   // 1. Check for Tenant-specific custom SMTP configuration
   if (tenantId) {
@@ -109,9 +115,13 @@ export async function sendEmail({
             },
           });
 
-          const from = tenantConfig.fromName
-            ? `"${tenantConfig.fromName}" <${tenantConfig.fromEmail}>`
-            : tenantConfig.fromEmail;
+          const effectiveFromName = fromName || tenantConfig.fromName;
+          const effectiveFromEmail = fromEmail || tenantConfig.fromEmail;
+          const effectiveReplyTo = replyTo || tenantConfig?.replyTo || undefined;
+
+          const from = effectiveFromName
+            ? `"${effectiveFromName}" <${effectiveFromEmail}>`
+            : effectiveFromEmail;
 
           await tenantTransporter.sendMail({
             from,
@@ -119,7 +129,7 @@ export async function sendEmail({
             subject,
             html,
             text,
-            replyTo: tenantConfig?.replyTo ?? undefined,
+            replyTo: effectiveReplyTo,
           });
 
           logger.info(
@@ -150,9 +160,13 @@ export async function sendEmail({
         },
       });
 
-      const from = env.SMTP_FROM_NAME
-        ? `"${env.SMTP_FROM_NAME}" <${env.SMTP_FROM_EMAIL ?? env.SMTP_USER}>`
-        : (env.SMTP_FROM_EMAIL ?? env.SMTP_USER);
+      const effectiveFromName = fromName || env.SMTP_FROM_NAME;
+      const effectiveFromEmail = fromEmail || env.SMTP_FROM_EMAIL || env.SMTP_USER;
+      const effectiveReplyTo = replyTo || undefined;
+
+      const from = effectiveFromName
+        ? `"${effectiveFromName}" <${effectiveFromEmail}>`
+        : effectiveFromEmail;
 
       await systemTransporter.sendMail({
         from,
@@ -160,6 +174,7 @@ export async function sendEmail({
         subject,
         html,
         text,
+        replyTo: effectiveReplyTo,
       });
 
       logger.info({ to, subject, host: env.SMTP_HOST }, '[mailer] sent via system SMTP');
@@ -168,11 +183,16 @@ export async function sendEmail({
   }
 
   // 3. System Default: AWS SES v2
-  if (isProd && env.SES_FROM_EMAIL) {
+  if (isProd && (fromEmail || env.SES_FROM_EMAIL)) {
+    const sesSender = fromName
+      ? `"${fromName}" <${fromEmail || env.SES_FROM_EMAIL}>`
+      : fromEmail || env.SES_FROM_EMAIL;
+
     await ses.send(
       new SendEmailCommand({
-        FromEmailAddress: env.SES_FROM_EMAIL,
+        FromEmailAddress: sesSender,
         Destination: { ToAddresses: [to] },
+        ReplyToAddresses: replyTo ? [replyTo] : undefined,
         Content: { Simple: { Subject: { Data: subject }, Body: { Html: { Data: html } } } },
       }),
     );
@@ -182,7 +202,7 @@ export async function sendEmail({
 
   // 4. Development Fallback Logger
   logger.info(
-    { to, subject, tenantId },
+    { to, subject, tenantId, fromName, fromEmail, replyTo },
     '[mailer] (not sent: non-prod or no live email provider configured)',
   );
 }

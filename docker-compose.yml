@@ -51,6 +51,15 @@ services:
       interval: 5s
       retries: 10
 
+  redis-insight: # GUI for inspecting Redis state, cache, queues, and pub/sub
+    image: redis/redisinsight:latest
+    ports:
+      - '${REDIS_INSIGHT_PORT:-5540}:5540'
+    volumes:
+      - redisinsight-data:/data
+    depends_on:
+      redis: { condition: service_healthy }
+
   minio: # S3-compatible storage for local development
     image: cgr.dev/chainguard/minio:latest
     command: server /data --console-address ":9001"
@@ -73,7 +82,8 @@ services:
       /bin/sh -c "sleep 3 &&
       mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD} &&
       mc mb --ignore-existing local/$${S3_BUCKET} &&
-      mc anonymous set none local/$${S3_BUCKET}"
+      mc anonymous set none local/$${S3_BUCKET} &&
+      mc anonymous set download local/$${S3_BUCKET}/tenants"
 
   api: &app
     profiles: ['full']
@@ -107,4 +117,4 @@ services:
       - '${NGINX_PORT:-8080}:80'
     depends_on: [api]
 
-volumes: { pgdata: {}, redisdata: {}, queue-redisdata: {}, miniodata: {} }
+volumes: { pgdata: {}, redisdata: {}, queue-redisdata: {}, miniodata: {}, redisinsight-data: {} }

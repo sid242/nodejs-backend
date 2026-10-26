@@ -1,9 +1,9 @@
 import bcrypt from 'bcryptjs';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 import { closeDb, db } from '@/config/db.js';
 import { logger } from '@/config/logger.js';
-import { closeRedisClients } from '@/config/redis.js';
+import { cacheRedis, closeRedisClients, redis } from '@/config/redis.js';
 import {
   appModules,
   auditLogs,
@@ -35,48 +35,32 @@ export const DEMO_CREDENTIALS = {
     {
       role: 'Super Administrator',
       roleKey: 'SUPER_ADMIN',
-      email: 'superadmin@platform.local',
+      email: 'sid.superadmin@yopmail.com',
       password: DEMO_PASSWORD,
-      name: 'Platform Super Administrator',
+      name: 'Siddharth SuperAdmin',
       url: '/platform/login',
     },
     {
       role: 'Customer Support Staff',
       roleKey: 'SUPPORT_STAFF',
-      email: 'support@platform.local',
+      email: 'staff.support@yopmail.com',
       password: DEMO_PASSWORD,
-      name: 'Alex Support Engineer',
+      name: 'Support Staff',
       url: '/platform/login',
     },
     {
       role: 'Technical Operations Support',
       roleKey: 'TECHNICAL_SUPPORT',
-      email: 'techops@platform.local',
+      email: 'staff.techops@yopmail.com',
       password: DEMO_PASSWORD,
-      name: 'Sarah Technical Operations',
-      url: '/platform/login',
-    },
-    {
-      role: 'Billing & Finance Staff',
-      roleKey: 'BILLING_STAFF',
-      email: 'billing@platform.local',
-      password: DEMO_PASSWORD,
-      name: 'Marcus Billing Specialist',
-      url: '/platform/login',
-    },
-    {
-      role: 'Compliance & Security Auditor',
-      roleKey: 'READ_ONLY_AUDITOR',
-      email: 'auditor@platform.local',
-      password: DEMO_PASSWORD,
-      name: 'Elena Compliance Officer',
+      name: 'TechOps Staff',
       url: '/platform/login',
     },
   ],
   tenants: [
     {
-      tenantName: 'Acme Real Estate Inc.',
-      tenantSlug: 'acme-corp',
+      tenantName: 'Acme Realty Corp',
+      tenantSlug: 'acme-realty',
       plan: 'PRO',
       databaseMode: 'shared',
       members: [
@@ -97,36 +81,36 @@ export const DEMO_CREDENTIALS = {
           url: '/login',
         },
         {
-          role: 'Standard Member',
+          role: 'Operations Manager',
           tenantRole: 'MEMBER',
-          email: 'member@acme.com',
+          email: 'manager@acme.com',
           password: DEMO_PASSWORD,
-          name: 'Charlie Miller',
+          name: 'Charles Miller',
           url: '/login',
         },
         {
-          role: 'Operations Agent',
+          role: 'Real Estate Agent',
           tenantRole: 'MEMBER',
           email: 'agent@acme.com',
           password: DEMO_PASSWORD,
-          name: 'Aaron Agent',
+          name: 'Diana Prince',
           url: '/login',
         },
         {
-          role: 'Viewer / Read-Only',
+          role: 'Auditor / Viewer',
           tenantRole: 'VIEWER',
           email: 'viewer@acme.com',
           password: DEMO_PASSWORD,
-          name: 'Diana Prince',
+          name: 'Evan Wright',
           url: '/login',
         },
       ],
     },
     {
-      tenantName: 'Nexus Logistics Global',
-      tenantSlug: 'nexus-logistics',
+      tenantName: 'Nexus Global Estates',
+      tenantSlug: 'nexus-estates',
       plan: 'ENTERPRISE',
-      databaseMode: 'dedicated',
+      databaseMode: 'shared',
       members: [
         {
           role: 'Tenant Owner',
@@ -144,6 +128,30 @@ export const DEMO_CREDENTIALS = {
           name: 'Olivia Wilde',
           url: '/login',
         },
+        {
+          role: 'Property Manager',
+          tenantRole: 'MEMBER',
+          email: 'manager@nexus.com',
+          password: DEMO_PASSWORD,
+          name: 'Marcus Vance',
+          url: '/login',
+        },
+        {
+          role: 'Sales Specialist',
+          tenantRole: 'MEMBER',
+          email: 'agent@nexus.com',
+          password: DEMO_PASSWORD,
+          name: 'Sarah Connor',
+          url: '/login',
+        },
+        {
+          role: 'Compliance Reviewer',
+          tenantRole: 'VIEWER',
+          email: 'viewer@nexus.com',
+          password: DEMO_PASSWORD,
+          name: 'Elena Fisher',
+          url: '/login',
+        },
       ],
     },
   ],
@@ -153,6 +161,43 @@ async function seed(): Promise<void> {
   logger.info('====================================================');
   logger.info('       Starting SaaS Foundation Master Seeder       ');
   logger.info('====================================================');
+
+  // ----------------------------------------------------
+  // 0. Clean and Wipe Old Data (Cascade Truncate)
+  // ----------------------------------------------------
+  logger.info('0. Wiping existing users, staff, and customer tenants...');
+  await db.execute(sql`
+    TRUNCATE TABLE 
+      "PlatformSupportSession",
+      "PlatformAuditLog",
+      "PlatformUserGroupMember",
+      "PlatformUserGroupRole",
+      "PlatformUserGroup",
+      "PlatformStaff",
+      "Session",
+      "VerificationToken",
+      "AuditLog",
+      "EmailTemplate",
+      "File",
+      "Subscription",
+      "TenantMemberRole",
+      "TenantMember",
+      "TenantModule",
+      "TenantBranding",
+      "TenantEmailConfig",
+      "Tenant",
+      "User"
+    CASCADE;
+  `);
+
+  try {
+    await redis.flushdb();
+    await cacheRedis.flushdb();
+    logger.info('   ✔ Flushed state & cache Redis databases.');
+  } catch {
+    logger.warn('   ⚠ Could not flush Redis during seed (proceeding).');
+  }
+  logger.info('   ✔ Clean slate established.');
 
   // ----------------------------------------------------
   // 1. Seed Dynamic RBAC Permissions & System Roles
@@ -213,18 +258,19 @@ async function seed(): Promise<void> {
   }
 
   // Provision superadmin into global users table for seamless customer / general app login
+  const superAdminEmail = 'sid.superadmin@yopmail.com';
   const [existingPlatformAdminUser] = await db
     .select()
     .from(users)
-    .where(eq(users.email, 'superadmin@platform.local'))
+    .where(eq(users.email, superAdminEmail))
     .limit(1);
   const adminPasswordHash = await bcrypt.hash(DEMO_PASSWORD, 12);
 
   if (!existingPlatformAdminUser) {
     await db.insert(users).values({
-      email: 'superadmin@platform.local',
+      email: superAdminEmail,
       passwordHash: adminPasswordHash,
-      name: 'Platform Super Administrator',
+      name: 'Siddharth SuperAdmin',
       role: 'ADMIN',
       status: 'ACTIVE',
       emailVerifiedAt: new Date(),
@@ -303,7 +349,7 @@ async function seed(): Promise<void> {
       .values({
         tenantId: tenantRecord.id,
         companyName: tenantDef.tenantName,
-        primaryColor: tenantDef.tenantSlug === 'acme-corp' ? '#E11D48' : '#2563EB',
+        primaryColor: tenantDef.tenantSlug === 'acme-realty' ? '#E11D48' : '#2563EB',
       })
       .onConflictDoNothing();
 
@@ -383,8 +429,8 @@ async function seed(): Promise<void> {
   // 5. Seed Active Support Delegation Session
   // ----------------------------------------------------
   logger.info('5. Seeding sample active audited support session...');
-  const supportStaffId = staffIdMap.get('support@platform.local');
-  const acmeTenantId = tenantIdMap.get('acme-corp');
+  const supportStaffId = staffIdMap.get('staff.support@yopmail.com');
+  const acmeTenantId = tenantIdMap.get('acme-realty');
 
   if (supportStaffId && acmeTenantId) {
     const existingSession = await db
@@ -401,9 +447,9 @@ async function seed(): Promise<void> {
         status: 'ACTIVE',
         expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 hours window
       });
-      logger.info('   ✔ Active audited support session created for Acme Corp.');
+      logger.info('   ✔ Active audited support session created for Acme Realty Corp.');
     } else {
-      logger.info('   ℹ Support session already exists for Acme Corp.');
+      logger.info('   ℹ Support session already exists for Acme Realty Corp.');
     }
   }
 
@@ -411,7 +457,7 @@ async function seed(): Promise<void> {
   // 6. Seed Platform Compliance Audit Trail
   // ----------------------------------------------------
   logger.info('6. Seeding platform compliance audit trail...');
-  const superAdminId = staffIdMap.get('superadmin@platform.local');
+  const superAdminId = staffIdMap.get('sid.superadmin@yopmail.com');
 
   if (superAdminId) {
     const existingLogs = await db.select().from(platformAuditLogs).limit(1);
@@ -422,7 +468,7 @@ async function seed(): Promise<void> {
           action: 'platform_staff.created',
           targetType: 'staff',
           targetId: supportStaffId ?? null,
-          metadata: { email: 'support@platform.local', role: 'SUPPORT_STAFF' },
+          metadata: { email: 'staff.support@yopmail.com', role: 'SUPPORT_STAFF' },
           ipAddress: '127.0.0.1',
           userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
         },
@@ -480,7 +526,7 @@ async function seed(): Promise<void> {
           action: 'TENANT.CREATED',
           entityType: 'tenant',
           entityId: acmeTenantId,
-          metadata: { plan: 'PRO', name: 'Acme Real Estate Inc.' },
+          metadata: { plan: 'PRO', name: 'Acme Realty Corp' },
           ipAddress: '127.0.0.1',
         },
         {
@@ -565,10 +611,14 @@ async function seed(): Promise<void> {
       logger.info('   ✔ Customer tenant email templates seeded.');
     }
 
-    // 12. Seed default SaaS pricing plans and assign Growth plan to Acme tenant
+    // Seed default SaaS pricing plans and assign subscriptions
     await seedDefaultPlans();
     await assignInitialSubscription(acmeTenantId, 'GROWTH');
-    logger.info('   ✔ SaaS plans, entitlements, and Acme Growth subscription seeded.');
+    const nexusTenantId = tenantIdMap.get('nexus-estates');
+    if (nexusTenantId) {
+      await assignInitialSubscription(nexusTenantId, 'ENTERPRISE');
+    }
+    logger.info('   ✔ SaaS plans, entitlements, and tenant subscriptions seeded.');
   }
 
   logger.info('====================================================');
@@ -584,4 +634,5 @@ try {
 } finally {
   await closeRedisClients();
   await closeDb();
+  process.exit(process.exitCode ?? 0);
 }

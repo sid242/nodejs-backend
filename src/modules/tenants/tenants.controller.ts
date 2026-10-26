@@ -11,8 +11,7 @@ export const createTenant = asyncHandler(async (req: Request, res: Response) => 
 });
 
 export const getMyTenants = asyncHandler(async (req: Request, res: Response) => {
-  const isSystemAdmin = req.user!.role === 'ADMIN';
-  const list = await tenantsService.getUserTenants(req.user!.id, isSystemAdmin);
+  const list = await tenantsService.getUserTenants(req.user!.id);
   AppResponse.ok(list).send(res);
 });
 
@@ -112,7 +111,11 @@ export const testTenantEmailConfig = asyncHandler(async (req: Request, res: Resp
 export const resolvePublicTenant = asyncHandler(async (req: Request, res: Response) => {
   const slug = (req.query?.slug as string) ?? undefined;
   const domain = (req.query?.domain as string) ?? undefined;
-  const host = req.headers['x-forwarded-host']?.toString() ?? req.headers.host;
+  const host =
+    (req.query?.host as string) ??
+    (req.query?.domain as string) ??
+    req.headers['x-forwarded-host']?.toString() ??
+    req.headers.host;
 
   const resolved = await tenantsService.resolvePublicTenant({ slug, domain, host });
   if (!resolved) {

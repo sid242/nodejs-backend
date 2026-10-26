@@ -63,6 +63,7 @@ export type TestTenantEmailConfigDto = z.infer<typeof testTenantEmailConfigDto>;
 export const resolvePublicTenantDto = z.object({
   slug: z.string().trim().optional(),
   domain: z.string().trim().optional(),
+  host: z.string().trim().optional(),
 });
 
 export type ResolvePublicTenantDto = z.infer<typeof resolvePublicTenantDto>;
@@ -70,21 +71,22 @@ export type ResolvePublicTenantDto = z.infer<typeof resolvePublicTenantDto>;
 const hexColorRegex = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 export const updateTenantBrandingDto = z.object({
-  companyName: z.string().trim().max(100).optional(),
+  companyName: z.string().trim().max(100).optional().nullable(),
   logoUrl: z.string().trim().url().optional().or(z.literal('')).nullable(),
   logoDarkUrl: z.string().trim().url().optional().or(z.literal('')).nullable(),
   faviconUrl: z.string().trim().url().optional().or(z.literal('')).nullable(),
   primaryColor: z.string().trim().regex(hexColorRegex, 'Invalid hex color code').optional(),
   accentColor: z.string().trim().regex(hexColorRegex, 'Invalid hex color code').optional(),
-  borderRadius: z.string().trim().max(20).optional(),
+  borderRadius: z.string().trim().max(20).optional().nullable(),
   customDomain: z
     .string()
     .trim()
     .max(255)
     .regex(/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/, 'Must be a valid domain name')
     .optional()
+    .nullable()
     .or(z.literal('')),
-  supportEmail: z.string().trim().email().optional().or(z.literal('')),
+  supportEmail: z.string().trim().email().optional().nullable().or(z.literal('')),
 });
 
 export type UpdateTenantBrandingDto = z.infer<typeof updateTenantBrandingDto>;
