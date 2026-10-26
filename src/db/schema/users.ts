@@ -1,4 +1,4 @@
-import { index, integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { index, integer, json, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 import { roleEnum, userStatusEnum } from './enums';
 
@@ -23,6 +23,11 @@ export const users = pgTable(
     failedLoginAttempts: integer('failedLoginAttempts').notNull().default(0),
     lockedUntil: timestamp('lockedUntil', { precision: 3, mode: 'date' }),
     lastLoginAt: timestamp('lastLoginAt', { precision: 3, mode: 'date' }),
+
+    // Two-Factor Authentication
+    twoFactorSecret: text('twoFactorSecret'), // AES-256-GCM encrypted TOTP secret (null = 2FA disabled)
+    twoFactorEnabledAt: timestamp('twoFactorEnabledAt', { precision: 3, mode: 'date' }),
+    twoFactorRecoveryCodes: json('twoFactorRecoveryCodes').$type<string[]>(), // bcrypt-hashed single-use recovery codes
 
     // Soft delete & timestamps
     deletedAt: timestamp('deletedAt', { precision: 3, mode: 'date' }),
@@ -51,6 +56,7 @@ export const publicUser = {
   emailVerifiedAt: users.emailVerifiedAt,
   phoneNumber: users.phoneNumber,
   phoneVerifiedAt: users.phoneVerifiedAt,
+  twoFactorEnabledAt: users.twoFactorEnabledAt,
   createdAt: users.createdAt,
 };
 
@@ -63,5 +69,6 @@ export type PublicUser = {
   emailVerifiedAt: Date | null;
   phoneNumber?: string | null;
   phoneVerifiedAt?: Date | null;
+  twoFactorEnabledAt?: Date | null;
   createdAt: Date;
 };

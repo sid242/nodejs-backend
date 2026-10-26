@@ -24,6 +24,8 @@ export const AUTH_ROLES = {
 export const TOKEN_EXPIRATION = {
   PASSWORD_RESET_SECONDS: 15 * 60, // 15 minutes
   EMAIL_VERIFICATION_SECONDS: 24 * 60 * 60, // 24 hours
+  TWO_FACTOR_CHALLENGE_SECONDS: 5 * 60, // 5 minutes
+  TWO_FACTOR_PENDING_SECONDS: 10 * 60, // 10 minutes to scan QR
 } as const;
 
 export const REDIS_PREFIXES = {
@@ -34,6 +36,8 @@ export const REDIS_PREFIXES = {
   USER_CACHE: 'user:',
   USERS_LIST_CACHE: 'users:list:',
   IMPERSONATION_SESSION: 'imp:session:',
+  TWO_FACTOR_CHALLENGE: '2fa:challenge:',
+  TWO_FACTOR_PENDING_SECRET: '2fa:pending:',
 } as const;
 
 export const AUTH_MESSAGES = {
@@ -62,4 +66,11 @@ export const AUTH_MESSAGES = {
   PASSWORD_CHANGED_SUCCESS: 'Password changed successfully.',
   CURRENT_PASSWORD_INCORRECT: 'Current password does not match.',
   NEW_PASSWORD_SAME: 'New password must be different from your current password.',
+  TWO_FACTOR_REQUIRED: 'Two-factor authentication is required',
+  TWO_FACTOR_INVALID_CODE: 'Invalid verification code',
+  TWO_FACTOR_ALREADY_ENABLED: 'Two-factor authentication is already enabled',
+  TWO_FACTOR_NOT_ENABLED: 'Two-factor authentication is not enabled',
+  TWO_FACTOR_ENABLED_SUCCESS: 'Two-factor authentication enabled successfully',
+  TWO_FACTOR_DISABLED_SUCCESS: 'Two-factor authentication disabled successfully',
+  TWO_FACTOR_CHALLENGE_EXPIRED: 'Two-factor challenge has expired or is invalid',
 } as const;

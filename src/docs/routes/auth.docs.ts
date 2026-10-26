@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { errorResponse, successResponse } from '@/docs/helpers.js';
 import { UserSchema } from '@/docs/routes/users.docs.js';
 import {
+  disableTwoFactorDto,
+  enableTwoFactorDto,
   forgotPasswordDto,
   impersonateUserDto,
   loginDto,
@@ -12,6 +14,7 @@ import {
   requestEmailVerificationDto,
   resetPasswordDto,
   verifyEmailDto,
+  verifyTwoFactorChallengeDto,
 } from '@/modules/auth/auth.dto.js';
 
 export function registerAuthDocs(registry: OpenAPIRegistry): void {
@@ -246,6 +249,121 @@ export function registerAuthDocs(registry: OpenAPIRegistry): void {
       ),
       400: errorResponse('Not currently in an active impersonation session'),
       401: errorResponse('Unauthorized or expired session'),
+    },
+  });
+
+  // --- Two-Factor Authentication (2FA) Routes ---
+  const Enable2FAInput = registry.register('Enable2FAInput', enableTwoFactorDto);
+  const Disable2FAInput = registry.register('Disable2FAInput', disableTwoFactorDto);
+  const Verify2FAChallengeInput = registry.register(
+    'Verify2FAChallengeInput',
+    verifyTwoFactorChallengeDto,
+  );
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/auth/2fa/setup',
+    summary: 'Setup 2FA TOTP',
+    description: 'Generates a pending TOTP secret and returns an otpauth URI for QR code pairing.',
+    tags: ['Auth'],
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: successResponse(
+        z.object({
+          secret: z.string(),
+          otpauthUri: z.string(),
+        }),
+        'TOTP secret generated successfully',
+      ),
+      400: errorResponse('2FA already enabled'),
+      401: errorResponse('Unauthorized'),
+    },
+  });
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/auth/2fa/enable',
+    summary: 'Enable 2FA TOTP',
+    description: 'Validates code against pending secret and activates 2FA, returning 8 recovery codes.',
+    tags: ['Auth'],
+    security: [{ bearerAuth: [] }],
+    request: {
+      body: {
+        description: '6-digit TOTP verification code',
+        content: { 'application/json': { schema: Enable2FAInput } },
+      },
+    },
+    responses: {
+      200: successResponse(
+        z.object({
+          message: z.string(),
+          recoveryCodes: z.array(z.string()),
+        }),
+        'Two-factor authentication enabled successfully',
+      ),
+      400: errorResponse('Invalid verification code or setup expired'),
+      401: errorResponse('Unauthorized'),
+    },
+  });
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/auth/2fa/disable',
+    summary: 'Disable 2FA TOTP',
+    description: 'Requires current account password and valid TOTP code to disable 2FA.',
+    tags: ['Auth'],
+    security: [{ bearerAuth: [] }],
+    request: {
+      body: {
+        description: 'Current password and 6-digit TOTP code',
+        content: { 'application/json': { schema: Disable2FAInput } },
+      },
+    },
+    responses: {
+      200: successResponse(
+        z.object({ message: z.string() }),
+        'Two-factor authentication disabled successfully',
+      ),
+      400: errorResponse('Invalid code or 2FA not enabled'),
+      401: errorResponse('Unauthorized or invalid password'),
+    },
+  });
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/auth/2fa/verify',
+    summary: 'Verify 2FA login challenge',
+    description: 'Submits 6-digit TOTP or 10-character recovery code with challengeToken to complete login.',
+    tags: ['Auth'],
+    request: {
+      body: {
+        description: 'Challenge token and verification/recovery code',
+        content: { 'application/json': { schema: Verify2FAChallengeInput } },
+      },
+    },
+    responses: {
+      200: successResponse(AuthResponseData, 'Logged in successfully via 2FA'),
+      400: errorResponse('Invalid code or expired challenge'),
+      401: errorResponse('Invalid credentials'),
+    },
+  });
+
+  registry.registerPath({
+    method: 'get',
+    path: '/api/v1/auth/2fa/status',
+    summary: 'Get 2FA status',
+    description: 'Checks whether 2FA is currently active on the logged-in user account.',
+    tags: ['Auth'],
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: successResponse(
+        z.object({
+          enabled: z.boolean(),
+          enabledAt: z.string().nullable(),
+        }),
+        '2FA status retrieved',
+      ),
+      401: errorResponse('Unauthorized'),
     },
   });
 }

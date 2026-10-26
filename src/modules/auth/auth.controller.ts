@@ -8,6 +8,7 @@ import * as service from '@/modules/auth/auth.service.js';
 import { clearAuthCookies, setAuthCookies } from '@/modules/auth/cookies.js';
 import * as sessionsRepo from '@/modules/auth/sessions.repository.js';
 import { revokeRefreshToken } from '@/modules/auth/tokens.js';
+import * as twoFactorService from '@/modules/auth/two-factor.service.js';
 
 export const register = asyncHandler(async (req: Request, res: Response) => {
   const result = await service.register(req.valid?.body);
@@ -17,7 +18,14 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
 
 export const login = asyncHandler(async (req: Request, res: Response) => {
   const result = await service.login(req.valid?.body);
-  setAuthCookies(res, result);
+
+  // If 2FA is required, return the challenge (no cookies set)
+  if ('twoFactorRequired' in result && result.twoFactorRequired) {
+    AppResponse.ok(result, 'Two-factor authentication required').send(res);
+    return;
+  }
+
+  setAuthCookies(res, result as any);
   AppResponse.ok(result, 'Logged in').send(res);
 });
 
@@ -112,4 +120,38 @@ export const requestMagicLink = asyncHandler(async (req: Request, res: Response)
 export const verifyMagicLink = asyncHandler(async (req: Request, res: Response) => {
   const result = await service.verifyMagicLink(req.valid!.body.token);
   AppResponse.ok(result, 'Authenticated successfully via magic link').send(res);
+});
+
+// ─── Two-Factor Authentication ──────────────────────────────────────────────────
+
+export const setupTwoFactor = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user?.id) throw AppError.unauthorized();
+  const result = await twoFactorService.setupTwoFactor(req.user.id);
+  AppResponse.ok(result, 'Scan the QR code with your authenticator app').send(res);
+});
+
+export const enableTwoFactor = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user?.id) throw AppError.unauthorized();
+  const result = await twoFactorService.enableTwoFactor(req.user.id, req.valid?.body?.code);
+  AppResponse.ok(result, result.message).send(res);
+});
+
+export const disableTwoFactor = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user?.id) throw AppError.unauthorized();
+  const { password, code } = req.valid?.body ?? {};
+  const result = await twoFactorService.disableTwoFactor(req.user.id, password, code);
+  AppResponse.ok(result, result.message).send(res);
+});
+
+export const verifyTwoFactorChallenge = asyncHandler(async (req: Request, res: Response) => {
+  const { challengeToken, code } = req.valid?.body ?? {};
+  const result = await twoFactorService.verifyTwoFactorChallenge(challengeToken, code);
+  setAuthCookies(res, result);
+  AppResponse.ok(result, 'Two-factor authentication verified').send(res);
+});
+
+export const getTwoFactorStatus = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user?.id) throw AppError.unauthorized();
+  const result = await twoFactorService.getTwoFactorStatus(req.user.id);
+  AppResponse.ok(result).send(res);
 });

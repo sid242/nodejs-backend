@@ -16,6 +16,7 @@ export const verificationTokenTypeEnum = pgEnum('VerificationTokenType', [
   'EMAIL_CHANGE',
   'PHONE_OTP',
   'MAGIC_LINK',
+  'TWO_FACTOR_CHALLENGE',
 ]);
 
 export const tenantStatusEnum = pgEnum('TenantStatus', [

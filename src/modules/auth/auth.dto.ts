@@ -79,3 +79,33 @@ export const verifyMagicLinkDto = z.object({
 });
 
 export type VerifyMagicLinkDto = z.infer<typeof verifyMagicLinkDto>;
+
+// ─── Two-Factor Authentication ──────────────────────────────────────────────────
+
+export const enableTwoFactorDto = z.object({
+  code: z
+    .string()
+    .min(6)
+    .max(6)
+    .regex(/^\d{6}$/, 'Code must be exactly 6 digits'),
+});
+
+export type EnableTwoFactorDto = z.infer<typeof enableTwoFactorDto>;
+
+export const disableTwoFactorDto = z.object({
+  password: z.string().min(1),
+  code: z
+    .string()
+    .min(6)
+    .max(6)
+    .regex(/^\d{6}$/, 'Code must be exactly 6 digits'),
+});
+
+export type DisableTwoFactorDto = z.infer<typeof disableTwoFactorDto>;
+
+export const verifyTwoFactorChallengeDto = z.object({
+  challengeToken: z.string().min(1),
+  code: z.string().min(6).max(10), // 6-digit TOTP or 10-char recovery code
+});
+
+export type VerifyTwoFactorChallengeDto = z.infer<typeof verifyTwoFactorChallengeDto>;

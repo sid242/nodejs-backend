@@ -31,6 +31,10 @@ import {
   type AuthTokens,
   type ImpersonatorClaim,
 } from '@/modules/auth/tokens.js';
+import {
+  createTwoFactorChallenge,
+  type TwoFactorChallengeData,
+} from '@/modules/auth/two-factor.service.js';
 import { emailQueue } from '@/queues/index.js';
 
 // Compared against when the user doesn't exist, so response time doesn't reveal valid emails.
@@ -59,7 +63,7 @@ export async function register({ email, password, name }: RegisterDto): Promise<
   return { user, ...(await issueTokens(user)) };
 }
 
-export async function login({ email, password }: LoginDto): Promise<AuthResult> {
+export async function login({ email, password }: LoginDto): Promise<AuthResult | TwoFactorChallengeData> {
   const record = await authRepo.findByEmail(email);
   const ok = await bcrypt.compare(password, record?.passwordHash ?? DUMMY_HASH);
   if (!record || !ok || record.deletedAt)
@@ -76,6 +80,11 @@ export async function login({ email, password }: LoginDto): Promise<AuthResult> 
     });
   }
 
+  // If 2FA is enabled, return a challenge instead of tokens
+  if (record.twoFactorEnabledAt) {
+    return createTwoFactorChallenge(record.id);
+  }
+
   const user: PublicUser = {
     id: record.id,
     email: record.email,
@@ -85,6 +94,7 @@ export async function login({ email, password }: LoginDto): Promise<AuthResult> 
     emailVerifiedAt: record.emailVerifiedAt,
     phoneNumber: record.phoneNumber,
     phoneVerifiedAt: record.phoneVerifiedAt,
+    twoFactorEnabledAt: record.twoFactorEnabledAt,
     createdAt: record.createdAt,
   };
   return { user, ...(await issueTokens(user)) };
@@ -285,6 +295,7 @@ export async function impersonateUser(
     emailVerifiedAt: target.emailVerifiedAt,
     phoneNumber: target.phoneNumber,
     phoneVerifiedAt: target.phoneVerifiedAt,
+    twoFactorEnabledAt: target.twoFactorEnabledAt,
     createdAt: target.createdAt,
   };
 

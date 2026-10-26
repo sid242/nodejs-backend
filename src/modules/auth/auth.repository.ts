@@ -57,3 +57,39 @@ export async function markEmailVerified(id: string): Promise<PublicUser | null> 
     .returning(publicUser);
   return (user as PublicUser) ?? null;
 }
+
+export async function enableTwoFactor(
+  id: string,
+  encryptedSecret: string,
+  hashedRecoveryCodes: string[],
+): Promise<void> {
+  await db
+    .update(users)
+    .set({
+      twoFactorSecret: encryptedSecret,
+      twoFactorEnabledAt: new Date(),
+      twoFactorRecoveryCodes: hashedRecoveryCodes,
+    })
+    .where(eq(users.id, id));
+}
+
+export async function disableTwoFactor(id: string): Promise<void> {
+  await db
+    .update(users)
+    .set({
+      twoFactorSecret: null,
+      twoFactorEnabledAt: null,
+      twoFactorRecoveryCodes: null,
+    })
+    .where(eq(users.id, id));
+}
+
+export async function updateRecoveryCodes(
+  id: string,
+  hashedCodes: string[],
+): Promise<void> {
+  await db
+    .update(users)
+    .set({ twoFactorRecoveryCodes: hashedCodes })
+    .where(eq(users.id, id));
+}

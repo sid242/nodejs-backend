@@ -7,6 +7,8 @@ import { validate } from '@/middleware/validate.js';
 import * as controller from '@/modules/auth/auth.controller.js';
 import {
   changePasswordDto,
+  disableTwoFactorDto,
+  enableTwoFactorDto,
   forgotPasswordDto,
   impersonateUserDto,
   loginDto,
@@ -17,6 +19,7 @@ import {
   resetPasswordDto,
   verifyEmailDto,
   verifyMagicLinkDto,
+  verifyTwoFactorChallengeDto,
 } from '@/modules/auth/auth.dto.js';
 
 const router = Router();
@@ -56,6 +59,29 @@ router.post('/verify-email/confirm', validate({ body: verifyEmailDto }), control
 // --- Active Device Sessions Management ---
 router.get('/sessions', requireAuth, controller.listSessions);
 router.delete('/sessions/:sessionId', requireAuth, controller.revokeSession);
+
+// --- Two-Factor Authentication ---
+router.post('/2fa/setup', requireAuth, blockIfImpersonating('2FA Setup'), controller.setupTwoFactor);
+router.post(
+  '/2fa/enable',
+  requireAuth,
+  blockIfImpersonating('2FA Enable'),
+  validate({ body: enableTwoFactorDto }),
+  controller.enableTwoFactor,
+);
+router.post(
+  '/2fa/disable',
+  requireAuth,
+  blockIfImpersonating('2FA Disable'),
+  validate({ body: disableTwoFactorDto }),
+  controller.disableTwoFactor,
+);
+router.post(
+  '/2fa/verify',
+  validate({ body: verifyTwoFactorChallengeDto }),
+  controller.verifyTwoFactorChallenge,
+);
+router.get('/2fa/status', requireAuth, controller.getTwoFactorStatus);
 
 // --- Controlled Impersonation ---
 router.post(
