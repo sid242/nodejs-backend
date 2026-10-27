@@ -7,8 +7,8 @@ export * from './sessions';
 export * from './tenants';
 export * from './rbac';
 export * from './audit-logs';
-
-export * from './email-templates.js';
+export * from './email-templates';
 export * from './platform';
-export * from './plans.js';
-export * from './subscriptions.js';
+export * from './plans';
+export * from './subscriptions';
+export * from './invoices';

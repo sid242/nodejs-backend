@@ -121,6 +121,35 @@ export const updateStaff = asyncHandler(async (req: Request, res: Response) => {
   AppResponse.ok(result, 'Platform staff member updated successfully').send(res);
 });
 
+export const suspendStaff = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.suspendStaff(
+    req.staff!.id,
+    req.params.id as string,
+    req.valid?.body?.reason,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.ok(result, 'Platform staff account suspended successfully').send(res);
+});
+
+export const activateStaff = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.activateStaff(
+    req.staff!.id,
+    req.params.id as string,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.ok(result, 'Platform staff account activated successfully').send(res);
+});
+
+export const resetStaffPassword = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.resetStaffPassword(
+    req.staff!.id,
+    req.params.id as string,
+    req.valid?.body?.newPassword,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.ok(result, result.message).send(res);
+});
+
 // ==========================================
 // 2. Roles & Permissions Handlers
 // ==========================================

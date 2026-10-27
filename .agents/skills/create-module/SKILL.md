@@ -7,15 +7,15 @@ description: >-
 
 # Create API Module Runbook
 
-Follow these steps to scaffold a new domain module in `src/modules/<domain>/` adhering to the project's **4-layer architecture + DTOs** (`dto` -> `routes` -> `controller` -> `service` -> `repository`).
+Follow these steps to scaffold a new domain module in `src/modules/<domain>/` adhering to the project's **4-layer architecture + DTOs** (`dto` -> `routes` -> `controller` -> `service` -> `repository`) with strict TypeScript and clean extensionless imports.
 
 ---
 
 ## Step 1: Define Database Schema (if database storage is required)
 
-1. Create or update `src/db/schema/<domain>.js`:
+1. Create or update `src/db/schema/<domain>.ts`:
 
-   ```javascript
+   ```typescript
    import { integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
    export const items = pgTable('Item', {
@@ -37,12 +37,15 @@ Follow these steps to scaffold a new domain module in `src/modules/<domain>/` ad
      status: items.status,
      createdAt: items.createdAt,
    };
+
+   export type Item = typeof items.$inferSelect;
+   export type PublicItem = typeof publicItem;
    ```
 
-2. Export the schema in `src/db/schema/index.js`:
+2. Export the schema in `src/db/schema/index.ts` with extensionless module path:
 
-   ```javascript
-   export * from './<domain>.js';
+   ```typescript
+   export * from './<domain>';
    ```
 
 3. Run migrations:
@@ -55,51 +58,56 @@ Follow these steps to scaffold a new domain module in `src/modules/<domain>/` ad
 
 ## Step 2: Implement DTOs (Zod Request & Query Schemas)
 
-Create `src/modules/<domain>/<domain>.dto.js`:
+Create `src/modules/<domain>/<domain>.dto.ts`:
 
-```javascript
+```typescript
 import { z } from 'zod';
 
 export const createItemDto = z.object({
   title: z.string().min(1).max(200),
 });
+export type CreateItemDto = z.infer<typeof createItemDto>;
 
 export const listItemsQueryDto = z.object({
   page: z.coerce.number().int().min(1).max(10_000).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
+export type ListItemsQueryDto = z.infer<typeof listItemsQueryDto>;
 
 export const itemIdParamDto = z.object({
   id: z.string().uuid(),
 });
+export type ItemIdParamDto = z.infer<typeof itemIdParamDto>;
 ```
 
 ---
 
 ## Step 3: Implement the Repository Layer (Database Queries)
 
-Create `src/modules/<domain>/<domain>.repository.js`:
+Create `src/modules/<domain>/<domain>.repository.ts`:
 
-```javascript
+```typescript
 import { desc, eq } from 'drizzle-orm';
 
-import { db } from '@/config/db.js';
-import { items, publicItem } from '@/db/schema/index.js';
+import { db } from '@/config/db';
+import { items, publicItem } from '@/db/schema';
 
-export async function create(userId, data) {
+import type { CreateItemDto, ListItemsQueryDto } from './<domain>.dto';
+
+export async function create(userId: string, data: CreateItemDto) {
   const [created] = await db
     .insert(items)
     .values({ userId, ...data })
     .returning(publicItem);
-  return created;
+  return created ?? null;
 }
 
-export async function findById(id) {
+export async function findById(id: string) {
   const [item] = await db.select(publicItem).from(items).where(eq(items.id, id)).limit(1);
   return item ?? null;
 }
 
-export async function findByUserId(userId, { page, limit }) {
+export async function findByUserId(userId: string, { page, limit }: ListItemsQueryDto) {
   return db
     .select(publicItem)
     .from(items)
@@ -114,30 +122,32 @@ export async function findByUserId(userId, { page, limit }) {
 
 ## Step 4: Implement the Service Layer (Business Logic)
 
-Create `src/modules/<domain>/<domain>.service.js`:
+Create `src/modules/<domain>/<domain>.service.ts`:
 
-```javascript
-import { cache } from '@/lib/cache.js';
-import { AppError } from '@/lib/errors.js';
-import * as itemRepo from '@/modules/<domain>/<domain>.repository.js';
+```typescript
+import { cache } from '@/lib/cache';
+import { AppError } from '@/lib/errors';
 
-export async function createItem(userId, data) {
+import type { CreateItemDto, ListItemsQueryDto } from './<domain>.dto';
+import * as itemRepo from './<domain>.repository';
+
+export async function createItem(userId: string, data: CreateItemDto) {
   const created = await itemRepo.create(userId, data);
-  await cache.delPattern(`items:user:${userId}:*`);
+  await cache.delByPrefix(`items:user:${userId}`);
   return created;
 }
 
-export const getItemById = (id) =>
+export const getItemById = (id: string) =>
   cache.wrap(`item:${id}`, 300, async () => {
     const item = await itemRepo.findById(id);
     if (!item) throw AppError.notFound('Item not found');
     return item;
   });
 
-export const listItems = (userId, { page, limit }) =>
-  cache.wrap(`items:user:${userId}:${page}:${limit}`, 60, async () => {
-    const records = await itemRepo.findByUserId(userId, { page, limit });
-    return { items: records, page, limit };
+export const listItems = (userId: string, query: ListItemsQueryDto) =>
+  cache.wrap(`items:user:${userId}:${query.page}:${query.limit}`, 60, async () => {
+    const records = await itemRepo.findByUserId(userId, query);
+    return { items: records ?? [], page: query.page, limit: query.limit };
   });
 ```
 
@@ -145,25 +155,32 @@ export const listItems = (userId, { page, limit }) =>
 
 ## Step 5: Implement the Controller Layer (HTTP Request/Response)
 
-Create `src/modules/<domain>/<domain>.controller.js`:
+Create `src/modules/<domain>/<domain>.controller.ts`:
 
-```javascript
-import { asyncHandler } from '@/lib/async-handler.js';
-import { AppResponse } from '@/lib/responses.js';
-import * as service from '@/modules/<domain>/<domain>.service.js';
+```typescript
+import type { Request, Response } from 'express';
 
-export const createItem = asyncHandler(async (req, res) => {
-  const result = await service.createItem(req.user.id, req.valid.body);
+import { asyncHandler } from '@/lib/async-handler';
+import { AppResponse } from '@/lib/responses';
+
+import type { CreateItemDto, ItemIdParamDto, ListItemsQueryDto } from './<domain>.dto';
+import * as service from './<domain>.service';
+
+export const createItem = asyncHandler(async (req: Request, res: Response) => {
+  const body = req.valid?.body as CreateItemDto;
+  const result = await service.createItem(req.user!.id, body);
   AppResponse.created(result, 'Item created').send(res);
 });
 
-export const listItems = asyncHandler(async (req, res) => {
-  const result = await service.listItems(req.user.id, req.valid.query);
+export const listItems = asyncHandler(async (req: Request, res: Response) => {
+  const query = req.valid?.query as unknown as ListItemsQueryDto;
+  const result = await service.listItems(req.user!.id, query);
   AppResponse.ok(result).send(res);
 });
 
-export const getItemById = asyncHandler(async (req, res) => {
-  const result = await service.getItemById(req.valid.params.id);
+export const getItemById = asyncHandler(async (req: Request, res: Response) => {
+  const params = req.valid?.params as ItemIdParamDto;
+  const result = await service.getItemById(params.id);
   AppResponse.ok(result).send(res);
 });
 ```
@@ -172,19 +189,16 @@ export const getItemById = asyncHandler(async (req, res) => {
 
 ## Step 6: Implement the Routes Layer
 
-Create `src/modules/<domain>/<domain>.routes.js`:
+Create `src/modules/<domain>/<domain>.routes.ts`:
 
-```javascript
+```typescript
 import { Router } from 'express';
 
-import { requireAuth } from '@/middleware/auth.js';
-import { validate } from '@/middleware/validate.js';
-import * as controller from '@/modules/<domain>/<domain>.controller.js';
-import {
-  createItemDto,
-  itemIdParamDto,
-  listItemsQueryDto,
-} from '@/modules/<domain>/<domain>.dto.js';
+import { requireAuth } from '@/middleware/auth';
+import { validate } from '@/middleware/validate';
+
+import * as controller from './<domain>.controller';
+import { createItemDto, itemIdParamDto, listItemsQueryDto } from './<domain>.dto';
 
 const router = Router();
 router.use(requireAuth);
@@ -200,16 +214,21 @@ export default router;
 
 ## Step 7: Register Routes in Main Router
 
-Open `src/routes.js` and register the new module:
+Open `src/routes.ts` and register the new module:
 
-```javascript
-import itemRoutes from './modules/<domain>/<domain>.routes.js';
+```typescript
+import itemRoutes from './modules/<domain>/<domain>.routes';
 
 router.use('/<domain>', itemRoutes);
 ```
 
 ---
 
-## Step 8: Add Unit Tests
+## Step 8: Add Tests & Verify
 
-Create `test/<domain>.test.js` and run `npm test`.
+Create `test/<domain>.test.ts` and verify types and tests:
+
+```bash
+npm run typecheck
+npm test
+```

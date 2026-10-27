@@ -3,7 +3,7 @@
 ## 1. Authentication & Token Management
 
 - Use short-lived JWT Access Tokens (e.g. 15 minutes) and rotating Refresh Tokens (e.g. 7 days).
-- Refresh tokens are cryptographically hashed and stored in Redis with TTL (`src/modules/auth/tokens.js`):
+- Refresh tokens are cryptographically hashed and stored in Redis with TTL (`src/modules/auth/tokens.ts`):
   - On refresh, the existing token's `jti` is deleted and a new pair is issued (rotation).
   - On logout, the token family or `jti` is revoked immediately in Redis.
 - Passwords must be hashed using `bcryptjs` with appropriate cost factors.
@@ -26,7 +26,7 @@ All rate limits use Redis storage (`rate-limit-redis`) to apply across all runni
 
 ## 4. Input Sanitization & Traversal Defense
 
-- Always sanitize filenames using `safeFilename()` (`src/lib/utils.js`) before generating S3 keys.
+- Always sanitize filenames using `safeFilename()` (`src/lib/utils.ts`) before generating S3 keys.
 - Never trust client-provided object keys or paths.
 - Helmet is enabled globally on all HTTP endpoints (with relaxed settings only on Bull-Board if needed).
 - CORS is configured to only allow origins defined in `CORS_ORIGINS`.

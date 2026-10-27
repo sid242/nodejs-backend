@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import authRoutes from '@/modules/auth/auth.routes.js';
+import billingRoutes from '@/modules/billing/billing.routes.js';
 import emailTemplateRoutes from '@/modules/email-templates/email-templates.routes.js';
 import fileRoutes from '@/modules/files/files.routes.js';
 import planRoutes from '@/modules/plans/plans.routes.js';
@@ -18,5 +19,6 @@ router.use('/rbac', rbacRoutes);
 router.use('/platform', platformRoutes);
 router.use('/email-templates', emailTemplateRoutes);
 router.use('/plans', planRoutes);
+router.use('/billing', billingRoutes);
 
 export default router;

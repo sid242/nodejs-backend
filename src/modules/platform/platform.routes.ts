@@ -68,6 +68,26 @@ router.patch(
   controller.updateStaff,
 );
 
+router.post(
+  '/staff/:id/suspend',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.STAFF_DISABLE),
+  validate({ body: dto.suspendStaffDto }),
+  controller.suspendStaff,
+);
+
+router.post(
+  '/staff/:id/activate',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.STAFF_UPDATE),
+  controller.activateStaff,
+);
+
+router.post(
+  '/staff/:id/reset-password',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.STAFF_UPDATE),
+  validate({ body: dto.resetStaffPasswordDto }),
+  controller.resetStaffPassword,
+);
+
 // ==========================================
 // 2. Platform Roles & Permission Catalogue
 // ==========================================

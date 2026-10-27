@@ -42,7 +42,12 @@ node-scalable-foundation/
 │   │       ├── enums.ts          # Shared PostgreSQL enums
 │   │       ├── users.ts          # Users table & public projections
 │   │       ├── files.ts          # Files table & status enums
-│   │       └── index.ts          # Unified schema exports
+│   │       ├── tenants.ts        # Tenants, memberships, and roles
+│   │       ├── plans.ts          # Membership plans, features & pricing tiers
+│   │       ├── subscriptions.ts  # Tenant subscriptions & entitlements
+│   │       ├── invoices.ts       # Billing invoices, line items, and payment states
+│   │       ├── audit.ts          # Operator and tenant audit logs
+│   │       └── index.ts          # Unified schema exports (extensionless)
 │   ├── docs/                     # OpenAPI 3.0 specs & Swagger UI (/docs)
 │   │   ├── index.ts              # Swagger UI router & /openapi.json endpoint
 │   │   ├── openapi.ts            # Root OpenAPI document generator & aggregator
@@ -62,14 +67,20 @@ node-scalable-foundation/
 │   │   └── utils.ts              # Generic helper utilities
 │   ├── middleware/               # Express middleware
 │   │   ├── auth.ts               # JWT authentication & RBAC guards
+│   │   ├── platform.ts           # Platform staff authentication & canonical RBAC guards
+│   │   ├── tenant.ts             # Tenant resolution & membership guards
 │   │   ├── error.ts              # Centralized error handler & 404 handler
 │   │   ├── http-logger.ts        # Pino HTTP logger with request ID propagation
 │   │   ├── rate-limit.ts         # Redis-backed rate limiters (global, auth, user)
 │   │   └── validate.ts           # Zod request validation middleware
 │   ├── modules/                  # Domain-driven feature modules
 │   │   ├── auth/                 # Authentication, JWT, refresh tokens
+│   │   ├── billing/              # Invoices, billing status, line items, revenue summaries
 │   │   ├── files/                # S3 uploads, confirmation, downloads
 │   │   ├── health/               # /health/live, /health/ready probes
+│   │   ├── plans/                # Membership tiers, features, seat limits
+│   │   ├── platform/             # Platform staff, roles matrix, overview, operator audit
+│   │   ├── tenants/              # Workspaces, member management, bulk invites, status toggle
 │   │   └── users/                # User profile & administration
 │   ├── observability/            # Prometheus metrics (/metrics)
 │   ├── queues/                   # BullMQ queue definitions & workers
@@ -121,7 +132,7 @@ Every new business domain should be placed in `src/modules/<domain>/`:
 
 - Use `cache.wrap(key, ttlSeconds, fetchFn)` from `src/lib/cache.ts`.
 - It includes a distributed mutex lock to prevent cache stampedes under high concurrency.
-- Invalidate cache on mutations using `cache.del(key)` or `cache.delPattern(pattern)`.
+- Invalidate cache on mutations using `cache.del(key)` or `cache.delByPrefix(prefix)`.
 
 ### 3.5 Background Queues & WebSockets
 
@@ -143,6 +154,12 @@ Every new business domain should be placed in `src/modules/<domain>/`:
 - **Client Permission Introspection**:
   - Endpoints `GET /api/v1/tenants/:tenantId/context` and `GET /api/v1/platform/auth/me` return caller membership, assigned role, and an active `permissions: string[]` array.
   - Frontends rely on these arrays to hide unauthorized navigation links and action buttons completely. Backend routes must always re-verify permissions independently on every HTTP request.
+
+### 3.8 TypeScript & Extensionless Imports
+
+- The project uses TypeScript with `"moduleResolution": "bundler"`.
+- Never append `.js` or `.ts` to relative imports or `@/*` path aliases (e.g., use `import { db } from '@/config/db';`, `export * from './invoices';`).
+- Always verify type correctness with `npm run typecheck` (`tsc --noEmit`).
 
 ---
 

@@ -45,9 +45,9 @@ This guide covers local containerized development, Dockerfile builds, and AWS de
 
 The Dockerfile uses a lightweight multi-stage Node Alpine build:
 
-- Base: `node:20-alpine` with `tini` process supervisor.
-- API role command: `node src/server.js`
-- Worker role command: `node src/worker.js`
+- Base: `node:24-bookworm-slim` with `dumb-init` process supervisor.
+- API role command: `node dist/server.js` (or `tsx src/server.ts` in development)
+- Worker role command: `node dist/worker.js` (or `tsx src/worker.ts` in development)
 
 Build image locally:
 

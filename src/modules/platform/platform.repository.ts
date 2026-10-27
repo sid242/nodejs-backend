@@ -160,13 +160,14 @@ export async function createStaff(data: NewPlatformStaff) {
   return created;
 }
 
-export async function updateStaff(id: string, data: UpdateStaffDto) {
+export async function updateStaff(id: string, data: UpdateStaffDto & { passwordHash?: string }) {
   const [updated] = await db
     .update(platformStaff)
     .set({
       ...(data.displayName ? { displayName: data.displayName } : {}),
       ...(data.status ? { status: data.status } : {}),
       ...(data.roleId ? { roleId: data.roleId } : {}),
+      ...(data.passwordHash ? { passwordHash: data.passwordHash } : {}),
     })
     .where(eq(platformStaff.id, id))
     .returning(publicPlatformStaff);

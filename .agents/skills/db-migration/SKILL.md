@@ -15,9 +15,9 @@ This skill outlines the lifecycle of managing PostgreSQL schemas with Drizzle OR
 
 All schemas reside in `src/db/schema/`:
 
-- `src/db/schema/enums.js`: PostgreSQL custom enums (e.g., `roleEnum`, `fileStatusEnum`).
-- `src/db/schema/<domain>.js`: Domain table definitions (e.g. `users.js`, `files.js`).
-- `src/db/schema/index.js`: Main schema entrypoint that re-exports all domain schemas.
+- `src/db/schema/enums.ts`: PostgreSQL custom enums (e.g., `roleEnum`, `fileStatusEnum`, `invoiceStatusEnum`).
+- `src/db/schema/<domain>.ts`: Domain table definitions (e.g. `users.ts`, `files.ts`, `invoices.ts`, `tenants.ts`, `plans.ts`).
+- `src/db/schema/index.ts`: Main schema entrypoint that re-exports all domain schemas using extensionless module paths.
 
 ---
 
@@ -25,9 +25,9 @@ All schemas reside in `src/db/schema/`:
 
 ### Step 1: Update Schema Definitions
 
-Create or edit a schema file in `src/db/schema/<domain>.js`:
+Create or edit a schema file in `src/db/schema/<domain>.ts`:
 
-```javascript
+```typescript
 import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 export const products = pgTable('Product', {
@@ -42,7 +42,7 @@ export const products = pgTable('Product', {
 });
 ```
 
-Make sure `src/db/schema/index.js` exports the table.
+Make sure `src/db/schema/index.ts` exports the table (`export * from './<domain>';`).
 
 ### Step 2: Generate Migration SQL
 
@@ -64,7 +64,7 @@ npm run db:check
 
 ### Step 4: Apply Migration
 
-Run migration executor (`src/db/migrate.js`):
+Run migration executor (`src/db/migrate.ts`):
 
 ```bash
 npm run db:migrate

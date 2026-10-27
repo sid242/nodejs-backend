@@ -11,6 +11,7 @@ import {
   tenantBrandings,
   tenantModules,
 } from '@/db/schema/index.js';
+import { cache } from '@/lib/cache.js';
 import { AppError } from '@/lib/errors.js';
 import * as authRepo from '@/modules/auth/auth.repository.js';
 import {
@@ -196,6 +197,82 @@ export async function updateStaff(
   });
 
   return updated;
+}
+
+export async function suspendStaff(
+  actorStaffId: string,
+  staffId: string,
+  reason?: string,
+  requestId?: string,
+) {
+  if (actorStaffId === staffId) {
+    throw AppError.badRequest('You cannot suspend your own staff account');
+  }
+
+  const staff = await platformRepo.findStaffById(staffId);
+  if (!staff) throw AppError.notFound('Platform staff member not found');
+
+  const updated = await platformRepo.updateStaff(staffId, { status: 'SUSPENDED' });
+
+  await cache.del(`platform:staff:${staffId}:permissions`);
+
+  await platformRepo.logPlatformAction({
+    actorStaffId,
+    action: 'platform_staff.suspended',
+    targetType: 'staff',
+    targetId: staffId,
+    metadata: { reason },
+    requestId,
+  });
+
+  return updated;
+}
+
+export async function activateStaff(actorStaffId: string, staffId: string, requestId?: string) {
+  const staff = await platformRepo.findStaffById(staffId);
+  if (!staff) throw AppError.notFound('Platform staff member not found');
+
+  const updated = await platformRepo.updateStaff(staffId, { status: 'ACTIVE' });
+
+  await platformRepo.logPlatformAction({
+    actorStaffId,
+    action: 'platform_staff.activated',
+    targetType: 'staff',
+    targetId: staffId,
+    requestId,
+  });
+
+  return updated;
+}
+
+export async function resetStaffPassword(
+  actorStaffId: string,
+  staffId: string,
+  newPassword?: string,
+  requestId?: string,
+) {
+  const staff = await platformRepo.findStaffById(staffId);
+  if (!staff) throw AppError.notFound('Platform staff member not found');
+
+  const plainPassword = newPassword || randomUUID().slice(0, 12);
+  const passwordHash = await bcrypt.hash(plainPassword, 12);
+
+  await platformRepo.updateStaff(staffId, { passwordHash });
+
+  await cache.del(`platform:staff:${staffId}:permissions`);
+
+  await platformRepo.logPlatformAction({
+    actorStaffId,
+    action: 'platform_staff.password_reset',
+    targetType: 'staff',
+    targetId: staffId,
+    requestId,
+  });
+
+  return {
+    message: 'Staff password reset successfully',
+    temporaryPassword: newPassword ? undefined : plainPassword,
+  };
 }
 
 // ==========================================

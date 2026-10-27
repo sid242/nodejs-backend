@@ -496,6 +496,93 @@ export async function updateMemberRole(
   return { message: 'Member role updated successfully', role: matchedRole.name };
 }
 
+export async function updateTenantMemberStatus(
+  tenantId: string,
+  operatorUserId: string,
+  memberId: string,
+  status: 'ACTIVE' | 'SUSPENDED',
+): Promise<{ message: string; member: TenantMember }> {
+  const member = await tenantsRepo.findTenantMemberById(memberId);
+  if (!member || member.tenantId !== tenantId) {
+    throw AppError.notFound('Member not found in this tenant');
+  }
+
+  if (member.userId === operatorUserId && status === 'SUSPENDED') {
+    throw AppError.badRequest('You cannot suspend your own membership');
+  }
+
+  if (status === 'SUSPENDED') {
+    const existingRoles = await rbacRepo.getMemberRoles(member.id);
+    const isOwner = existingRoles.some((r) => r.name.toLowerCase() === 'owner');
+    if (isOwner) {
+      const ownerCount = await rbacRepo.countTenantOwners(tenantId);
+      if (ownerCount <= 1) {
+        throw AppError.badRequest('Cannot suspend the last remaining Owner of this organization.');
+      }
+    }
+  }
+
+  const updated = await tenantsRepo.updateTenantMemberStatus(memberId, status);
+  if (!updated) {
+    throw AppError.internal('Failed to update member status');
+  }
+
+  if (status === 'SUSPENDED') {
+    await revokeAllUserTokens(member.userId);
+  }
+
+  await logSecurityEvent({
+    tenantId,
+    userId: operatorUserId,
+    action: status === 'SUSPENDED' ? 'MEMBER.SUSPENDED' : 'MEMBER.REACTIVATED',
+    entityType: 'TenantMember',
+    entityId: memberId,
+    metadata: { targetUserId: member.userId, status },
+  });
+
+  return {
+    message: `Member successfully ${status.toLowerCase()}`,
+    member: updated,
+  };
+}
+
+export async function bulkInviteMembers(
+  tenantId: string,
+  operatorUserId: string,
+  invites: Array<{ email: string; role: string }>,
+): Promise<{
+  successful: Array<{ email: string; role: string; inviteUrl?: string }>;
+  failed: Array<{ email: string; reason: string }>;
+}> {
+  const sub = await plansService.getTenantSubscription(tenantId);
+  const remainingSeats = sub?.usage?.remainingSeats ?? 0;
+
+  if (remainingSeats < invites.length) {
+    throw AppError.forbidden(
+      `Cannot invite ${invites.length} members. Only ${remainingSeats} seat(s) remaining on your current plan. Please upgrade your subscription.`,
+    );
+  }
+
+  const successful: Array<{ email: string; role: string; inviteUrl?: string }> = [];
+  const failed: Array<{ email: string; reason: string }> = [];
+
+  for (const inv of invites) {
+    try {
+      const result = await addMemberToTenant(tenantId, operatorUserId, inv.email, inv.role);
+      successful.push({
+        email: inv.email,
+        role: result.role,
+        inviteUrl: result.inviteUrl,
+      });
+    } catch (err: unknown) {
+      const reason = err instanceof Error ? err.message : 'Failed to send invite';
+      failed.push({ email: inv.email, reason });
+    }
+  }
+
+  return { successful, failed };
+}
+
 export async function transferTenantOwnership(
   tenantId: string,
   operatorUserId: string,

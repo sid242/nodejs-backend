@@ -69,6 +69,26 @@ export const updateMemberRole = asyncHandler(async (req: Request, res: Response)
   AppResponse.ok(result).send(res);
 });
 
+export const updateMemberStatus = asyncHandler(async (req: Request, res: Response) => {
+  const memberId = String(req.params.memberId);
+  const result = await tenantsService.updateTenantMemberStatus(
+    req.tenant!.id,
+    req.user!.id,
+    memberId,
+    req.valid!.body.status,
+  );
+  AppResponse.ok(result).send(res);
+});
+
+export const bulkInviteMembers = asyncHandler(async (req: Request, res: Response) => {
+  const result = await tenantsService.bulkInviteMembers(
+    req.tenant!.id,
+    req.user!.id,
+    req.valid!.body.invites,
+  );
+  AppResponse.ok(result, 'Bulk invitations processed').send(res);
+});
+
 export const transferOwnership = asyncHandler(async (req: Request, res: Response) => {
   const memberId = String(req.params.memberId);
   const result = await tenantsService.transferTenantOwnership(

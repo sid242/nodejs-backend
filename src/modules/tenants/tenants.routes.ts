@@ -82,6 +82,24 @@ router.patch(
   controller.updateMemberRole,
 );
 
+router.patch(
+  '/:tenantId/members/:memberId/status',
+  requireAuth,
+  requireTenant,
+  requirePermission('members:update'),
+  validate({ body: dto.updateMemberStatusDto }),
+  controller.updateMemberStatus,
+);
+
+router.post(
+  '/:tenantId/members/bulk',
+  requireAuth,
+  requireTenant,
+  requirePermission('members:invite'),
+  validate({ body: dto.bulkInviteMembersDto }),
+  controller.bulkInviteMembers,
+);
+
 router.post(
   '/:tenantId/members/:memberId/transfer-ownership',
   requireAuth,

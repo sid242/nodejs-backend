@@ -7,24 +7,24 @@ description: >-
 
 # Create BullMQ Queue & Worker Runbook
 
-This guide details how to create and wire a new background worker and queue in the architecture.
+This guide details how to create and wire a new background worker and queue in the architecture using TypeScript and extensionless module paths.
 
 ---
 
 ## 1. Define the Queue
 
-1. Open `src/queues/index.js`.
+1. Open `src/queues/index.ts`.
 2. Add the queue name to `QUEUES`:
-   ```javascript
+   ```typescript
    export const QUEUES = {
      EMAIL: 'email',
      FILE: 'file-processing',
      MAINTENANCE: 'maintenance',
      REPORT: 'report-generation', // New queue
-   };
+   } as const;
    ```
 3. Instantiate and export the queue:
-   ```javascript
+   ```typescript
    export const reportQueue = make(QUEUES.REPORT);
    export const allQueues = [emailQueue, fileQueue, maintenanceQueue, reportQueue];
    ```
@@ -33,13 +33,20 @@ This guide details how to create and wire a new background worker and queue in t
 
 ## 2. Implement the Worker Processor
 
-Create `src/queues/workers/report.worker.js`:
+Create `src/queues/workers/report.worker.ts`:
 
-```javascript
-import { logger } from '../../config/logger.js';
-import { emitToUser } from '../../sockets/emitter.js';
+```typescript
+import type { Job } from 'bullmq';
 
-export async function processReport(job) {
+import { logger } from '@/config/logger';
+import { emitToUser } from '@/sockets/emitter';
+
+interface ReportJobData {
+  reportId: string;
+  userId: string;
+}
+
+export async function processReport(job: Job<ReportJobData>) {
   const { reportId, userId } = job.data;
   logger.info({ reportId, userId }, 'processing report');
 
@@ -57,10 +64,10 @@ export async function processReport(job) {
 
 ## 3. Register the Worker
 
-1. Open `src/queues/workers/index.js`.
+1. Open `src/queues/workers/index.ts`.
 2. Import `processReport` and register the worker:
-   ```javascript
-   import { processReport } from './report.worker.js';
+   ```typescript
+   import { processReport } from './report.worker';
 
    export function startWorkers() {
      return [
@@ -83,7 +90,7 @@ export async function processReport(job) {
 
 If the worker job needs to run on a recurring cron pattern:
 
-```javascript
+```typescript
 export async function registerSchedulers() {
   await reportQueue.upsertJobScheduler(
     'generate-daily-summary',
@@ -99,10 +106,10 @@ export async function registerSchedulers() {
 
 From any API route or service:
 
-```javascript
-import { reportQueue } from '../../queues/index.js';
+```typescript
+import { reportQueue } from '@/queues';
 
-export async function requestReport(userId, options) {
+export async function requestReport(userId: string, options: Record<string, unknown>) {
   const job = await reportQueue.add(
     'generate',
     { userId, options, requestedAt: new Date().toISOString() },

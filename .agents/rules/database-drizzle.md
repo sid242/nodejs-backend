@@ -2,12 +2,15 @@
 
 ## 1. Schema Definitions
 
-- Define table schemas inside `src/db/schema/<domain>.js` using `drizzle-orm/pg-core`.
-- Re-export all tables, enums, and schemas in `src/db/schema/index.js`.
+- Define table schemas inside `src/db/schema/<domain>.ts` using `drizzle-orm/pg-core`.
+- Re-export all tables, enums, and schemas in `src/db/schema/index.ts` with clean extensionless paths (`export * from './<domain>';`).
 - Always define explicit timestamps (`createdAt`, `updatedAt` with `$onUpdate(() => new Date())`).
 - Use UUID primary keys with default random values:
-  ```javascript
+  ```typescript
   import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+
+  import { orderStatusEnum } from './enums';
+  import { users } from './users';
 
   export const orders = pgTable('Order', {
     id: uuid('id').defaultRandom().primaryKey(),
@@ -27,7 +30,7 @@
 
 - Avoid returning raw database rows that may contain sensitive data (hashes, internal flags).
 - Define reusable projection objects:
-  ```javascript
+  ```typescript
   export const publicOrder = {
     id: orders.id,
     userId: orders.userId,
@@ -38,9 +41,9 @@
 
 ## 3. Querying & Transactions
 
-- Import `db` from `src/config/db.js`.
+- Import `db` from `@/config/db`.
 - For multi-step updates, always use database transactions:
-  ```javascript
+  ```typescript
   await db.transaction(async (tx) => {
     await tx.update(accounts).set(...).where(...);
     await tx.insert(auditLogs).values(...);
@@ -50,7 +53,7 @@
 
 ## 4. Connection Pool Constraints
 
-- Connections are managed by `postgres` in `src/config/db.js` with `max: env.DB_POOL_MAX`.
+- Connections are managed by `postgres` in `src/config/db.ts` with `max: env.DB_POOL_MAX`.
 - Keep queries fast and non-blocking. Never run long synchronous tasks while holding a database connection or transaction.
 
 ## 5. Migrations Workflow

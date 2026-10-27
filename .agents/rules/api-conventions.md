@@ -2,11 +2,11 @@
 
 ## 1. Module System & Imports
 
-- Target runtime: Node.js >= 24 with native ESM (`"type": "module"`).
-- Always use standard ES `import` and `export` statements with full `.js` file extensions:
-  ```javascript
-  import { AppError } from '../../lib/errors.js';
-  import { AppResponse } from '../../lib/responses.js';
+- Target runtime: Node.js >= 24 with TypeScript ESM (`"type": "module"`, `"moduleResolution": "bundler"`).
+- Always use TypeScript `import` and `export` statements with clean `@/*` path aliases or extensionless relative paths (do NOT append `.js` or `.ts` to imports):
+  ```typescript
+  import { AppError } from '@/lib/errors';
+  import { AppResponse } from '@/lib/responses';
   ```
 
 ## 2. API Response Formatting
@@ -50,8 +50,8 @@ AppResponse.created(data, 'Resource created').send(res);
 
 ## 3. Error Handling
 
-- Use `AppError` subclasses from `src/lib/errors.js`:
-  ```javascript
+- Use `AppError` subclasses from `@/lib/errors`:
+  ```typescript
   throw AppError.badRequest('Invalid parameters', validationErrors);
   throw AppError.unauthorized('Invalid or missing authentication token');
   throw AppError.forbidden('You do not have permission to access this resource');
@@ -59,7 +59,7 @@ AppResponse.created(data, 'Resource created').send(res);
   throw AppError.conflict('Email is already in use');
   ```
 - All async route handlers must be wrapped with `asyncHandler`:
-  ```javascript
+  ```typescript
   router.get(
     '/profile',
     requireAuth,
@@ -73,9 +73,9 @@ AppResponse.created(data, 'Resource created').send(res);
 ## 4. Request Validation
 
 - Validate all incoming `body`, `query`, and `params` with Zod using the `validate()` middleware:
-  ```javascript
-  import { validate } from '../../middleware/validate.js';
+  ```typescript
   import { z } from 'zod';
+  import { validate } from '@/middleware/validate';
 
   const updateSchema = {
     body: z.object({
@@ -94,10 +94,10 @@ AppResponse.created(data, 'Resource created').send(res);
 ## 5. Logging Standards
 
 - Inside request contexts, always use `req.log` (Pino child logger with `requestId` and route metadata attached):
-  ```javascript
+  ```typescript
   req.log.info({ userId: req.user.id }, 'User updated profile');
   ```
-- Never use `console.log()` or `console.error()`. Use `logger` from `src/config/logger.js` outside of request contexts.
+- Never use `console.log()` or `console.error()`. Use `logger` from `@/config/logger` outside of request contexts.
 
 ## 6. Defensive Programming & Safe Property Access (`?.`)
 

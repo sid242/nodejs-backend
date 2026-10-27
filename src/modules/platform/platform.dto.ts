@@ -33,6 +33,16 @@ export const updateStaffDto = z.object({
 });
 export type UpdateStaffDto = z.infer<typeof updateStaffDto>;
 
+export const suspendStaffDto = z.object({
+  reason: z.string().trim().min(3).max(300).optional(),
+});
+export type SuspendStaffDto = z.infer<typeof suspendStaffDto>;
+
+export const resetStaffPasswordDto = z.object({
+  newPassword: z.string().min(8).max(100).optional(),
+});
+export type ResetStaffPasswordDto = z.infer<typeof resetStaffPasswordDto>;
+
 // ==========================================
 // Platform Roles & Permissions DTOs
 // ==========================================

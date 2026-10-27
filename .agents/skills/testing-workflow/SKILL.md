@@ -2,12 +2,12 @@
 name: testing-workflow
 description: >-
   Use this skill when writing, executing, and debugging tests in this project.
-  Covers the native Node.js test runner (`node --test`), assertion libraries, mocking, and API testing.
+  Covers the tsx test runner (`tsx --test`), assertion libraries, mocking, and API testing.
 ---
 
 # Testing Workflow Runbook
 
-This project uses the native **Node.js Test Runner** (`node:test`) and strict assertions (`node:assert/strict`).
+This project uses **tsx** with Node's native test runner (`tsx --test`) and strict assertions (`node:assert/strict`).
 
 ---
 
@@ -19,29 +19,29 @@ This project uses the native **Node.js Test Runner** (`node:test`) and strict as
   ```
 - Run a specific test file:
   ```bash
-  node --test test/utils.test.js
+  npx tsx --test test/utils.test.ts
   ```
 - Run tests matching a name pattern:
   ```bash
-  node --test --test-name-pattern="safeFilename"
+  npx tsx --test --test-name-pattern="safeFilename"
   ```
 - Run tests in watch mode:
   ```bash
-  node --test --watch
+  npx tsx --test --watch
   ```
 
 ---
 
 ## 2. Writing Unit Tests
 
-Create test files inside the `test/` directory using the `*.test.js` naming convention:
+Create test files inside the `test/` directory using the `*.test.ts` naming convention:
 
-```javascript
+```typescript
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { AppError } from '../src/lib/errors.js';
-import { AppResponse } from '../src/lib/responses.js';
+import { AppError } from '@/lib/errors';
+import { AppResponse } from '@/lib/responses';
 
 test('AppResponse returns expected 200 payload structure', () => {
   const res = AppResponse.ok({ count: 5 }, 'Success');
@@ -68,12 +68,12 @@ test('AppError creates 404 not found error', () => {
 
 Node's `node:test` module includes built-in mocking utilities:
 
-```javascript
+```typescript
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
 test('mocking an asynchronous service dependency', async (t) => {
-  const mockFetcher = t.mock.fn(async (id) => ({ id, name: 'Test' }));
+  const mockFetcher = t.mock.fn(async (id: string) => ({ id, name: 'Test' }));
 
   const result = await mockFetcher('123');
   assert.equal(result.name, 'Test');

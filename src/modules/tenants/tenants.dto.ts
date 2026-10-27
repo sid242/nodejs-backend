@@ -33,6 +33,26 @@ export const updateMemberRoleDto = z.object({
 
 export type UpdateMemberRoleDto = z.infer<typeof updateMemberRoleDto>;
 
+export const updateMemberStatusDto = z.object({
+  status: z.enum(['ACTIVE', 'SUSPENDED']),
+});
+
+export type UpdateMemberStatusDto = z.infer<typeof updateMemberStatusDto>;
+
+export const bulkInviteMembersDto = z.object({
+  invites: z
+    .array(
+      z.object({
+        email: z.string().trim().email(),
+        role: z.string().trim().min(2).max(50).default('MEMBER'),
+      }),
+    )
+    .min(1, 'At least one invite is required')
+    .max(50, 'Cannot invite more than 50 members in a single request'),
+});
+
+export type BulkInviteMembersDto = z.infer<typeof bulkInviteMembersDto>;
+
 export const upsertTenantEmailConfigDto = z.object({
   host: z.string().trim().min(1, 'SMTP host is required'),
   port: z.coerce.number().int().min(1).max(65535).default(587),

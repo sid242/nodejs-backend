@@ -7,7 +7,7 @@ description: >-
 
 # Socket.IO Real-time Events & Emitters Runbook
 
-This guide covers real-time WebSocket communication in the backend.
+This guide covers real-time WebSocket communication in the backend using TypeScript and extensionless module paths.
 
 ---
 
@@ -21,12 +21,14 @@ This guide covers real-time WebSocket communication in the backend.
 
 ## 2. Adding Client-to-Server Events
 
-Edit `src/sockets/index.js` inside `io.on('connection', (socket) => { ... })`:
+Edit `src/sockets/index.ts` inside `io.on('connection', (socket) => { ... })`:
 
-```javascript
+```typescript
+import { z } from 'zod';
+
 const documentSchema = z.object({ docId: z.string().uuid() });
 
-socket.on('doc:join', async (payload, ack) => {
+socket.on('doc:join', async (payload: unknown, ack?: (response: unknown) => void) => {
   try {
     const { docId } = documentSchema.parse(payload);
 
@@ -37,8 +39,9 @@ socket.on('doc:join', async (payload, ack) => {
     // 2. Join room
     socket.join(`doc:${docId}`);
     ack?.({ ok: true });
-  } catch (err) {
-    ack?.({ ok: false, error: err.message });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    ack?.({ ok: false, error: message });
   }
 });
 ```
@@ -47,12 +50,12 @@ socket.on('doc:join', async (payload, ack) => {
 
 ## 3. Emitting Events from Workers / Services (Worker -> Client)
 
-Workers running in `src/worker.js` cannot access the Socket.IO server directly. Instead, they publish events via the Redis Emitter (`src/sockets/emitter.js`).
+Workers running in `src/worker.ts` cannot access the Socket.IO server directly. Instead, they publish events via the Redis Emitter (`src/sockets/emitter.ts`).
 
 ### Targeting a Specific User:
 
-```javascript
-import { emitToUser } from '../sockets/emitter.js';
+```typescript
+import { emitToUser } from '@/sockets/emitter';
 
 emitToUser(userId, 'notification:received', {
   id: 'notif-123',
@@ -63,8 +66,8 @@ emitToUser(userId, 'notification:received', {
 
 ### Broadcasting to a Shared Room:
 
-```javascript
-import { emitToRoom } from '../sockets/emitter.js';
+```typescript
+import { emitToRoom } from '@/sockets/emitter';
 
 emitToRoom(`doc:${docId}`, 'doc:updated', {
   updatedBy: userId,
