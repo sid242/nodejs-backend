@@ -135,6 +135,15 @@ Every new business domain should be placed in `src/modules/<domain>/`:
 - Guard against `null` / `undefined` across all data accesses, parameters, and query results to avoid uncaught `TypeError` runtime exceptions (`Cannot read properties of undefined/null`).
 - Pair with nullish coalescing (`??`) to supply safe fallback defaults where appropriate (e.g., `payload?.tags ?? []`, `result?.total ?? 0`).
 
+### 3.7 Dynamic RBAC, Permissions & Context Invariants
+
+- **Dual-Surface Isolation**:
+  - Internal Platform operations require `requirePlatformAuth` and `requirePlatformPermission(...)` (checking canonical `resource::action` permissions).
+  - Customer tenant operations require `requireAuth`, `requireTenant`, and `requirePermission(...)` (checking domain permissions).
+- **Client Permission Introspection**:
+  - Endpoints `GET /api/v1/tenants/:tenantId/context` and `GET /api/v1/platform/auth/me` return caller membership, assigned role, and an active `permissions: string[]` array.
+  - Frontends rely on these arrays to hide unauthorized navigation links and action buttons completely. Backend routes must always re-verify permissions independently on every HTTP request.
+
 ---
 
 ## 4. Useful Commands

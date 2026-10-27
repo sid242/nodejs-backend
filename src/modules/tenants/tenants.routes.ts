@@ -29,12 +29,7 @@ router.post('/', requireAuth, validate({ body: dto.createTenantDto }), controlle
 
 router.get('/', requireAuth, controller.getMyTenants);
 
-router.get(
-  '/:tenantId/context',
-  requireAuth,
-  requireTenant,
-  controller.getTenantContext,
-);
+router.get('/:tenantId/context', requireAuth, requireTenant, controller.getTenantContext);
 
 router.get(
   '/:tenantId',
