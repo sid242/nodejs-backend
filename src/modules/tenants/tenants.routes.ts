@@ -29,7 +29,13 @@ router.post('/', requireAuth, validate({ body: dto.createTenantDto }), controlle
 
 router.get('/', requireAuth, controller.getMyTenants);
 
-// Scoped tenant endpoints (require tenant membership & dynamic RBAC permission)
+router.get(
+  '/:tenantId/context',
+  requireAuth,
+  requireTenant,
+  controller.getTenantContext,
+);
+
 router.get(
   '/:tenantId',
   requireAuth,

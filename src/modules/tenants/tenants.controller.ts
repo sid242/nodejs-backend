@@ -15,6 +15,14 @@ export const getMyTenants = asyncHandler(async (req: Request, res: Response) => 
   AppResponse.ok(list).send(res);
 });
 
+export const getTenantContext = asyncHandler(async (req: Request, res: Response) => {
+  AppResponse.ok({
+    tenant: req.tenant,
+    membership: req.membership,
+    permissions: req.permissions,
+  }).send(res);
+});
+
 export const getTenant = asyncHandler(async (req: Request, res: Response) => {
   const tenant = await tenantsService.getTenantDetails(req.tenant!.id);
   AppResponse.ok(tenant).send(res);
