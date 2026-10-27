@@ -24,6 +24,7 @@ import * as rbacService from '@/modules/rbac/rbac.service.js';
 import { tenantsRepo } from '@/modules/tenants/tenants.repository.js';
 import { emailQueue } from '@/queues/index.js';
 
+import { createPlatformTwoFactorChallenge } from './platform-2fa.service.js';
 import type {
   CreatePlatformRoleDto,
   CreateStaffDto,
@@ -40,7 +41,6 @@ import type {
 } from './platform.dto.js';
 import { PLATFORM_PERMISSION_CATALOGUE, SYSTEM_PLATFORM_ROLES } from './platform.permissions.js';
 import * as platformRepo from './platform.repository.js';
-import { createPlatformTwoFactorChallenge } from './platform-2fa.service.js';
 
 // ==========================================
 // 1. Staff Management & Authentication

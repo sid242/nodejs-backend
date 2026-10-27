@@ -262,11 +262,8 @@ test('revokeAllUserTokens revokes all active refresh tokens for that user', asyn
 });
 
 test('2FA DTOs validate payloads correctly', async () => {
-  const {
-    enableTwoFactorDto,
-    disableTwoFactorDto,
-    verifyTwoFactorChallengeDto,
-  } = await import('../src/modules/auth/auth.dto.js');
+  const { enableTwoFactorDto, disableTwoFactorDto, verifyTwoFactorChallengeDto } =
+    await import('../src/modules/auth/auth.dto.js');
 
   // enableTwoFactorDto
   assert.equal(enableTwoFactorDto.safeParse({ code: '123456' }).success, true);
@@ -319,9 +316,8 @@ test('2FA TOTP generation, challenge creation and validation lifecycle', async (
   const { db } = await import('../src/config/db.js');
   const { users } = await import('../src/db/schema/index.js');
   const { eq } = await import('drizzle-orm');
-  const { createTwoFactorChallenge, verifyTwoFactorChallenge } = await import(
-    '../src/modules/auth/two-factor.service.js'
-  );
+  const { createTwoFactorChallenge, verifyTwoFactorChallenge } =
+    await import('../src/modules/auth/two-factor.service.js');
 
   // 1. Generate a test TOTP secret and token
   const secret = new Secret({ size: 20 });

@@ -1,13 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import { TOTP, Secret } from 'otpauth';
+import { Secret, TOTP } from 'otpauth';
 
 import { redis } from '@/config/redis.js';
-import {
-  AUTH_MESSAGES,
-  REDIS_PREFIXES,
-  TOKEN_EXPIRATION,
-} from '@/constants/index.js';
+import { AUTH_MESSAGES, REDIS_PREFIXES, TOKEN_EXPIRATION } from '@/constants/index.js';
 import type { PublicUser } from '@/db/schema/index.js';
 import { cache } from '@/lib/cache.js';
 import { decrypt, encrypt } from '@/lib/crypto.js';
@@ -87,9 +83,7 @@ export async function enableTwoFactor(
   const redisKey = `${REDIS_PREFIXES.TWO_FACTOR_PENDING_SECRET}${userId}`;
   const pendingSecret = await redis.get(redisKey);
   if (!pendingSecret) {
-    throw AppError.badRequest(
-      'No pending 2FA setup found. Please start the setup process again.',
-    );
+    throw AppError.badRequest('No pending 2FA setup found. Please start the setup process again.');
   }
 
   // Validate the TOTP code against the pending secret
@@ -189,9 +183,7 @@ export interface TwoFactorChallengeData {
  * Creates a 2FA challenge token (Redis-backed, 5min TTL).
  * Called from the login flow when the user has 2FA enabled.
  */
-export async function createTwoFactorChallenge(
-  userId: string,
-): Promise<TwoFactorChallengeData> {
+export async function createTwoFactorChallenge(userId: string): Promise<TwoFactorChallengeData> {
   const { rawToken } = await createHashedVerificationToken({
     userId,
     type: 'TWO_FACTOR_CHALLENGE',

@@ -64,6 +64,7 @@ declare global {
       membership?: TenantMembershipContext;
       permissions?: string[];
       valid?: ValidatedRequestData;
+      log?: import('pino').Logger;
     }
   }
 }

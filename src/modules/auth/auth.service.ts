@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 
 import { AUTH_MESSAGES, REDIS_PREFIXES } from '@/constants/index.js';
-import type { PublicUser } from '@/db/schema/index.js';
+import type { PublicUser, User } from '@/db/schema/index.js';
 import { cache } from '@/lib/cache.js';
 import { AppError } from '@/lib/errors.js';
 import { logSecurityEvent } from '@/modules/audit/audit.service.js';
@@ -63,7 +63,10 @@ export async function register({ email, password, name }: RegisterDto): Promise<
   return { user, ...(await issueTokens(user)) };
 }
 
-export async function login({ email, password }: LoginDto): Promise<AuthResult | TwoFactorChallengeData> {
+export async function login({
+  email,
+  password,
+}: LoginDto): Promise<AuthResult | TwoFactorChallengeData> {
   const record = await authRepo.findByEmail(email);
   const ok = await bcrypt.compare(password, record?.passwordHash ?? DUMMY_HASH);
   if (!record || !ok || record.deletedAt)
@@ -178,7 +181,7 @@ export async function requestEmailVerification(identifier: {
   userId?: string;
   email?: string;
 }): Promise<{ message: string }> {
-  let user: any = null;
+  let user: User | null = null;
   if (identifier.userId) {
     user = await authRepo.findById(identifier.userId);
   } else if (identifier.email) {

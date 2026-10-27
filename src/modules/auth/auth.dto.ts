@@ -109,3 +109,9 @@ export const verifyTwoFactorChallengeDto = z.object({
 });
 
 export type VerifyTwoFactorChallengeDto = z.infer<typeof verifyTwoFactorChallengeDto>;
+
+export const revokeSessionParamsDto = z.object({
+  sessionId: z.string().uuid(),
+});
+
+export type RevokeSessionParamsDto = z.infer<typeof revokeSessionParamsDto>;

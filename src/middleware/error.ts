@@ -11,11 +11,13 @@ export function notFound(req: Request, res: Response): void {
   });
 }
 
-export function errorHandler(err: any, req: Request, res: Response, _next: NextFunction): void {
+export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction): void {
   let status = 500;
   let code = 'INTERNAL_ERROR';
   let message = 'Something went wrong';
-  let details: any;
+  let details: unknown = undefined;
+
+  const errObj = (typeof err === 'object' && err !== null ? err : {}) as Record<string, unknown>;
 
   if (err instanceof AppError) {
     ({ status, code, message, details } = err);
@@ -32,26 +34,26 @@ export function errorHandler(err: any, req: Request, res: Response, _next: NextF
     status = 401;
     code = 'UNAUTHORIZED';
     message = 'Invalid token';
-  } else if (err?.code === '23505') {
+  } else if (errObj?.code === '23505') {
     // PostgreSQL unique_violation
     status = 409;
     code = 'CONFLICT';
     message = 'Resource already exists';
-  } else if (err?.type === 'entity.parse.failed') {
+  } else if (errObj?.type === 'entity.parse.failed') {
     status = 400;
     code = 'BAD_JSON';
     message = 'Malformed JSON body';
-  } else if (err?.type === 'entity.too.large') {
+  } else if (errObj?.type === 'entity.too.large') {
     status = 413;
     code = 'PAYLOAD_TOO_LARGE';
     message = 'Payload too large';
   }
 
-  const log = (req as any).log;
+  const log = req?.log;
   if (log) {
     if (status >= 500) log.error({ err }, 'unhandled error');
     else log.warn({ code, message }, 'request failed');
   }
 
-  res.status(status).json({ error: { code, message, details }, requestId: req.id });
+  res.status(status).json({ error: { code, message, details }, requestId: req?.id });
 }

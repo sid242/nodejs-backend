@@ -284,7 +284,8 @@ export function registerAuthDocs(registry: OpenAPIRegistry): void {
     method: 'post',
     path: '/api/v1/auth/2fa/enable',
     summary: 'Enable 2FA TOTP',
-    description: 'Validates code against pending secret and activates 2FA, returning 8 recovery codes.',
+    description:
+      'Validates code against pending secret and activates 2FA, returning 8 recovery codes.',
     tags: ['Auth'],
     security: [{ bearerAuth: [] }],
     request: {
@@ -333,7 +334,8 @@ export function registerAuthDocs(registry: OpenAPIRegistry): void {
     method: 'post',
     path: '/api/v1/auth/2fa/verify',
     summary: 'Verify 2FA login challenge',
-    description: 'Submits 6-digit TOTP or 10-character recovery code with challengeToken to complete login.',
+    description:
+      'Submits 6-digit TOTP or 10-character recovery code with challengeToken to complete login.',
     tags: ['Auth'],
     request: {
       body: {

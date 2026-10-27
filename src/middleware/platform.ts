@@ -8,6 +8,14 @@ import * as platformRepo from '@/modules/platform/platform.repository.js';
 
 export const PLATFORM_STAFF_TOKEN_COOKIE = 'platform_staff_token';
 
+export interface PlatformStaffJwtPayload extends JwtPayload {
+  sub: string;
+  email: string;
+  type: 'PLATFORM_STAFF';
+  roleKey?: string;
+  roleId?: string;
+}
+
 /**
  * Platform Authentication Guard: Ensures caller is a verified internal SaaS staff member.
  * Platform staff sessions and identities are strictly decoupled from tenant customer users.
@@ -31,29 +39,24 @@ export async function requirePlatformAuth(
   }
 
   try {
-    const payload = jwt.verify(token, env.JWT_ACCESS_SECRET) as JwtPayload;
-
-    // Verify token audience / type is explicitly platform staff
-    if ((payload as any).type !== 'PLATFORM_STAFF' && !(payload as any).isPlatformStaff) {
-      // If legacy token, verify against platformStaff table directly
-      const staffMember = await platformRepo.findStaffById(payload.sub as string);
-      if (!staffMember || staffMember.status !== 'ACTIVE') {
-        return next(AppError.unauthorized('Invalid or deactivated platform staff identity'));
-      }
-
-      const permissions = await platformRepo.getRolePermissionKeys(staffMember.roleId);
-      req.staff = {
-        id: staffMember.id,
-        email: staffMember.email,
-        displayName: staffMember.displayName,
-        roleId: staffMember.roleId,
-        roleKey: staffMember.roleKey ?? 'STAFF',
-        permissions,
-      };
-      return next();
+    const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET);
+    if (!decoded || typeof decoded !== 'object') {
+      return next(AppError.unauthorized('Malformed platform staff token'));
     }
 
-    const staffId = payload.sub as string;
+    const payload = decoded as PlatformStaffJwtPayload;
+
+    // Strict boundary enforcement: require explicit PLATFORM_STAFF type.
+    // Standard customer access tokens cannot authenticate to platform endpoints.
+    if (payload.type !== 'PLATFORM_STAFF') {
+      return next(AppError.unauthorized('Invalid platform staff token type'));
+    }
+
+    const staffId = payload.sub;
+    if (!staffId) {
+      return next(AppError.unauthorized('Platform staff token missing subject'));
+    }
+
     const staffMember = await platformRepo.findStaffById(staffId);
     if (!staffMember || staffMember.status !== 'ACTIVE') {
       return next(AppError.unauthorized('Platform staff account is deactivated or suspended'));

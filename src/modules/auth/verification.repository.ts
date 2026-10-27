@@ -13,7 +13,13 @@ export function hashToken(rawToken: string): string {
 
 export interface CreateTokenParams {
   userId: string;
-  type: 'EMAIL_VERIFICATION' | 'PASSWORD_RESET' | 'EMAIL_CHANGE' | 'PHONE_OTP' | 'MAGIC_LINK' | 'TWO_FACTOR_CHALLENGE';
+  type:
+    | 'EMAIL_VERIFICATION'
+    | 'PASSWORD_RESET'
+    | 'EMAIL_CHANGE'
+    | 'PHONE_OTP'
+    | 'MAGIC_LINK'
+    | 'TWO_FACTOR_CHALLENGE';
   target?: string;
   ttlSeconds: number;
 }
@@ -54,7 +60,13 @@ export async function createHashedVerificationToken({
 
 export async function verifyAndConsumeHashedToken(
   rawToken: string,
-  type: 'EMAIL_VERIFICATION' | 'PASSWORD_RESET' | 'EMAIL_CHANGE' | 'PHONE_OTP' | 'MAGIC_LINK' | 'TWO_FACTOR_CHALLENGE',
+  type:
+    | 'EMAIL_VERIFICATION'
+    | 'PASSWORD_RESET'
+    | 'EMAIL_CHANGE'
+    | 'PHONE_OTP'
+    | 'MAGIC_LINK'
+    | 'TWO_FACTOR_CHALLENGE',
 ): Promise<VerificationToken> {
   const tokenHash = hashToken(rawToken);
 

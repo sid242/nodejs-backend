@@ -59,8 +59,8 @@ export function initSocket(httpServer: HttpServer): SocketManager {
 
       const payload = verifyAccessToken(token);
 
-      if ((payload as any).impersonator) {
-        const imp = (payload as any).impersonator;
+      if (payload?.impersonator) {
+        const imp = payload.impersonator;
         const isActive = await isImpersonationSessionActive(imp.sessionId);
         if (!isActive) throw new Error('unauthorized');
         socket.data.impersonator = imp;
@@ -73,7 +73,7 @@ export function initSocket(httpServer: HttpServer): SocketManager {
         60_000,
       );
       if (!allowed) throw new Error('rate_limited');
-      socket.data.user = { id: payload.sub as string, role: (payload as any).role };
+      socket.data.user = { id: payload.sub as string, role: payload?.role ?? 'USER' };
       next();
     })().catch(() => next(new Error('unauthorized')));
   });

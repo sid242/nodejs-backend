@@ -18,10 +18,10 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
 
   try {
     const payload = verifyAccessToken(token);
-    req.user = { id: payload.sub as string, role: (payload as any).role };
+    req.user = { id: payload.sub as string, role: payload?.role ?? 'USER' };
 
-    if ((payload as any).impersonator) {
-      const imp = (payload as any).impersonator;
+    if (payload?.impersonator) {
+      const imp = payload.impersonator;
       const isActive = await isImpersonationSessionActive(imp.sessionId);
       if (!isActive) {
         return next(AppError.unauthorized(AUTH_MESSAGES.IMPERSONATION_REVOKED));
@@ -51,10 +51,10 @@ export async function optionalAuth(
     }
     if (token) {
       const payload = verifyAccessToken(token);
-      req.user = { id: payload.sub as string, role: (payload as any).role };
+      req.user = { id: payload.sub as string, role: payload?.role ?? 'USER' };
 
-      if ((payload as any).impersonator) {
-        const imp = (payload as any).impersonator;
+      if (payload?.impersonator) {
+        const imp = payload.impersonator;
         const isActive = await isImpersonationSessionActive(imp.sessionId);
         if (isActive) {
           req.impersonator = imp;

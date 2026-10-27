@@ -3,8 +3,8 @@ import type { Request, Response } from 'express';
 import { asyncHandler } from '@/lib/async-handler.js';
 import { AppResponse } from '@/lib/responses.js';
 
-import * as service from './platform.service.js';
 import * as platform2FaService from './platform-2fa.service.js';
+import * as service from './platform.service.js';
 
 // ==========================================
 // 1. Staff Authentication & Handlers
@@ -31,7 +31,8 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     sameSite: 'lax',
     maxAge: 8 * 60 * 60 * 1000,
   });
-  AppResponse.ok(result, 'Platform staff authenticated successfully').send(res);
+  // Omit raw JWT token from the JSON body to prevent exposure to JavaScript
+  AppResponse.ok({ staff: result.staff }, 'Platform staff authenticated successfully').send(res);
 });
 
 export const verifyTwoFactor = asyncHandler(async (req: Request, res: Response) => {
@@ -51,7 +52,8 @@ export const verifyTwoFactor = asyncHandler(async (req: Request, res: Response) 
     sameSite: 'lax',
     maxAge: 8 * 60 * 60 * 1000,
   });
-  AppResponse.ok(result, 'Platform staff authenticated successfully').send(res);
+  // Omit raw JWT token from the JSON body to prevent exposure to JavaScript
+  AppResponse.ok({ staff: result.staff }, 'Platform staff authenticated successfully').send(res);
 });
 
 export const setupTwoFactor = asyncHandler(async (req: Request, res: Response) => {
@@ -182,7 +184,7 @@ export const endSupportSession = asyncHandler(async (req: Request, res: Response
 });
 
 export const listSupportSessions = asyncHandler(async (req: Request, res: Response) => {
-  const result = await service.listSupportSessions(req.query as any);
+  const result = await service.listSupportSessions(req.valid?.query);
   AppResponse.ok(result).send(res);
 });
 

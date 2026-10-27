@@ -9,7 +9,8 @@ const emitterClient = createRedis('sio-emitter', { url: env.SOCKET_REDIS_URL });
 const emitter = new Emitter(emitterClient);
 
 export const emitToUser = (userId: string, event: string, payload: any): void => {
-  emitter.to(`user:${userId}`).emit(event, payload);
+  emitter?.to?.(`user:${userId}`)?.emit?.(event, payload);
+  void emitterClient?.publish?.(`sse:user:${userId}`, JSON.stringify({ event, payload }));
 };
 
 export const emitToRoom = (room: string, event: string, payload: any): void => {

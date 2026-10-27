@@ -15,7 +15,7 @@ const RELEASE_LOCK_IF_OWNER =
  * - wrap() has stampede protection (one caller rebuilds, others wait briefly).
  */
 export const cache = {
-  async get<T = any>(key: string): Promise<T | null> {
+  async get<T = unknown>(key: string): Promise<T | null> {
     try {
       const raw = await cacheRedis.get(PREFIX + key);
       return raw === null ? null : (JSON.parse(raw) as T);
@@ -25,7 +25,7 @@ export const cache = {
     }
   },
 
-  async set(key: string, value: any, ttlSeconds = 60): Promise<void> {
+  async set(key: string, value: unknown, ttlSeconds = 60): Promise<void> {
     try {
       await cacheRedis.set(PREFIX + key, JSON.stringify(value), 'EX', ttlSeconds);
     } catch (err) {

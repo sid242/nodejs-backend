@@ -70,6 +70,12 @@ export const endSupportSessionDto = z.object({
 });
 export type EndSupportSessionDto = z.infer<typeof endSupportSessionDto>;
 
+export const listSupportSessionsQueryDto = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+export type ListSupportSessionsQueryDto = z.infer<typeof listSupportSessionsQueryDto>;
+
 // ==========================================
 // Platform Audit Log Query DTOs
 // ==========================================

@@ -30,11 +30,7 @@ router.use(requirePlatformAuth);
 
 router.get('/auth/me', controller.getMe);
 router.post('/auth/2fa/setup', controller.setupTwoFactor);
-router.post(
-  '/auth/2fa/enable',
-  validate({ body: enableTwoFactorDto }),
-  controller.enableTwoFactor,
-);
+router.post('/auth/2fa/enable', validate({ body: enableTwoFactorDto }), controller.enableTwoFactor);
 router.post(
   '/auth/2fa/disable',
   validate({ body: disableTwoFactorDto }),
@@ -113,6 +109,7 @@ router.get(
 router.get(
   '/support-sessions',
   requirePlatformPermission(PLATFORM_PERMISSIONS.SUPPORT_START),
+  validate({ query: dto.listSupportSessionsQueryDto }),
   controller.listSupportSessions,
 );
 

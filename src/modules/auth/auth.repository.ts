@@ -84,12 +84,6 @@ export async function disableTwoFactor(id: string): Promise<void> {
     .where(eq(users.id, id));
 }
 
-export async function updateRecoveryCodes(
-  id: string,
-  hashedCodes: string[],
-): Promise<void> {
-  await db
-    .update(users)
-    .set({ twoFactorRecoveryCodes: hashedCodes })
-    .where(eq(users.id, id));
+export async function updateRecoveryCodes(id: string, hashedCodes: string[]): Promise<void> {
+  await db.update(users).set({ twoFactorRecoveryCodes: hashedCodes }).where(eq(users.id, id));
 }

@@ -1,32 +1,32 @@
 import type { Response } from 'express';
 
-export interface SuccessEnvelope<T = any> {
+export interface SuccessEnvelope<T = unknown> {
   success: true;
   message: string;
   data: T;
-  meta?: any;
+  meta?: Record<string, unknown>;
   requestId?: string;
 }
 
 /** A consistent success envelope for public API endpoints. */
-export class AppResponse<T = any> {
+export class AppResponse<T = unknown> {
   public readonly status: number;
   public readonly data: T;
   public readonly message: string;
-  public readonly meta?: any;
+  public readonly meta?: Record<string, unknown>;
 
-  constructor(status: number, data: T, message = 'OK', meta?: any) {
+  constructor(status: number, data: T, message = 'OK', meta?: Record<string, unknown>) {
     this.status = status;
     this.data = data;
     this.message = message;
     this.meta = meta;
   }
 
-  static ok<T>(data: T, message = 'OK', meta?: any): AppResponse<T> {
+  static ok<T>(data: T, message = 'OK', meta?: Record<string, unknown>): AppResponse<T> {
     return new AppResponse(200, data, message, meta);
   }
 
-  static created<T>(data: T, message = 'Created', meta?: any): AppResponse<T> {
+  static created<T>(data: T, message = 'Created', meta?: Record<string, unknown>): AppResponse<T> {
     return new AppResponse(201, data, message, meta);
   }
 
@@ -38,6 +38,6 @@ export class AppResponse<T = any> {
   }
 
   send(res: Response): Response {
-    return res.status(this.status).json(this.toJSON((res.req as any)?.id));
+    return res.status(this.status).json(this.toJSON((res?.req as { id?: string } | undefined)?.id));
   }
 }

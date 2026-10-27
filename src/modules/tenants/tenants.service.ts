@@ -7,11 +7,15 @@ import { db } from '@/config/db.js';
 import { env } from '@/config/env.js';
 import {
   appModules,
+  tenantMemberRoles,
+  tenantMembers,
   tenantModules,
+  tenants,
   type PublicTenant,
   type PublicTenantBranding,
   type PublicTenantEmailConfig,
   type PublicUser,
+  type Tenant,
   type TenantMember,
 } from '@/db/schema/index.js';
 import { cache } from '@/lib/cache.js';
@@ -55,76 +59,115 @@ export async function createTenantOrganization(
   creatorUserId: string,
   data: CreateTenantDto,
 ): Promise<PublicTenant> {
-  const existing = await tenantsRepo.findTenantBySlug(data.slug);
+  const cleanSlug = data?.slug?.toLowerCase?.()?.trim?.() ?? '';
+  const existing = await tenantsRepo.findTenantBySlug(cleanSlug);
   if (existing) {
     throw AppError.conflict('A tenant with this slug already exists');
   }
 
-  // 1. Create tenant record
-  const tenant = await tenantsRepo.createTenant({
-    name: data.name,
-    slug: data.slug.toLowerCase().trim(),
-    plan: data.plan ?? 'FREE',
-    status: 'ACTIVE',
-  });
+  // Wrap all relational provisioning steps in an atomic database transaction
+  let tenantRecord: Tenant;
+  try {
+    tenantRecord = await db.transaction(async (tx) => {
+      // 1. Create tenant record
+      const [tenant] = await tx
+        .insert(tenants)
+        .values({
+          name: data?.name,
+          slug: cleanSlug,
+          plan: data?.plan ?? 'FREE',
+          status: 'ACTIVE',
+        })
+        .returning();
 
-  // 2. Add creator as initial member
-  const member = await tenantsRepo.addTenantMember({
-    tenantId: tenant.id,
-    userId: creatorUserId,
-    status: 'ACTIVE',
-  });
+      if (!tenant) throw AppError.internal('Failed to create tenant organization');
 
-  // 3. Look up OWNER role (global system role)
-  const systemRoles = await rbacRepo.findRolesByTenant(null);
-  let ownerRole = systemRoles.find((r) => r.name === rbacService.SYSTEM_ROLES.OWNER);
-
-  if (!ownerRole) {
-    // Ensure default system roles are seeded
-    await rbacService.seedDefaultRbac();
-    const refreshed = await rbacRepo.findRolesByTenant(null);
-    ownerRole = refreshed.find((r) => r.name === rbacService.SYSTEM_ROLES.OWNER);
-  }
-
-  if (ownerRole) {
-    await rbacRepo.assignRoleToMember(member.id, ownerRole.id);
-  }
-
-  // 4. Provision default tenant modules
-  const allModules = await db.select({ id: appModules.id }).from(appModules);
-  if (allModules.length > 0) {
-    await db
-      .insert(tenantModules)
-      .values(
-        allModules.map((m) => ({
+      // 2. Add creator as initial member
+      const [member] = await tx
+        .insert(tenantMembers)
+        .values({
           tenantId: tenant.id,
-          moduleId: m.id,
-          isEnabled: true,
-        })),
-      )
-      .onConflictDoNothing();
+          userId: creatorUserId,
+          status: 'ACTIVE',
+        })
+        .returning();
+
+      if (!member) throw AppError.internal('Failed to assign initial tenant member');
+
+      // 3. Look up OWNER role (global system role)
+      const systemRoles = await rbacRepo.findRolesByTenant(null);
+      let ownerRole = systemRoles?.find((r) => r?.name === rbacService.SYSTEM_ROLES.OWNER);
+
+      if (!ownerRole) {
+        await rbacService.seedDefaultRbac();
+        const refreshed = await rbacRepo.findRolesByTenant(null);
+        ownerRole = refreshed?.find((r) => r?.name === rbacService.SYSTEM_ROLES.OWNER);
+      }
+
+      if (ownerRole) {
+        await tx
+          .insert(tenantMemberRoles)
+          .values({
+            memberId: member.id,
+            roleId: ownerRole.id,
+          })
+          .onConflictDoNothing();
+      }
+
+      // 4. Provision default tenant modules
+      const allModules = await tx.select({ id: appModules.id }).from(appModules);
+      if (allModules?.length > 0) {
+        await tx
+          .insert(tenantModules)
+          .values(
+            allModules.map((m) => ({
+              tenantId: tenant.id,
+              moduleId: m.id,
+              isEnabled: true,
+            })),
+          )
+          .onConflictDoNothing();
+      }
+
+      // 5. Assign initial subscription
+      await plansService.assignInitialSubscription(tenant.id, tenant?.plan ?? 'FREE');
+
+      return tenant;
+    });
+  } catch (err: unknown) {
+    const errObj = (typeof err === 'object' && err !== null ? err : {}) as Record<string, unknown>;
+    const errMsg = typeof errObj.message === 'string' ? errObj.message : '';
+    if (
+      errObj?.code === '23505' ||
+      errMsg.includes('duplicate key') ||
+      errMsg.includes('already exists')
+    ) {
+      throw AppError.conflict('A tenant with this slug already exists');
+    }
+    throw err;
   }
 
-  // 5. Assign initial subscription
-  await plansService.assignInitialSubscription(tenant.id, tenant.plan ?? 'FREE');
-
-  // 6. Record audit event
-  await logSecurityEvent({
-    tenantId: tenant.id,
-    userId: creatorUserId,
-    action: 'TENANT.CREATED',
-    entityType: 'Tenant',
-    entityId: tenant.id,
-    metadata: { name: tenant.name, slug: tenant.slug },
-  });
+  // 6. External side effects: Record security audit event outside the DB transaction
+  try {
+    await logSecurityEvent({
+      tenantId: tenantRecord.id,
+      userId: creatorUserId,
+      action: 'TENANT.CREATED',
+      entityType: 'Tenant',
+      entityId: tenantRecord.id,
+      metadata: { name: tenantRecord.name, slug: tenantRecord.slug },
+    });
+  } catch {
+    /* ignore logging failure */
+  }
 
   return {
-    id: tenant.id,
-    name: tenant.name,
-    slug: tenant.slug,
-    status: tenant.status,
-    plan: tenant.plan,
-    createdAt: tenant.createdAt,
+    id: tenantRecord.id,
+    name: tenantRecord.name,
+    slug: tenantRecord.slug,
+    status: tenantRecord.status,
+    plan: tenantRecord.plan,
+    createdAt: tenantRecord.createdAt,
   };
 }
 

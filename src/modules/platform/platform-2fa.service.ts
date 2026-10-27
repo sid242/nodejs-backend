@@ -5,11 +5,7 @@ import { Secret, TOTP } from 'otpauth';
 
 import { env } from '@/config/env.js';
 import { redis } from '@/config/redis.js';
-import {
-  AUTH_MESSAGES,
-  REDIS_PREFIXES,
-  TOKEN_EXPIRATION,
-} from '@/constants/index.js';
+import { AUTH_MESSAGES, REDIS_PREFIXES, TOKEN_EXPIRATION } from '@/constants/index.js';
 import { decrypt, encrypt } from '@/lib/crypto.js';
 import { AppError } from '@/lib/errors.js';
 
@@ -39,9 +35,7 @@ export interface PlatformTwoFactorChallengeData {
  * Initiates 2FA setup for platform staff member.
  * Generates pending TOTP secret stored in Redis with 10min TTL.
  */
-export async function setupPlatformTwoFactor(
-  staffId: string,
-): Promise<PlatformTwoFactorSetupData> {
+export async function setupPlatformTwoFactor(staffId: string): Promise<PlatformTwoFactorSetupData> {
   const staff = await platformRepo.findFullStaffById(staffId);
   if (!staff) throw AppError.notFound('Platform staff not found');
 
@@ -86,9 +80,7 @@ export async function enablePlatformTwoFactor(
   const redisKey = `${REDIS_PREFIXES.PLATFORM_TWO_FACTOR_PENDING_SECRET}${staffId}`;
   const pendingSecret = await redis.get(redisKey);
   if (!pendingSecret) {
-    throw AppError.badRequest(
-      'No pending 2FA setup found. Please start the setup process again.',
-    );
+    throw AppError.badRequest('No pending 2FA setup found. Please start the setup process again.');
   }
 
   const secret = Secret.fromBase32(pendingSecret);

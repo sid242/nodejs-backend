@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 
+import { createRedis } from '@/config/redis.js';
 import { asyncHandler } from '@/lib/async-handler.js';
 import { AppResponse } from '@/lib/responses.js';
 import * as service from '@/modules/files/files.service.js';
@@ -35,3 +36,47 @@ export const deleteFile = asyncHandler(async (req: Request, res: Response) => {
   await service.deleteFile(req.user!.id, req.valid?.params.id, req.user?.role, req.tenant?.id);
   res.status(204).end();
 });
+
+export const streamEvents = (req: Request, res: Response): void => {
+  const userId = req.user?.id;
+  if (!userId) {
+    res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Authentication required' } });
+    return;
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.write(':connected\n\n');
+
+  const subClient = createRedis(`sse-sub-${userId}`);
+  const channel = `sse:user:${userId}`;
+
+  void subClient.subscribe(channel);
+
+  subClient.on('message', (chan, msg) => {
+    if (chan === channel) {
+      try {
+        const parsed = JSON.parse(msg);
+        res.write(
+          `event: ${parsed?.event ?? 'message'}\ndata: ${JSON.stringify(parsed?.payload ?? {})}\n\n`,
+        );
+      } catch {
+        res.write(`data: ${msg}\n\n`);
+      }
+    }
+  });
+
+  const keepAliveInterval = setInterval(() => {
+    res.write(':ping\n\n');
+  }, 25_000);
+
+  req.on('close', () => {
+    clearInterval(keepAliveInterval);
+    void subClient.unsubscribe(channel).catch(() => {});
+    void subClient.quit().catch(() => {});
+  });
+};

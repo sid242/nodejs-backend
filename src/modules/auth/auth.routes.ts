@@ -17,6 +17,7 @@ import {
   requestEmailVerificationDto,
   requestMagicLinkDto,
   resetPasswordDto,
+  revokeSessionParamsDto,
   verifyEmailDto,
   verifyMagicLinkDto,
   verifyTwoFactorChallengeDto,
@@ -58,10 +59,20 @@ router.post('/verify-email/confirm', validate({ body: verifyEmailDto }), control
 
 // --- Active Device Sessions Management ---
 router.get('/sessions', requireAuth, controller.listSessions);
-router.delete('/sessions/:sessionId', requireAuth, controller.revokeSession);
+router.delete(
+  '/sessions/:sessionId',
+  requireAuth,
+  validate({ params: revokeSessionParamsDto }),
+  controller.revokeSession,
+);
 
 // --- Two-Factor Authentication ---
-router.post('/2fa/setup', requireAuth, blockIfImpersonating('2FA Setup'), controller.setupTwoFactor);
+router.post(
+  '/2fa/setup',
+  requireAuth,
+  blockIfImpersonating('2FA Setup'),
+  controller.setupTwoFactor,
+);
 router.post(
   '/2fa/enable',
   requireAuth,

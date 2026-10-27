@@ -19,18 +19,24 @@ export interface TokenUser {
   role: string;
 }
 
+export interface AccessTokenPayload extends JwtPayload {
+  sub?: string;
+  role?: string;
+  impersonator?: ImpersonatorClaim;
+}
+
 export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
 }
 
-export const verifyAccessToken = (token: string): JwtPayload =>
-  jwt.verify(token, env.JWT_ACCESS_SECRET) as JwtPayload;
+export const verifyAccessToken = (token: string): AccessTokenPayload =>
+  jwt.verify(token, env.JWT_ACCESS_SECRET) as AccessTokenPayload;
 
 const signAccessToken = (user: TokenUser): string =>
   jwt.sign({ role: user.role }, env.JWT_ACCESS_SECRET, {
     subject: user.id,
-    expiresIn: env.JWT_ACCESS_TTL as any,
+    expiresIn: env.JWT_ACCESS_TTL as jwt.SignOptions['expiresIn'],
   });
 
 /** Short-lived stateless access token + long-lived refresh token tracked in Redis (revocable). */
@@ -159,7 +165,7 @@ export async function issueImpersonationToken(
     env.JWT_ACCESS_SECRET,
     {
       subject: targetUser.id,
-      expiresIn: `${ttlSeconds}s` as any,
+      expiresIn: ttlSeconds,
     },
   );
 

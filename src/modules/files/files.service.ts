@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { PresignedPost } from '@aws-sdk/s3-presigned-post';
 
+import { logger } from '@/config/logger.js';
 import type { FileRecord } from '@/db/schema/index.js';
 import { AppError } from '@/lib/errors.js';
 import { createDownloadUrl, createUploadPost, deleteObject, headObject } from '@/lib/s3.js';
@@ -74,8 +75,15 @@ export async function requestUpload(
     ownerId: userId,
     tenantId: tenantId ?? null,
   });
-  const upload = await createUploadPost({ key, contentType });
-  return { fileId: file.id, upload }; // client POSTs { ...upload.fields, file } to upload.url
+
+  try {
+    const upload = await createUploadPost({ key, contentType });
+    return { fileId: file.id, upload }; // client POSTs { ...upload.fields, file } to upload.url
+  } catch (uploadErr) {
+    // Compensating action: prune orphaned database record if storage initialization fails
+    await fileRepo.deleteById(file.id).catch(() => {});
+    throw uploadErr;
+  }
 }
 
 /** Step 3: after the browser finished uploading to S3, verify the object exists and kick off processing. */
@@ -95,11 +103,20 @@ export async function confirmUpload(
     size: head.ContentLength,
   });
   if (!updated) throw AppError.notFound('File not found');
-  await fileQueue.add(
-    'process',
-    { fileId: id, ownerId: userId, tenantId: file.tenantId },
-    { jobId: `process-${id}` },
-  );
+  try {
+    await fileQueue.add(
+      'process',
+      { fileId: id, ownerId: userId, tenantId: file.tenantId },
+      { jobId: `process-${id}` },
+    );
+  } catch (queueErr) {
+    logger.error(
+      { err: queueErr, fileId: id },
+      'Failed to enqueue file processing job; reverting status to PENDING',
+    );
+    await fileRepo.updateStatusAndSize(id, { status: 'PENDING', size: null }).catch(() => {});
+    throw AppError.internal('Failed to queue file processing, please retry');
+  }
   return updated;
 }
 
@@ -142,6 +159,14 @@ export async function deleteFile(
   tenantId?: string,
 ): Promise<void> {
   const file = await getOwned(userId, id, role, tenantId);
-  await deleteObject(file.key);
+  // Idempotent and recoverable deletion: tolerates missing storage objects and AWS timeouts
+  try {
+    await deleteObject(file.key);
+  } catch (storageErr) {
+    logger.warn(
+      { err: storageErr, fileId: id, key: file.key },
+      'Storage deletion warning during file removal; proceeding with DB deletion',
+    );
+  }
   await fileRepo.deleteById(id);
 }

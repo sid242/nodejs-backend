@@ -247,7 +247,7 @@ export async function createModule(data: dto.CreateModuleDto): Promise<ModuleWit
     isSystem: false,
   });
 
-  let createdPerms: any[] = [];
+  let createdPerms: Permission[] = [];
   if (data.permissions && data.permissions.length > 0) {
     createdPerms = await rbacRepo.createPermissionsBatch(
       data.permissions.map((p) => ({

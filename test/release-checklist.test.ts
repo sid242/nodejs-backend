@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, test } from 'node:test';
 import { eq, inArray } from 'drizzle-orm';
+import jwt from 'jsonwebtoken';
 
 import { closeDb, db } from '../src/config/db.js';
+import { env } from '../src/config/env.js';
 import { closeRedisClients } from '../src/config/redis.js';
 import { platformStaff, tenantMembers, tenants, users } from '../src/db/schema/index.js';
 import { AppError } from '../src/lib/errors.js';
@@ -105,6 +107,24 @@ test('Release Checklist 3: Platform Privilege Separation (Tenant Admin cannot ac
   assert.ok(caughtError instanceof AppError);
   assert.equal(caughtError.status, 401);
   assert.ok(caughtError.message.includes('Platform staff authentication required'));
+
+  // Test that a customer user access token signed with JWT_ACCESS_SECRET is rejected by platform auth
+  const customerUserJwt = jwt.sign(
+    { sub: randomUUID(), email: 'user@tenant.com', role: 'USER' },
+    env.JWT_ACCESS_SECRET,
+    { expiresIn: '15m' },
+  );
+  const jwtReq: any = {
+    headers: { authorization: `Bearer ${customerUserJwt}` },
+    cookies: {},
+  };
+  let jwtErr: any = null;
+  await requirePlatformAuth(jwtReq, res, (err?: any) => {
+    jwtErr = err;
+  });
+  assert.ok(jwtErr instanceof AppError);
+  assert.equal(jwtErr.status, 401);
+  assert.equal(jwtErr.message, 'Invalid platform staff token type');
 
   let permError: any = null;
   const permGuard = requirePlatformPermission('tenants::manage');

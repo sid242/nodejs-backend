@@ -69,11 +69,7 @@ export async function findStaffById(id: string) {
 }
 
 export async function findFullStaffById(id: string): Promise<PlatformStaff | null> {
-  const [staff] = await db
-    .select()
-    .from(platformStaff)
-    .where(eq(platformStaff.id, id))
-    .limit(1);
+  const [staff] = await db.select().from(platformStaff).where(eq(platformStaff.id, id)).limit(1);
   return staff ?? null;
 }
 
@@ -107,10 +103,7 @@ export async function disablePlatformTwoFactor(staffId: string) {
   return updated ?? null;
 }
 
-export async function updatePlatformRecoveryCodes(
-  staffId: string,
-  recoveryCodes: string[],
-) {
+export async function updatePlatformRecoveryCodes(staffId: string, recoveryCodes: string[]) {
   const [updated] = await db
     .update(platformStaff)
     .set({

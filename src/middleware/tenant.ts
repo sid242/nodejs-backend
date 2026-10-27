@@ -16,22 +16,18 @@ export async function resolveTenantContext(
   }
 
   // 1. Identify tenant from header, path params, query, cookie, or single-tenant auto-fallback
-  const rawHeader = req.headers['x-tenant-id'];
+  const rawHeader = req.headers?.['x-tenant-id'];
   let tenantIdentifier =
-    (Array.isArray(rawHeader) ? rawHeader[0] : rawHeader) ||
-    (typeof req.params.tenantId === 'string' ? req.params.tenantId : undefined) ||
-    (typeof req.query.tenantId === 'string' ? req.query.tenantId : undefined) ||
+    (Array.isArray(rawHeader) ? rawHeader?.[0] : rawHeader) ||
+    (typeof req.params?.tenantId === 'string' ? req.params?.tenantId : undefined) ||
+    (typeof req.query?.tenantId === 'string' ? req.query?.tenantId : undefined) ||
     (req.cookies?.['active_tenant_id'] as string | undefined);
-
-  if (tenantIdentifier === 'tenant-acme') {
-    tenantIdentifier = undefined;
-  }
 
   // If omitted and user is authenticated, auto-resolve if user has exactly one active tenant
   if (!tenantIdentifier && req.user?.id) {
     try {
       const userTenants = await tenantsRepo.findUserTenants(req.user.id);
-      if (userTenants.length === 1 && userTenants[0]?.id) {
+      if (userTenants?.length === 1 && userTenants?.[0]?.id) {
         tenantIdentifier = userTenants[0].id;
       }
     } catch {

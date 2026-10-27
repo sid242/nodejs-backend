@@ -12,6 +12,7 @@ router.use(requireAuth);
 router.use(resolveTenantContext);
 
 router.get('/', controller.listFiles);
+router.get('/events/stream', controller.streamEvents);
 router.post(
   '/upload-url',
   uploadLimiter,
