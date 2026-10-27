@@ -1,7 +1,7 @@
 import { and, count, desc, eq, SQL } from 'drizzle-orm';
 
-import { db } from '@/config/db.js';
-import { invoices, plans, tenants, type Invoice, type NewInvoice } from '@/db/schema/index.js';
+import { db } from '@/config/db';
+import { invoices, plans, tenants, type Invoice, type NewInvoice } from '@/db/schema';
 
 export interface InvoiceWithDetails extends Invoice {
   tenantName?: string;

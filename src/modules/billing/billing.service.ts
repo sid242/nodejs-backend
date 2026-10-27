@@ -1,15 +1,15 @@
-import { cache } from '@/lib/cache.js';
-import { AppError } from '@/lib/errors.js';
-import * as plansRepo from '@/modules/plans/plans.repository.js';
-import { tenantsRepo } from '@/modules/tenants/tenants.repository.js';
+import { cache } from '@/lib/cache';
+import { AppError } from '@/lib/errors';
+import * as plansRepo from '@/modules/plans/plans.repository';
+import { tenantsRepo } from '@/modules/tenants/tenants.repository';
 
 import type {
   CreateInvoiceDto,
   ListInvoicesQueryDto,
   ListPlatformInvoicesQueryDto,
   UpdateInvoiceStatusDto,
-} from './billing.dto.js';
-import * as billingRepo from './billing.repository.js';
+} from './billing.dto';
+import * as billingRepo from './billing.repository';
 
 export async function createInvoice(data: CreateInvoiceDto) {
   const tenant = await tenantsRepo.findTenantById(data.tenantId);

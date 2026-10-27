@@ -1,9 +1,9 @@
 import type { Request, Response } from 'express';
 
-import { asyncHandler } from '@/lib/async-handler.js';
-import { AppResponse } from '@/lib/responses.js';
+import { asyncHandler } from '@/lib/async-handler';
+import { AppResponse } from '@/lib/responses';
 
-import * as billingService from './billing.service.js';
+import * as billingService from './billing.service';
 
 export const getTenantInvoices = asyncHandler(async (req: Request, res: Response) => {
   const result = await billingService.getTenantInvoices(req.tenant!.id, req.valid?.query ?? {});

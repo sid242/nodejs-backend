@@ -1,14 +1,14 @@
 import { Router } from 'express';
 
-import { requireAuth } from '@/middleware/auth.js';
-import { requirePlatformAuth, requirePlatformPermission } from '@/middleware/platform.js';
-import { requirePermission } from '@/middleware/rbac.js';
-import { requireTenant } from '@/middleware/tenant.js';
-import { validate } from '@/middleware/validate.js';
-import { PLATFORM_PERMISSIONS } from '@/modules/platform/platform.permissions.js';
+import { requireAuth } from '@/middleware/auth';
+import { requirePlatformAuth, requirePlatformPermission } from '@/middleware/platform';
+import { requirePermission } from '@/middleware/rbac';
+import { requireTenant } from '@/middleware/tenant';
+import { validate } from '@/middleware/validate';
+import { PLATFORM_PERMISSIONS } from '@/modules/platform/platform.permissions';
 
-import * as controller from './billing.controller.js';
-import * as dto from './billing.dto.js';
+import * as controller from './billing.controller';
+import * as dto from './billing.dto';
 
 const router: Router = Router();
 
