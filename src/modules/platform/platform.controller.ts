@@ -4,6 +4,7 @@ import { asyncHandler } from '@/lib/async-handler.js';
 import { AppResponse } from '@/lib/responses.js';
 
 import * as service from './platform.service.js';
+import * as platform2FaService from './platform-2fa.service.js';
 
 // ==========================================
 // 1. Staff Authentication & Handlers
@@ -18,6 +19,12 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     userAgent,
     req.id ? String(req.id) : undefined,
   );
+
+  if ('twoFactorRequired' in result) {
+    AppResponse.ok(result, 'Two-factor authentication is required').send(res);
+    return;
+  }
+
   res.cookie('platform_staff_token', result.token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -25,6 +32,53 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     maxAge: 8 * 60 * 60 * 1000,
   });
   AppResponse.ok(result, 'Platform staff authenticated successfully').send(res);
+});
+
+export const verifyTwoFactor = asyncHandler(async (req: Request, res: Response) => {
+  const ip = req.ip || req.socket.remoteAddress;
+  const userAgent = req.headers['user-agent'];
+  const result = await platform2FaService.verifyPlatformTwoFactorChallenge(
+    req.valid?.body.challengeToken,
+    req.valid?.body.code,
+    ip,
+    userAgent,
+    req.id ? String(req.id) : undefined,
+  );
+
+  res.cookie('platform_staff_token', result.token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 8 * 60 * 60 * 1000,
+  });
+  AppResponse.ok(result, 'Platform staff authenticated successfully').send(res);
+});
+
+export const setupTwoFactor = asyncHandler(async (req: Request, res: Response) => {
+  const result = await platform2FaService.setupPlatformTwoFactor(req.staff!.id);
+  AppResponse.ok(result, 'TOTP secret generated successfully').send(res);
+});
+
+export const enableTwoFactor = asyncHandler(async (req: Request, res: Response) => {
+  const result = await platform2FaService.enablePlatformTwoFactor(
+    req.staff!.id,
+    req.valid?.body.code,
+  );
+  AppResponse.ok(result, result.message).send(res);
+});
+
+export const disableTwoFactor = asyncHandler(async (req: Request, res: Response) => {
+  const result = await platform2FaService.disablePlatformTwoFactor(
+    req.staff!.id,
+    req.valid?.body.password,
+    req.valid?.body.code,
+  );
+  AppResponse.ok(result, result.message).send(res);
+});
+
+export const getTwoFactorStatus = asyncHandler(async (req: Request, res: Response) => {
+  const result = await platform2FaService.getPlatformTwoFactorStatus(req.staff!.id);
+  AppResponse.ok(result, 'Platform staff 2FA status retrieved').send(res);
 });
 
 export const getMe = asyncHandler(async (req: Request, res: Response) => {

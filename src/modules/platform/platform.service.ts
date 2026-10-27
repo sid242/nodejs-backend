@@ -40,6 +40,7 @@ import type {
 } from './platform.dto.js';
 import { PLATFORM_PERMISSION_CATALOGUE, SYSTEM_PLATFORM_ROLES } from './platform.permissions.js';
 import * as platformRepo from './platform.repository.js';
+import { createPlatformTwoFactorChallenge } from './platform-2fa.service.js';
 
 // ==========================================
 // 1. Staff Management & Authentication
@@ -60,6 +61,11 @@ export async function loginStaff(
 
   const valid = await bcrypt.compare(data.password, staff.passwordHash);
   if (!valid) throw AppError.unauthorized('Invalid email or password');
+
+  // Intercept if 2FA is active on the platform staff account
+  if (staff.twoFactorEnabledAt) {
+    return createPlatformTwoFactorChallenge(staff.id);
+  }
 
   await platformRepo.updateStaffLastLogin(staff.id);
 

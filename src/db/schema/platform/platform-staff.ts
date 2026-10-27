@@ -1,4 +1,4 @@
-import { index, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { index, json, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { platformRoles } from './platform-roles.js';
 
@@ -13,6 +13,12 @@ export const platformStaff = pgTable(
     roleId: uuid('roleId')
       .notNull()
       .references(() => platformRoles.id, { onDelete: 'restrict' }),
+
+    // Two-Factor Authentication
+    twoFactorSecret: text('twoFactorSecret'), // AES-256-GCM encrypted TOTP secret
+    twoFactorEnabledAt: timestamp('twoFactorEnabledAt', { precision: 3, mode: 'date' }),
+    twoFactorRecoveryCodes: json('twoFactorRecoveryCodes').$type<string[]>(), // bcrypt-hashed recovery codes
+
     lastLoginAt: timestamp('lastLoginAt', { precision: 3, mode: 'date' }),
     createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updatedAt', { precision: 3, mode: 'date' })
@@ -36,6 +42,7 @@ export const publicPlatformStaff = {
   displayName: platformStaff.displayName,
   status: platformStaff.status,
   roleId: platformStaff.roleId,
+  twoFactorEnabledAt: platformStaff.twoFactorEnabledAt,
   lastLoginAt: platformStaff.lastLoginAt,
   createdAt: platformStaff.createdAt,
 };

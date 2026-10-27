@@ -38,6 +38,8 @@ export const REDIS_PREFIXES = {
   IMPERSONATION_SESSION: 'imp:session:',
   TWO_FACTOR_CHALLENGE: '2fa:challenge:',
   TWO_FACTOR_PENDING_SECRET: '2fa:pending:',
+  PLATFORM_TWO_FACTOR_CHALLENGE: 'platform:2fa:challenge:',
+  PLATFORM_TWO_FACTOR_PENDING_SECRET: 'platform:2fa:pending:',
 } as const;
 
 export const AUTH_MESSAGES = {

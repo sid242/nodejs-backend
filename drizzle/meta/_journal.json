@@ -85,6 +85,13 @@
       "when": 1793018818799,
       "tag": "0011_daffy_thunderbolt_ross",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793026531713,
+      "tag": "0012_sweet_malice",
+      "breakpoints": true
     }
   ]
 }

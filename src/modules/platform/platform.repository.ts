@@ -56,6 +56,7 @@ export async function findStaffById(id: string) {
       roleId: platformStaff.roleId,
       roleKey: platformRoles.key,
       roleName: platformRoles.name,
+      twoFactorEnabledAt: platformStaff.twoFactorEnabledAt,
       lastLoginAt: platformStaff.lastLoginAt,
       createdAt: platformStaff.createdAt,
       updatedAt: platformStaff.updatedAt,
@@ -65,6 +66,59 @@ export async function findStaffById(id: string) {
     .where(eq(platformStaff.id, id))
     .limit(1);
   return staff ?? null;
+}
+
+export async function findFullStaffById(id: string): Promise<PlatformStaff | null> {
+  const [staff] = await db
+    .select()
+    .from(platformStaff)
+    .where(eq(platformStaff.id, id))
+    .limit(1);
+  return staff ?? null;
+}
+
+export async function enablePlatformTwoFactor(
+  staffId: string,
+  encryptedSecret: string,
+  recoveryCodes: string[],
+) {
+  const [updated] = await db
+    .update(platformStaff)
+    .set({
+      twoFactorSecret: encryptedSecret,
+      twoFactorEnabledAt: new Date(),
+      twoFactorRecoveryCodes: recoveryCodes,
+    })
+    .where(eq(platformStaff.id, staffId))
+    .returning(publicPlatformStaff);
+  return updated ?? null;
+}
+
+export async function disablePlatformTwoFactor(staffId: string) {
+  const [updated] = await db
+    .update(platformStaff)
+    .set({
+      twoFactorSecret: null,
+      twoFactorEnabledAt: null,
+      twoFactorRecoveryCodes: null,
+    })
+    .where(eq(platformStaff.id, staffId))
+    .returning(publicPlatformStaff);
+  return updated ?? null;
+}
+
+export async function updatePlatformRecoveryCodes(
+  staffId: string,
+  recoveryCodes: string[],
+) {
+  const [updated] = await db
+    .update(platformStaff)
+    .set({
+      twoFactorRecoveryCodes: recoveryCodes,
+    })
+    .where(eq(platformStaff.id, staffId))
+    .returning(publicPlatformStaff);
+  return updated ?? null;
 }
 
 export async function findStaffPaginated(filters: ListStaffQueryDto) {

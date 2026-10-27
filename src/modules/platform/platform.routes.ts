@@ -2,6 +2,11 @@ import { Router } from 'express';
 
 import { requirePlatformAuth, requirePlatformPermission } from '@/middleware/platform.js';
 import { validate } from '@/middleware/validate.js';
+import {
+  disableTwoFactorDto,
+  enableTwoFactorDto,
+  verifyTwoFactorChallengeDto,
+} from '@/modules/auth/auth.dto.js';
 
 import * as controller from './platform.controller.js';
 import * as dto from './platform.dto.js';
@@ -13,12 +18,29 @@ const router: Router = Router();
 // Public Platform Staff Authentication
 // ==========================================
 router.post('/auth/login', validate({ body: dto.loginStaffDto }), controller.login);
+router.post(
+  '/auth/2fa/verify',
+  validate({ body: verifyTwoFactorChallengeDto }),
+  controller.verifyTwoFactor,
+);
 router.post('/auth/logout', controller.logout);
 
 // All subsequent platform endpoints require internal platform staff authentication
 router.use(requirePlatformAuth);
 
 router.get('/auth/me', controller.getMe);
+router.post('/auth/2fa/setup', controller.setupTwoFactor);
+router.post(
+  '/auth/2fa/enable',
+  validate({ body: enableTwoFactorDto }),
+  controller.enableTwoFactor,
+);
+router.post(
+  '/auth/2fa/disable',
+  validate({ body: disableTwoFactorDto }),
+  controller.disableTwoFactor,
+);
+router.get('/auth/2fa/status', controller.getTwoFactorStatus);
 
 // ==========================================
 // 1. Platform Staff Management
