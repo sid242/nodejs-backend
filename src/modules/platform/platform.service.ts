@@ -13,6 +13,7 @@ import {
 } from '@/db/schema/index.js';
 import { cache } from '@/lib/cache.js';
 import { AppError } from '@/lib/errors.js';
+import { provisionDedicatedDatabase } from '@/lib/provision-db.js';
 import * as authRepo from '@/modules/auth/auth.repository.js';
 import {
   createMagicLinkToken,
@@ -562,13 +563,19 @@ export async function provisionTenant(
     throw AppError.conflict(`A workspace with slug "${normalizedSlug}" already exists`);
   }
 
+  const isDedicated = data.databaseMode === 'dedicated';
+  const tenantId = randomUUID();
+  const databaseKey = isDedicated ? `dedicated-${tenantId}` : 'primary';
+
   // 1. Create tenant organization record
   const tenant = await tenantsRepo.createTenant({
+    id: tenantId,
     name: data.name.trim(),
     slug: normalizedSlug,
-    plan: data.plan ?? 'FREE',
+    plan: isDedicated ? 'ENTERPRISE' : (data.plan ?? 'FREE'),
     status: 'ACTIVE',
-    databaseMode: data.databaseMode ?? 'shared',
+    databaseMode: isDedicated ? 'dedicated' : 'shared',
+    databaseKey,
     metadata: {
       country: data?.country ?? null,
       timezone: data?.timezone ?? 'UTC',
@@ -576,6 +583,21 @@ export async function provisionTenant(
       provisionedByStaffId: actorStaffId,
     },
   });
+
+  // Automatically provision dedicated database and execute Drizzle migrations
+  if (isDedicated) {
+    try {
+      await provisionDedicatedDatabase(tenant.id);
+    } catch (err: unknown) {
+      logger.error({ err, tenantId: tenant.id }, 'Failed to provision dedicated database cluster');
+      await tenantsRepo.updateTenant(tenant.id, {
+        metadata: {
+          ...(tenant.metadata as Record<string, unknown> | null),
+          dbProvisioningError: (err as Error)?.message ?? 'Unknown database provisioning error',
+        },
+      });
+    }
+  }
 
   // 2. Resolve or provision owner user account
   const normalizedEmail = data.ownerEmail.toLowerCase().trim();
