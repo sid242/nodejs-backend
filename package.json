@@ -25,6 +25,7 @@
     "db:check": "drizzle-kit check",
     "db:migrate": "tsx --env-file=.env src/db/migrate.ts",
     "db:seed": "tsx --env-file=.env src/db/seed.ts",
+    "db:clean": "tsx --env-file=.env src/scripts/clean-db.ts",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {

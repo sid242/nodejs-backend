@@ -56,6 +56,22 @@ export const DEMO_CREDENTIALS = {
       name: 'TechOps Staff',
       url: '/platform/login',
     },
+    {
+      role: 'Billing & Finance Staff',
+      roleKey: 'BILLING_STAFF',
+      email: 'staff.billing@yopmail.com',
+      password: DEMO_PASSWORD,
+      name: 'Elena Billing',
+      url: '/platform/login',
+    },
+    {
+      role: 'Compliance & Security Auditor',
+      roleKey: 'READ_ONLY_AUDITOR',
+      email: 'staff.auditor@yopmail.com',
+      password: DEMO_PASSWORD,
+      name: 'Marcus Auditor',
+      url: '/platform/login',
+    },
   ],
   tenants: [
     {
