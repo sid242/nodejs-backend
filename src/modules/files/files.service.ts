@@ -28,7 +28,7 @@ async function getOwned(
   role?: string,
   tenantId?: string,
 ): Promise<FileRecord> {
-  const file = await fileRepo.findById(id);
+  const file = await fileRepo.findById(id, tenantId);
   // 404 (not 403) so we don't leak the existence of other users'/tenants' files.
   if (!file) {
     throw AppError.notFound('File not found');
@@ -98,10 +98,15 @@ export async function confirmUpload(
   const head = await headObject(file.key).catch(() => null);
   if (!head) throw AppError.badRequest('Upload not found in storage yet');
 
-  const updated = await fileRepo.updateStatusAndSize(id, {
-    status: 'UPLOADED',
-    size: head.ContentLength,
-  });
+  const resolvedTenantId = file.tenantId ?? tenantId;
+  const updated = await fileRepo.updateStatusAndSize(
+    id,
+    {
+      status: 'UPLOADED',
+      size: head.ContentLength,
+    },
+    resolvedTenantId,
+  );
   if (!updated) throw AppError.notFound('File not found');
   try {
     await fileQueue.add(
@@ -114,7 +119,9 @@ export async function confirmUpload(
       { err: queueErr, fileId: id },
       'Failed to enqueue file processing job; reverting status to PENDING',
     );
-    await fileRepo.updateStatusAndSize(id, { status: 'PENDING', size: null }).catch(() => {});
+    await fileRepo
+      .updateStatusAndSize(id, { status: 'PENDING', size: null }, resolvedTenantId)
+      .catch(() => {});
     throw AppError.internal('Failed to queue file processing, please retry');
   }
   return updated;

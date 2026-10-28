@@ -55,18 +55,21 @@ export async function resolveTenantContext(
     }
 
     // 3. Check for an active, audited support delegation session
+    // Strict caller binding: only honor support session if caller is authenticated as platform staff
+    // and the support session belongs to that specific staff member.
     const supportSessionHeader = req.headers['x-support-session-id'];
     const supportSessionId = Array.isArray(supportSessionHeader)
       ? supportSessionHeader[0]
       : supportSessionHeader;
 
     let activeSupportSession = null;
-    if (supportSessionId) {
+    if (supportSessionId && req.staff?.id) {
       const session = await platformRepo.findSupportSessionById(supportSessionId);
       if (
         session &&
         session.status === 'ACTIVE' &&
         session.tenantId === tenant.id &&
+        session.staffId === req.staff.id &&
         new Date(session.expiresAt) > new Date()
       ) {
         activeSupportSession = session;

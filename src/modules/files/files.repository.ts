@@ -1,10 +1,18 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 
 import { db } from '@/config/db.js';
 import { files, type FileRecord, type NewFileRecord } from '@/db/schema/index.js';
 
-export async function findById(id: string): Promise<FileRecord | null> {
-  const [file] = await db.select().from(files).where(eq(files.id, id)).limit(1);
+export async function findById(id: string, tenantId?: string): Promise<FileRecord | null> {
+  const conditions = [eq(files.id, id)];
+  if (tenantId) {
+    conditions.push(eq(files.tenantId, tenantId));
+  }
+  const [file] = await db
+    .select()
+    .from(files)
+    .where(and(...conditions))
+    .limit(1);
   return file ?? null;
 }
 
@@ -30,11 +38,16 @@ export interface UpdateStatusAndSizeOptions {
 export async function updateStatusAndSize(
   id: string,
   { status, size }: UpdateStatusAndSizeOptions,
+  tenantId?: string,
 ): Promise<FileRecord | null> {
+  const conditions = [eq(files.id, id)];
+  if (tenantId) {
+    conditions.push(eq(files.tenantId, tenantId));
+  }
   const [updated] = await db
     .update(files)
     .set({ status, size })
-    .where(eq(files.id, id))
+    .where(and(...conditions))
     .returning();
   return updated ?? null;
 }

@@ -104,7 +104,7 @@ export const getStaff = asyncHandler(async (req: Request, res: Response) => {
 
 export const createStaff = asyncHandler(async (req: Request, res: Response) => {
   const result = await service.createStaff(
-    req.staff!.id,
+    req.staff!,
     req.valid?.body,
     req.id ? String(req.id) : undefined,
   );
@@ -113,7 +113,7 @@ export const createStaff = asyncHandler(async (req: Request, res: Response) => {
 
 export const updateStaff = asyncHandler(async (req: Request, res: Response) => {
   const result = await service.updateStaff(
-    req.staff!.id,
+    req.staff!,
     req.params.id as string,
     req.valid?.body,
     req.id ? String(req.id) : undefined,
@@ -123,7 +123,7 @@ export const updateStaff = asyncHandler(async (req: Request, res: Response) => {
 
 export const suspendStaff = asyncHandler(async (req: Request, res: Response) => {
   const result = await service.suspendStaff(
-    req.staff!.id,
+    req.staff!,
     req.params.id as string,
     req.valid?.body?.reason,
     req.id ? String(req.id) : undefined,
@@ -204,7 +204,7 @@ export const startSupportSession = asyncHandler(async (req: Request, res: Respon
 
 export const endSupportSession = asyncHandler(async (req: Request, res: Response) => {
   const result = await service.endSupportSession(
-    req.staff!.id,
+    req.staff!,
     req.params.id as string,
     req.valid?.body?.outcome,
     req.id ? String(req.id) : undefined,

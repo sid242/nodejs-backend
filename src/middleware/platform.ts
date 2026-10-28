@@ -39,16 +39,18 @@ export async function requirePlatformAuth(
   }
 
   try {
-    const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET);
+    const decoded = jwt.verify(token, env.JWT_PLATFORM_SECRET, {
+      audience: 'platform-api',
+    });
     if (!decoded || typeof decoded !== 'object') {
       return next(AppError.unauthorized('Malformed platform staff token'));
     }
 
-    const payload = decoded as PlatformStaffJwtPayload;
+    const payload = decoded as PlatformStaffJwtPayload & { typ?: string };
 
-    // Strict boundary enforcement: require explicit PLATFORM_STAFF type.
+    // Strict boundary enforcement: require explicit STAFF token typ.
     // Standard customer access tokens cannot authenticate to platform endpoints.
-    if (payload.type !== 'PLATFORM_STAFF') {
+    if (payload.typ !== 'STAFF') {
       return next(AppError.unauthorized('Invalid platform staff token type'));
     }
 

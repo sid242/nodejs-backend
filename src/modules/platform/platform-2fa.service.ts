@@ -299,11 +299,12 @@ export async function verifyPlatformTwoFactorChallenge(
       sub: staff.id,
       email: staff.email,
       type: 'PLATFORM_STAFF',
+      typ: 'STAFF',
       roleKey: role?.key ?? 'STAFF',
       roleId: staff.roleId,
     },
-    env.JWT_ACCESS_SECRET,
-    { expiresIn: '8h' },
+    env.JWT_PLATFORM_SECRET,
+    { audience: 'platform-api', expiresIn: '8h' },
   );
 
   await platformRepo.logPlatformAction({

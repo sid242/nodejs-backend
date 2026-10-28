@@ -18,6 +18,9 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
 
   try {
     const payload = verifyAccessToken(token);
+    if (payload?.typ !== 'USER') {
+      return next(AppError.unauthorized('Invalid access token type'));
+    }
     req.user = { id: payload.sub as string, role: payload?.role ?? 'USER' };
 
     if (payload?.impersonator) {
@@ -32,7 +35,8 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
 
     next();
   } catch (error) {
-    next(error);
+    if (error instanceof AppError) return next(error);
+    next(AppError.unauthorized('Invalid or expired access token'));
   }
 }
 
@@ -51,14 +55,16 @@ export async function optionalAuth(
     }
     if (token) {
       const payload = verifyAccessToken(token);
-      req.user = { id: payload.sub as string, role: payload?.role ?? 'USER' };
+      if (payload?.typ === 'USER') {
+        req.user = { id: payload.sub as string, role: payload?.role ?? 'USER' };
 
-      if (payload?.impersonator) {
-        const imp = payload.impersonator;
-        const isActive = await isImpersonationSessionActive(imp.sessionId);
-        if (isActive) {
-          req.impersonator = imp;
-          req.isImpersonated = true;
+        if (payload?.impersonator) {
+          const imp = payload.impersonator;
+          const isActive = await isImpersonationSessionActive(imp.sessionId);
+          if (isActive) {
+            req.impersonator = imp;
+            req.isImpersonated = true;
+          }
         }
       }
     }

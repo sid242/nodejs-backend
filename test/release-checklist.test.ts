@@ -124,7 +124,10 @@ test('Release Checklist 3: Platform Privilege Separation (Tenant Admin cannot ac
   });
   assert.ok(jwtErr instanceof AppError);
   assert.equal(jwtErr.status, 401);
-  assert.equal(jwtErr.message, 'Invalid platform staff token type');
+  assert.ok(
+    jwtErr.message === 'Invalid or expired platform staff token' ||
+      jwtErr.message === 'Invalid platform staff token type',
+  );
 
   let permError: any = null;
   const permGuard = requirePlatformPermission('tenants::manage');

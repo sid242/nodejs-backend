@@ -39,19 +39,17 @@ import { emailQueue } from '@/queues/index.js';
 import { tenantBrandingRepo } from './tenant-branding.repository.js';
 import { tenantEmailRepo } from './tenant-email.repository.js';
 import type {
+  CreateTenantDto,
   RequestBrandingUploadUrlDto,
   SearchAuditLogsDto,
   TestTenantEmailConfigDto,
   UpdateTenantBrandingDto,
+  UpdateTenantDto,
   UpsertTenantEmailConfigDto,
 } from './tenants.dto.js';
 import { tenantsRepo } from './tenants.repository.js';
 
-export interface CreateTenantDto {
-  name: string;
-  slug: string;
-  plan?: string;
-}
+export const DEFAULT_TENANT_PLAN = 'FREE';
 
 export async function createTenantOrganization(
   creatorUserId: string,
@@ -67,12 +65,12 @@ export async function createTenantOrganization(
   let tenantRecord: Tenant;
   try {
     tenantRecord = await db.transaction(async (tx) => {
-      // 1. Create tenant record via repository
+      // 1. Create tenant record via repository with DEFAULT plan
       const tenant = await tenantsRepo.createTenant(
         {
           name: data?.name,
           slug: cleanSlug,
-          plan: data?.plan ?? 'FREE',
+          plan: DEFAULT_TENANT_PLAN,
           status: 'ACTIVE',
         },
         tx,
@@ -191,7 +189,7 @@ export async function getTenantDetails(tenantId: string): Promise<PublicTenant> 
 
 export async function updateTenantDetails(
   tenantId: string,
-  data: Partial<CreateTenantDto>,
+  data: UpdateTenantDto,
 ): Promise<PublicTenant> {
   const updated = await tenantsRepo.updateTenant(tenantId, data);
   if (!updated) throw AppError.notFound('Tenant not found');
@@ -298,11 +296,12 @@ export async function addMemberToTenant(
     metadata: { addedUserEmail: userEmail, role: matchedRole.name, isNewUser },
   });
 
+  const exposeDev = Boolean(env.EXPOSE_DEV_TOKENS) && process.env.NODE_ENV !== 'production';
+
   return {
     member,
     role: matchedRole.name,
-    inviteToken,
-    inviteUrl,
+    inviteUrl: exposeDev ? inviteUrl : undefined,
     message: `Invitation successfully sent to ${normalizedEmail}`,
   };
 }
@@ -318,12 +317,16 @@ export async function acceptTenantInvitation(
 }> {
   const { userId, target: boundTenantId } = await verifyAndConsumeMagicLinkToken(token);
 
-  // If the invitation was explicitly bound to a workspace, ensure consistency
-  if (boundTenantId && expectedTenantId && boundTenantId !== expectedTenantId) {
+  if (!boundTenantId) {
+    throw AppError.badRequest('Invitation token is not bound to a workspace');
+  }
+
+  // If the caller provided expectedTenantId, ensure consistency with the token's bound workspace
+  if (expectedTenantId && boundTenantId !== expectedTenantId) {
     throw AppError.forbidden('Invitation token does not belong to the requested workspace');
   }
 
-  const targetTenantId = boundTenantId || expectedTenantId;
+  const targetTenantId = boundTenantId;
 
   const userRecord = await authRepo.findById(userId);
   if (!userRecord || userRecord.deletedAt) {
@@ -348,27 +351,24 @@ export async function acceptTenantInvitation(
     throw AppError.internal('Failed to retrieve user status');
   }
 
-  // Activate ONLY the target tenant membership for this user (never blindly activate all memberships across other tenants)
+  // Activate ONLY the target tenant membership for this user (never activate memberships across other tenants)
   const memberships = await tenantsRepo.findMembershipsByUserId(userId);
   let activeTenantId: string | undefined = undefined;
+  let targetMembershipFound = false;
+
   for (const m of memberships) {
-    if (targetTenantId) {
-      if (m.tenantId === targetTenantId) {
-        if (m.status === 'INVITED') {
-          await tenantsRepo.updateTenantMemberStatus(m.id, 'ACTIVE');
-          await rbacService.invalidateRbacCache(m.tenantId, userId);
-        }
-        activeTenantId = m.tenantId;
-      }
-    } else {
+    if (m.tenantId === targetTenantId) {
+      targetMembershipFound = true;
       if (m.status === 'INVITED') {
         await tenantsRepo.updateTenantMemberStatus(m.id, 'ACTIVE');
         await rbacService.invalidateRbacCache(m.tenantId, userId);
-        activeTenantId = m.tenantId;
-      } else if (m.status === 'ACTIVE' && !activeTenantId) {
-        activeTenantId = m.tenantId;
       }
+      activeTenantId = m.tenantId;
     }
+  }
+
+  if (!targetMembershipFound) {
+    throw AppError.notFound('Invitation membership not found for this workspace');
   }
 
   const tokens = await issueTokens(finalUser);

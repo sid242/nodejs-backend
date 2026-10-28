@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 
+import { env } from '@/config/env.js';
 import { AUTH_MESSAGES, REDIS_PREFIXES } from '@/constants/index.js';
 import type { PublicUser, User } from '@/db/schema/index.js';
 import { cache } from '@/lib/cache.js';
@@ -345,27 +346,15 @@ export interface MagicLinkRequestResult {
 
 export async function requestMagicLink(email: string): Promise<MagicLinkRequestResult> {
   const normalizedEmail = email.toLowerCase().trim();
-  let user = await authRepo.findByEmail(normalizedEmail);
+  const user = await authRepo.findByEmail(normalizedEmail);
+  const genericMessage = 'If an account exists with this email, a magic sign-in link has been sent.';
 
-  // If user doesn't exist, automatically provision an account in PENDING_VERIFICATION
-  if (!user) {
-    const dummyHash = await bcrypt.hash(randomUUID(), 12);
-    const nameFromEmail = normalizedEmail.split('@')[0] || 'Member';
-    const capitalizedName = nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1);
-    const createdUser = await authRepo.createUser({
+  if (!user || user.deletedAt || user.status === 'SUSPENDED' || user.status === 'DEACTIVATED') {
+    return {
+      message: genericMessage,
       email: normalizedEmail,
-      name: capitalizedName,
-      passwordHash: dummyHash,
-    });
-    user = await authRepo.findById(createdUser.id);
-  }
-
-  if (!user || user.deletedAt) {
-    throw AppError.unauthorized('Account is not accessible');
-  }
-
-  if (user.status === 'SUSPENDED' || user.status === 'DEACTIVATED') {
-    throw AppError.forbidden(`Account is ${user.status.toLowerCase()}`);
+      expiresInMinutes: 15,
+    };
   }
 
   const rawToken = await createMagicLinkToken(user.id);
@@ -383,14 +372,14 @@ export async function requestMagicLink(email: string): Promise<MagicLinkRequestR
     { jobId: `magic-link-${user.id}-${Date.now()}` },
   );
 
-  const isDev = process.env.NODE_ENV !== 'production';
+  const exposeDev = Boolean(env.EXPOSE_DEV_TOKENS) && process.env.NODE_ENV !== 'production';
 
   return {
-    message: 'Magic sign-in link has been sent to your email',
+    message: genericMessage,
     email: user.email,
     expiresInMinutes: 15,
-    token: isDev ? rawToken : undefined,
-    magicLinkUrl: isDev ? magicLinkUrl : undefined,
+    token: exposeDev ? rawToken : undefined,
+    magicLinkUrl: exposeDev ? magicLinkUrl : undefined,
   };
 }
 

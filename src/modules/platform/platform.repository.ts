@@ -640,3 +640,12 @@ export async function findTenantMembers(tenantId: string) {
     .where(eq(tenantMembers.tenantId, tenantId))
     .orderBy(desc(tenantMembers.joinedAt));
 }
+
+export async function countActiveSuperAdmins(): Promise<number> {
+  const [result] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(platformStaff)
+    .innerJoin(platformRoles, eq(platformStaff.roleId, platformRoles.id))
+    .where(and(eq(platformRoles.key, 'SUPER_ADMIN'), eq(platformStaff.status, 'ACTIVE')));
+  return result?.count ?? 0;
+}

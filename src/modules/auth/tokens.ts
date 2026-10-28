@@ -22,6 +22,8 @@ export interface TokenUser {
 export interface AccessTokenPayload extends JwtPayload {
   sub?: string;
   role?: string;
+  typ?: string;
+  aud?: string | string[];
   impersonator?: ImpersonatorClaim;
 }
 
@@ -31,11 +33,12 @@ export interface AuthTokens {
 }
 
 export const verifyAccessToken = (token: string): AccessTokenPayload =>
-  jwt.verify(token, env.JWT_ACCESS_SECRET) as AccessTokenPayload;
+  jwt.verify(token, env.JWT_ACCESS_SECRET, { audience: 'customer-api' }) as AccessTokenPayload;
 
 const signAccessToken = (user: TokenUser): string =>
-  jwt.sign({ role: user.role }, env.JWT_ACCESS_SECRET, {
+  jwt.sign({ role: user.role, typ: 'USER' }, env.JWT_ACCESS_SECRET, {
     subject: user.id,
+    audience: 'customer-api',
     expiresIn: env.JWT_ACCESS_TTL as jwt.SignOptions['expiresIn'],
   });
 
@@ -160,11 +163,13 @@ export async function issueImpersonationToken(
   const accessToken = jwt.sign(
     {
       role: targetUser.role,
+      typ: 'USER',
       impersonator,
     },
     env.JWT_ACCESS_SECRET,
     {
       subject: targetUser.id,
+      audience: 'customer-api',
       expiresIn: ttlSeconds,
     },
   );
@@ -188,17 +193,17 @@ export async function issueImpersonationToken(
   return { accessToken, sessionId: impersonator.sessionId, expiresInSeconds: ttlSeconds };
 }
 
-/** Check if the active impersonation session key exists in Redis. */
+/** Check if the active impersonation session key exists in Redis. Fail closed on error/disconnect. */
 export async function isImpersonationSessionActive(sessionId: string): Promise<boolean> {
   if (redis.status !== 'ready' && redis.status !== 'connect') {
-    // If Redis is offline/disconnected, fail-open to token expiry
-    return true;
+    // Fail closed: if Redis is offline/disconnected, deny impersonated session
+    return false;
   }
   try {
     const exists = await redis.exists(impersonationSessionKey(sessionId));
     return exists === 1;
   } catch {
-    return true;
+    return false;
   }
 }
 

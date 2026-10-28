@@ -1,22 +1,24 @@
 import { z } from 'zod';
 
-export const createTenantDto = z.object({
-  name: z.string().trim().min(2).max(100),
-  slug: z
-    .string()
-    .trim()
-    .min(2)
-    .max(50)
-    .regex(/^[a-z0-9-]+$/, 'Slug must only contain lowercase alphanumeric characters and hyphens'),
-  plan: z.enum(['FREE', 'PRO', 'ENTERPRISE']).default('FREE'),
-});
+export const createTenantDto = z
+  .object({
+    name: z.string().trim().min(2).max(100),
+    slug: z
+      .string()
+      .trim()
+      .min(2)
+      .max(50)
+      .regex(/^[a-z0-9-]+$/, 'Slug must only contain lowercase alphanumeric characters and hyphens'),
+  })
+  .strict();
 
 export type CreateTenantDto = z.infer<typeof createTenantDto>;
 
-export const updateTenantDto = z.object({
-  name: z.string().trim().min(2).max(100).optional(),
-  plan: z.enum(['FREE', 'PRO', 'ENTERPRISE']).optional(),
-});
+export const updateTenantDto = z
+  .object({
+    name: z.string().trim().min(2).max(100).optional(),
+  })
+  .strict();
 
 export type UpdateTenantDto = z.infer<typeof updateTenantDto>;
 

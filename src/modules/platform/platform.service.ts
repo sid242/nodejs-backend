@@ -79,11 +79,12 @@ export async function loginStaff(
       sub: staff.id,
       email: staff.email,
       type: 'PLATFORM_STAFF',
+      typ: 'STAFF',
       roleKey: role?.key ?? 'STAFF',
       roleId: staff.roleId,
     },
-    env.JWT_ACCESS_SECRET,
-    { expiresIn: '8h' },
+    env.JWT_PLATFORM_SECRET,
+    { audience: 'platform-api', expiresIn: '8h' },
   );
 
   await platformRepo.logPlatformAction({
@@ -119,13 +120,49 @@ export async function getStaffById(id: string) {
   return staff;
 }
 
-export async function createStaff(actorStaffId: string, data: CreateStaffDto, requestId?: string) {
+export interface StaffActorContext {
+  id: string;
+  roleKey?: string;
+  permissions?: string[];
+}
+
+async function resolveActorContext(actor: string | StaffActorContext): Promise<StaffActorContext> {
+  if (typeof actor !== 'string') {
+    if (actor.roleKey && actor.permissions) return actor;
+    const staff = await platformRepo.findStaffById(actor.id);
+    const permissions = staff ? await platformRepo.getRolePermissionKeys(staff.roleId) : [];
+    return {
+      id: actor.id,
+      roleKey: actor.roleKey ?? staff?.roleKey ?? 'STAFF',
+      permissions: actor.permissions ?? permissions,
+    };
+  }
+  const staff = await platformRepo.findStaffById(actor);
+  const permissions = staff ? await platformRepo.getRolePermissionKeys(staff.roleId) : [];
+  return {
+    id: actor,
+    roleKey: staff?.roleKey ?? 'STAFF',
+    permissions,
+  };
+}
+
+export async function createStaff(
+  actor: string | StaffActorContext,
+  data: CreateStaffDto,
+  requestId?: string,
+) {
+  const actorCtx = await resolveActorContext(actor);
   const existing = await platformRepo.findStaffByEmail(data.email);
   if (existing) throw AppError.conflict('Staff member with this email already exists');
 
   const role = await platformRepo.findRoleById(data.roleId);
   if (!role || !role.isActive)
     throw AppError.badRequest('Assigned platform role is invalid or inactive');
+
+  // Escalation guard: Only SUPER_ADMIN can assign the SUPER_ADMIN role
+  if (role.key === 'SUPER_ADMIN' && actorCtx.roleKey !== 'SUPER_ADMIN') {
+    throw AppError.forbidden('Only Super Admins can assign the SUPER_ADMIN role');
+  }
 
   const passwordHash = await bcrypt.hash(data.password, 12);
   const created = await platformRepo.createStaff({
@@ -137,7 +174,7 @@ export async function createStaff(actorStaffId: string, data: CreateStaffDto, re
   });
 
   await platformRepo.logPlatformAction({
-    actorStaffId,
+    actorStaffId: actorCtx.id,
     action: 'platform_staff.created',
     targetType: 'staff',
     targetId: created.id,
@@ -170,11 +207,18 @@ export async function createStaff(actorStaffId: string, data: CreateStaffDto, re
 }
 
 export async function updateStaff(
-  actorStaffId: string,
+  actor: string | StaffActorContext,
   staffId: string,
   data: UpdateStaffDto,
   requestId?: string,
 ) {
+  const actorCtx = await resolveActorContext(actor);
+
+  // Self role/status modification guard
+  if (actorCtx.id === staffId && (data.roleId !== undefined || data.status !== undefined)) {
+    throw AppError.badRequest('A staff member cannot change their own role or status');
+  }
+
   const staff = await platformRepo.findStaffById(staffId);
   if (!staff) throw AppError.notFound('Platform staff member not found');
 
@@ -183,13 +227,55 @@ export async function updateStaff(
     if (!role || !role.isActive) {
       throw AppError.badRequest('Assigned platform role is invalid or inactive');
     }
+
+    const currentRoleKey = staff.roleKey;
+    const newRoleKey = role.key;
+
+    // Only SUPER_ADMIN may assign or remove the SUPER_ADMIN role
+    if (
+      (newRoleKey === 'SUPER_ADMIN' || currentRoleKey === 'SUPER_ADMIN') &&
+      actorCtx.roleKey !== 'SUPER_ADMIN'
+    ) {
+      throw AppError.forbidden('Only Super Admins can assign or remove the SUPER_ADMIN role');
+    }
+
+    // Last Super Admin invariant: ensure at least one active SUPER_ADMIN remains
+    if (currentRoleKey === 'SUPER_ADMIN' && newRoleKey !== 'SUPER_ADMIN') {
+      const activeSuperAdminCount = await platformRepo.countActiveSuperAdmins();
+      if (activeSuperAdminCount <= 1) {
+        throw AppError.badRequest('Cannot demote the last remaining active Super Admin');
+      }
+    }
+  }
+
+  if (data.status) {
+    const hasDisablePerm =
+      actorCtx.roleKey === 'SUPER_ADMIN' ||
+      actorCtx.permissions?.includes('*') ||
+      actorCtx.permissions?.includes('platform_staff::disable');
+
+    if (!hasDisablePerm) {
+      throw AppError.forbidden('Status changes require platform_staff::disable permission');
+    }
+
+    if (data.status === 'SUSPENDED' || data.status === 'DEACTIVATED') {
+      if (staff.roleKey === 'SUPER_ADMIN') {
+        if (actorCtx.roleKey !== 'SUPER_ADMIN') {
+          throw AppError.forbidden('Only Super Admins can disable a Super Admin');
+        }
+        const activeSuperAdminCount = await platformRepo.countActiveSuperAdmins();
+        if (activeSuperAdminCount <= 1) {
+          throw AppError.badRequest('Cannot disable the last remaining active Super Admin');
+        }
+      }
+    }
   }
 
   const updated = await platformRepo.updateStaff(staffId, data);
   if (!updated) throw AppError.notFound('Failed to update staff member');
 
   await platformRepo.logPlatformAction({
-    actorStaffId,
+    actorStaffId: actorCtx.id,
     action: 'platform_staff.updated',
     targetType: 'staff',
     targetId: staffId,
@@ -201,24 +287,36 @@ export async function updateStaff(
 }
 
 export async function suspendStaff(
-  actorStaffId: string,
+  actor: string | StaffActorContext,
   staffId: string,
   reason?: string,
   requestId?: string,
 ) {
-  if (actorStaffId === staffId) {
+  const actorCtx = await resolveActorContext(actor);
+
+  if (actorCtx.id === staffId) {
     throw AppError.badRequest('You cannot suspend your own staff account');
   }
 
   const staff = await platformRepo.findStaffById(staffId);
   if (!staff) throw AppError.notFound('Platform staff member not found');
 
+  if (staff.roleKey === 'SUPER_ADMIN') {
+    if (actorCtx.roleKey !== 'SUPER_ADMIN') {
+      throw AppError.forbidden('Only Super Admins can suspend a Super Admin');
+    }
+    const activeSuperAdminCount = await platformRepo.countActiveSuperAdmins();
+    if (activeSuperAdminCount <= 1) {
+      throw AppError.badRequest('Cannot suspend the last remaining active Super Admin');
+    }
+  }
+
   const updated = await platformRepo.updateStaff(staffId, { status: 'SUSPENDED' });
 
   await cache.del(`platform:staff:${staffId}:permissions`);
 
   await platformRepo.logPlatformAction({
-    actorStaffId,
+    actorStaffId: actorCtx.id,
     action: 'platform_staff.suspended',
     targetType: 'staff',
     targetId: staffId,
@@ -459,15 +557,17 @@ export async function listTenantMembers(tenantId: string) {
 }
 
 export async function endSupportSession(
-  staffId: string,
+  actor: string | StaffActorContext,
   sessionId: string,
   outcome?: string,
   requestId?: string,
 ) {
+  const actorCtx = await resolveActorContext(actor);
   const session = await platformRepo.findSupportSessionById(sessionId);
   if (!session) throw AppError.notFound('Support session not found');
 
-  if (session.staffId !== staffId) {
+  const isSuperAdmin = actorCtx.roleKey === 'SUPER_ADMIN';
+  if (session.staffId !== actorCtx.id && !isSuperAdmin) {
     throw AppError.forbidden(
       'Only the initiating staff member or Super Admin may terminate this session',
     );
@@ -476,7 +576,7 @@ export async function endSupportSession(
   const terminated = await platformRepo.terminateSupportSession(sessionId);
 
   await platformRepo.logPlatformAction({
-    actorStaffId: staffId,
+    actorStaffId: actorCtx.id,
     action: 'tenant_support.ended',
     targetType: 'tenant',
     targetId: session.tenantId,

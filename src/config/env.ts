@@ -22,11 +22,16 @@ const schema = z.object({
 
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
+  JWT_PLATFORM_SECRET: z.string().min(32),
   JWT_ACCESS_TTL: z.string().default('15m'),
   JWT_REFRESH_TTL_SECONDS: z.coerce
     .number()
     .int()
     .default(60 * 60 * 24 * 7),
+
+  EXPOSE_DEV_TOKENS: bool.default('false'),
+  BOOTSTRAP_SUPERADMIN_EMAIL: z.string().email().optional(),
+  BOOTSTRAP_SUPERADMIN_PASSWORD: z.string().min(8).optional(),
 
   AWS_REGION: z.string().default('ap-south-1'),
   S3_BUCKET: z.string().min(1),
