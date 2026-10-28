@@ -565,7 +565,8 @@ export async function provisionTenant(
 
   const isDedicated = data.databaseMode === 'dedicated';
   const tenantId = randomUUID();
-  const databaseKey = isDedicated ? `dedicated-${tenantId}` : 'primary';
+  const configuredDatabaseKey = data.databaseConfig?.databaseKey?.trim();
+  const databaseKey = isDedicated ? (configuredDatabaseKey || `dedicated-${tenantId}`) : 'primary';
 
   // 1. Create tenant organization record
   const tenant = await tenantsRepo.createTenant({
@@ -587,7 +588,23 @@ export async function provisionTenant(
   // Automatically provision dedicated database and execute Drizzle migrations
   if (isDedicated) {
     try {
-      await provisionDedicatedDatabase(tenant.id);
+      const dbResult = await provisionDedicatedDatabase(tenant.id, {
+        customDatabaseName: data.databaseConfig?.databaseName,
+        customDatabaseKey: databaseKey,
+        poolLimit: data.databaseConfig?.poolLimit,
+        connectionUrl: data.databaseConfig?.connectionUrl,
+      });
+
+      await tenantsRepo.updateTenant(tenant.id, {
+        databaseKey: dbResult.databaseKey,
+        metadata: {
+          ...(tenant.metadata as Record<string, unknown> | null),
+          databaseName: dbResult.databaseName,
+          poolLimit: dbResult.poolLimit,
+          schemaVersion: dbResult.schemaVersion,
+          dbProvisionedAt: new Date().toISOString(),
+        },
+      });
     } catch (err: unknown) {
       logger.error({ err, tenantId: tenant.id }, 'Failed to provision dedicated database cluster');
       await tenantsRepo.updateTenant(tenant.id, {

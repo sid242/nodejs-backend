@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull } from 'drizzle-orm';
 
-import { db } from '@/config/db.js';
+import { db, type DbExecutor } from '@/config/db';
 import {
   tenantMembers,
   tenants,
@@ -9,10 +9,10 @@ import {
   type PublicTenant,
   type Tenant,
   type TenantMember,
-} from '@/db/schema/index.js';
+} from '@/db/schema';
 
-export async function createTenant(data: NewTenant): Promise<Tenant> {
-  const [record] = await db.insert(tenants).values(data).returning();
+export async function createTenant(data: NewTenant, executor: DbExecutor = db): Promise<Tenant> {
+  const [record] = await executor.insert(tenants).values(data).returning();
   return record!;
 }
 
@@ -33,8 +33,12 @@ export async function findTenantBySlug(slug: string): Promise<Tenant | null> {
   return record ?? null;
 }
 
-export async function updateTenant(id: string, data: Partial<NewTenant>): Promise<Tenant | null> {
-  const [record] = await db.update(tenants).set(data).where(eq(tenants.id, id)).returning();
+export async function updateTenant(
+  id: string,
+  data: Partial<NewTenant>,
+  executor: DbExecutor = db,
+): Promise<Tenant | null> {
+  const [record] = await executor.update(tenants).set(data).where(eq(tenants.id, id)).returning();
   return record ?? null;
 }
 
@@ -72,12 +76,15 @@ export async function findAllActiveTenants(): Promise<PublicTenant[]> {
   return rows as PublicTenant[];
 }
 
-export async function addTenantMember(data: {
-  tenantId: string;
-  userId: string;
-  status?: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
-}): Promise<TenantMember> {
-  const [record] = await db
+export async function addTenantMember(
+  data: {
+    tenantId: string;
+    userId: string;
+    status?: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
+  },
+  executor: DbExecutor = db,
+): Promise<TenantMember> {
+  const [record] = await executor
     .insert(tenantMembers)
     .values({
       tenantId: data.tenantId,

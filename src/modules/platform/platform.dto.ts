@@ -130,6 +130,14 @@ export const provisionTenantDto = z.object({
   country: z.string().trim().max(100).optional(),
   timezone: z.string().trim().default('UTC'),
   databaseMode: z.enum(['shared', 'dedicated']).default('shared'),
+  databaseConfig: z
+    .object({
+      databaseName: z.string().trim().max(63).optional(),
+      poolLimit: z.coerce.number().int().min(1).max(50).default(5).optional(),
+      databaseKey: z.string().trim().max(100).optional(),
+      connectionUrl: z.string().trim().url().or(z.literal('')).optional(),
+    })
+    .optional(),
   notes: z.string().trim().max(500).optional(),
 });
 export type ProvisionTenantDto = z.infer<typeof provisionTenantDto>;

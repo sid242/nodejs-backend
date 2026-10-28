@@ -13,4 +13,7 @@ const client = postgres(env.DATABASE_URL, {
 
 export const db = drizzle({ client });
 export type Database = typeof db;
+export type DatabaseTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type DbExecutor = Database | DatabaseTransaction;
+
 export const closeDb = (): Promise<void> => client.end({ timeout: 5 });

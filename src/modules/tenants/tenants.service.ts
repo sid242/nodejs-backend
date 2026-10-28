@@ -8,9 +8,7 @@ import { env } from '@/config/env.js';
 import {
   appModules,
   tenantMemberRoles,
-  tenantMembers,
   tenantModules,
-  tenants,
   type PublicTenant,
   type PublicTenantBranding,
   type PublicTenantEmailConfig,
@@ -69,28 +67,28 @@ export async function createTenantOrganization(
   let tenantRecord: Tenant;
   try {
     tenantRecord = await db.transaction(async (tx) => {
-      // 1. Create tenant record
-      const [tenant] = await tx
-        .insert(tenants)
-        .values({
+      // 1. Create tenant record via repository
+      const tenant = await tenantsRepo.createTenant(
+        {
           name: data?.name,
           slug: cleanSlug,
           plan: data?.plan ?? 'FREE',
           status: 'ACTIVE',
-        })
-        .returning();
+        },
+        tx,
+      );
 
       if (!tenant) throw AppError.internal('Failed to create tenant organization');
 
-      // 2. Add creator as initial member
-      const [member] = await tx
-        .insert(tenantMembers)
-        .values({
+      // 2. Add creator as initial member via repository
+      const member = await tenantsRepo.addTenantMember(
+        {
           tenantId: tenant.id,
           userId: creatorUserId,
           status: 'ACTIVE',
-        })
-        .returning();
+        },
+        tx,
+      );
 
       if (!member) throw AppError.internal('Failed to assign initial tenant member');
 
@@ -104,15 +102,17 @@ export async function createTenantOrganization(
         ownerRole = refreshed?.find((r) => r?.name === rbacService.SYSTEM_ROLES.OWNER);
       }
 
-      if (ownerRole) {
-        await tx
-          .insert(tenantMemberRoles)
-          .values({
-            memberId: member.id,
-            roleId: ownerRole.id,
-          })
-          .onConflictDoNothing();
+      if (!ownerRole) {
+        throw AppError.internal('Failed to resolve or assign Owner system role for workspace');
       }
+
+      await tx
+        .insert(tenantMemberRoles)
+        .values({
+          memberId: member.id,
+          roleId: ownerRole.id,
+        })
+        .onConflictDoNothing();
 
       // 4. Provision default tenant modules
       const allModules = await tx.select({ id: appModules.id }).from(appModules);
