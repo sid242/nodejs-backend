@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import { requireAuth, requireRole } from '@/middleware/auth.js';
+import { requireAuth } from '@/middleware/auth.js';
 import { requirePermission } from '@/middleware/rbac.js';
 import { requireTenant } from '@/middleware/tenant.js';
 import { validate } from '@/middleware/validate.js';
@@ -11,66 +11,38 @@ import * as dto from './rbac.dto.js';
 const router: Router = Router();
 
 // ==========================================
-// Modules Catalog & Management (Platform-Wide)
+// Modules & Permissions Catalog (Read-Only for Tenant Role Management)
 // ==========================================
-router.get('/modules', requireAuth, controller.listModules);
-
-router.get('/modules/:moduleId', requireAuth, controller.getModule);
-
-router.post(
+router.get(
   '/modules',
   requireAuth,
-  requireRole('ADMIN'),
-  validate({ body: dto.createModuleDto }),
-  controller.createModule,
+  requireTenant,
+  requirePermission('roles:read'),
+  controller.listModules,
 );
 
-router.patch(
+router.get(
   '/modules/:moduleId',
   requireAuth,
-  requireRole('ADMIN'),
-  validate({ body: dto.updateModuleDto }),
-  controller.updateModule,
+  requireTenant,
+  requirePermission('roles:read'),
+  controller.getModule,
 );
 
-router.delete('/modules/:moduleId', requireAuth, requireRole('ADMIN'), controller.deleteModule);
-
-// ==========================================
-// Permissions Catalog & Management (Platform-Wide)
-// ==========================================
-router.get('/permissions', requireAuth, controller.listPermissions);
-
-router.get('/permissions/:permissionId', requireAuth, controller.getPermission);
-
-router.post(
+router.get(
   '/permissions',
   requireAuth,
-  requireRole('ADMIN'),
-  validate({ body: dto.createPermissionDto }),
-  controller.createPermission,
+  requireTenant,
+  requirePermission('roles:read'),
+  controller.listPermissions,
 );
 
-router.post(
-  '/modules/:moduleId/permissions',
-  requireAuth,
-  requireRole('ADMIN'),
-  validate({ body: dto.createPermissionDto }),
-  controller.createPermission,
-);
-
-router.patch(
+router.get(
   '/permissions/:permissionId',
   requireAuth,
-  requireRole('ADMIN'),
-  validate({ body: dto.updatePermissionDto }),
-  controller.updatePermission,
-);
-
-router.delete(
-  '/permissions/:permissionId',
-  requireAuth,
-  requireRole('ADMIN'),
-  controller.deletePermission,
+  requireTenant,
+  requirePermission('roles:read'),
+  controller.getPermission,
 );
 
 // ==========================================

@@ -11,6 +11,10 @@ import {
 import * as controller from './platform.controller.js';
 import * as dto from './platform.dto.js';
 import { PLATFORM_PERMISSIONS } from './platform.permissions.js';
+import * as rbacController from '@/modules/rbac/rbac.controller.js';
+import * as rbacDto from '@/modules/rbac/rbac.dto.js';
+import * as usersController from '@/modules/users/users.controller.js';
+import * as usersDto from '@/modules/users/users.dto.js';
 
 const router: Router = Router();
 
@@ -218,6 +222,80 @@ router.patch(
   requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_MANAGE),
   validate({ body: dto.updatePlatformTenantSubscriptionDto }),
   controller.updateTenantSubscription,
+);
+
+// ==========================================
+// 6. Global User Administration
+// ==========================================
+router.get(
+  '/users',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.USERS_READ),
+  validate({ query: usersDto.listUsersQueryDto }),
+  usersController.listUsers,
+);
+
+router.get(
+  '/users/:userId',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.USERS_READ),
+  validate({ params: usersDto.userIdParamDto }),
+  usersController.getUser,
+);
+
+router.patch(
+  '/users/:userId/status',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.USERS_SUSPEND),
+  validate({ params: usersDto.userIdParamDto, body: usersDto.updateUserStatusDto }),
+  usersController.updateUserStatus,
+);
+
+// ==========================================
+// 7. System RBAC Catalog CRUD
+// ==========================================
+router.post(
+  '/rbac/modules',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.RBAC_CATALOG_MANAGE),
+  validate({ body: rbacDto.createModuleDto }),
+  rbacController.createModule,
+);
+
+router.patch(
+  '/rbac/modules/:moduleId',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.RBAC_CATALOG_MANAGE),
+  validate({ body: rbacDto.updateModuleDto }),
+  rbacController.updateModule,
+);
+
+router.delete(
+  '/rbac/modules/:moduleId',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.RBAC_CATALOG_MANAGE),
+  rbacController.deleteModule,
+);
+
+router.post(
+  '/rbac/permissions',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.RBAC_CATALOG_MANAGE),
+  validate({ body: rbacDto.createPermissionDto }),
+  rbacController.createPermission,
+);
+
+router.post(
+  '/rbac/modules/:moduleId/permissions',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.RBAC_CATALOG_MANAGE),
+  validate({ body: rbacDto.createPermissionDto }),
+  rbacController.createPermission,
+);
+
+router.patch(
+  '/rbac/permissions/:permissionId',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.RBAC_CATALOG_MANAGE),
+  validate({ body: rbacDto.updatePermissionDto }),
+  rbacController.updatePermission,
+);
+
+router.delete(
+  '/rbac/permissions/:permissionId',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.RBAC_CATALOG_MANAGE),
+  rbacController.deletePermission,
 );
 
 export default router;

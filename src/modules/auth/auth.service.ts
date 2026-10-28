@@ -93,7 +93,6 @@ export async function login({
     id: record.id,
     email: record.email,
     name: record.name,
-    role: record.role,
     status: record.status,
     emailVerifiedAt: record.emailVerifiedAt,
     phoneNumber: record.phoneNumber,
@@ -232,7 +231,7 @@ export interface ImpersonationResult {
 }
 
 export async function impersonateUser(
-  adminUser: { id: string; role: string },
+  adminUser: { id: string },
   data: ImpersonateUserDto,
   clientMeta?: { ip?: string; userAgent?: string; tenantId?: string },
 ): Promise<ImpersonationResult> {
@@ -251,23 +250,18 @@ export async function impersonateUser(
     );
   }
 
-  // Prevent privilege escalation: Admin cannot impersonate another Admin
-  if (target.role === 'ADMIN' && adminUser.role !== 'SUPER_ADMIN') {
-    throw AppError.forbidden(AUTH_MESSAGES.CANNOT_IMPERSONATE_ADMIN);
-  }
-
   const sessionId = randomUUID();
   const durationMinutes = data.durationMinutes ?? 30;
 
   const impersonatorClaim: ImpersonatorClaim = {
     userId: adminUser.id,
-    role: adminUser.role,
+    role: 'ADMIN',
     reason: data.reason,
     sessionId,
   };
 
   const tokenResult = await issueImpersonationToken(
-    { id: target.id, role: target.role },
+    { id: target.id },
     impersonatorClaim,
     durationMinutes,
   );
@@ -283,7 +277,6 @@ export async function impersonateUser(
     userAgent: clientMeta?.userAgent,
     metadata: {
       targetEmail: target.email,
-      targetRole: target.role,
       reason: data.reason,
       sessionId,
       durationMinutes,
@@ -294,7 +287,6 @@ export async function impersonateUser(
     id: target.id,
     email: target.email,
     name: target.name,
-    role: target.role,
     status: target.status,
     emailVerifiedAt: target.emailVerifiedAt,
     phoneNumber: target.phoneNumber,

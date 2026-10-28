@@ -25,18 +25,12 @@ export interface DownloadUrlResult {
 async function getOwned(
   userId: string,
   id: string,
-  role?: string,
   tenantId?: string,
 ): Promise<FileRecord> {
   const file = await fileRepo.findById(id, tenantId);
   // 404 (not 403) so we don't leak the existence of other users'/tenants' files.
   if (!file) {
     throw AppError.notFound('File not found');
-  }
-
-  // Global ADMIN can access any file across the platform
-  if (role === 'ADMIN') {
-    return file;
   }
 
   // If the file belongs to a tenant workspace
@@ -92,7 +86,7 @@ export async function confirmUpload(
   id: string,
   tenantId?: string,
 ): Promise<FileRecord> {
-  const file = await getOwned(userId, id, undefined, tenantId);
+  const file = await getOwned(userId, id, tenantId);
   if (file.status === 'UPLOADED') return file;
 
   const head = await headObject(file.key).catch(() => null);
@@ -130,11 +124,10 @@ export async function confirmUpload(
 export async function getDownloadUrl(
   userId: string,
   id: string,
-  role?: string,
   tenantId?: string,
   disposition: 'attachment' | 'inline' = 'attachment',
 ): Promise<DownloadUrlResult> {
-  const file = await getOwned(userId, id, role, tenantId);
+  const file = await getOwned(userId, id, tenantId);
   if (file.status !== 'UPLOADED') throw AppError.badRequest('File not uploaded yet');
   return {
     url: await createDownloadUrl(file.key, 300, {
@@ -147,14 +140,10 @@ export async function getDownloadUrl(
 
 export const listFiles = (
   userId: string,
-  role?: string,
   tenantId?: string,
 ): Promise<FileRecord[]> => {
   if (tenantId) {
     return fileRepo.findByTenantId(tenantId);
-  }
-  if (role === 'ADMIN') {
-    return fileRepo.findAll();
   }
   return fileRepo.findByOwnerId(userId);
 };
@@ -162,10 +151,9 @@ export const listFiles = (
 export async function deleteFile(
   userId: string,
   id: string,
-  role?: string,
   tenantId?: string,
 ): Promise<void> {
-  const file = await getOwned(userId, id, role, tenantId);
+  const file = await getOwned(userId, id, tenantId);
   // Idempotent and recoverable deletion: tolerates missing storage objects and AWS timeouts
   try {
     await deleteObject(file.key);

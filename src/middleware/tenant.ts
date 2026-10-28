@@ -93,7 +93,6 @@ export async function resolveTenantContext(
             };
             req.user = {
               id: targetUser.id,
-              role: targetUser.role,
               status: targetUser.status,
             };
           }

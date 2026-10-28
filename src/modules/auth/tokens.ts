@@ -16,12 +16,10 @@ const refreshKey = (userId: string, jti: string): string =>
 
 export interface TokenUser {
   id: string;
-  role: string;
 }
 
 export interface AccessTokenPayload extends JwtPayload {
   sub?: string;
-  role?: string;
   typ?: string;
   aud?: string | string[];
   impersonator?: ImpersonatorClaim;
@@ -36,7 +34,7 @@ export const verifyAccessToken = (token: string): AccessTokenPayload =>
   jwt.verify(token, env.JWT_ACCESS_SECRET, { audience: 'customer-api' }) as AccessTokenPayload;
 
 const signAccessToken = (user: TokenUser): string =>
-  jwt.sign({ role: user.role, typ: 'USER' }, env.JWT_ACCESS_SECRET, {
+  jwt.sign({ typ: 'USER' }, env.JWT_ACCESS_SECRET, {
     subject: user.id,
     audience: 'customer-api',
     expiresIn: env.JWT_ACCESS_TTL as jwt.SignOptions['expiresIn'],
@@ -162,7 +160,6 @@ export async function issueImpersonationToken(
   const ttlSeconds = durationMinutes * 60;
   const accessToken = jwt.sign(
     {
-      role: targetUser.role,
       typ: 'USER',
       impersonator,
     },

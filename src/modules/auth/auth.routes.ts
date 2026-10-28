@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import { optionalAuth, requireAuth, requireRole } from '@/middleware/auth.js';
+import { optionalAuth, requireAuth } from '@/middleware/auth.js';
 import { blockIfImpersonating } from '@/middleware/impersonate-guard.js';
 import { authLimiter } from '@/middleware/rate-limit.js';
 import { validate } from '@/middleware/validate.js';
@@ -99,7 +99,6 @@ router.post(
   '/impersonate',
   requireAuth,
   blockIfImpersonating('Impersonation'),
-  requireRole('ADMIN'),
   validate({ body: impersonateUserDto }),
   controller.impersonate,
 );

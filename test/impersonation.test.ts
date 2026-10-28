@@ -19,7 +19,7 @@ after(async () => {
 });
 
 test('issueImpersonationToken issues short-lived token with dual-identity claims', async () => {
-  const targetUser = { id: randomUUID(), role: 'USER' };
+  const targetUser = { id: randomUUID() };
   const adminId = randomUUID();
   const sessionId = randomUUID();
   const reason = 'Support ticket #8472';
@@ -41,7 +41,7 @@ test('issueImpersonationToken issues short-lived token with dual-identity claims
 
   const payload = verifyAccessToken(result.accessToken);
   assert.equal(payload.sub, targetUser.id);
-  assert.equal(payload.role, 'USER');
+  assert.equal(payload.typ, 'USER');
   assert.ok((payload as any).impersonator);
   assert.equal((payload as any).impersonator.userId, adminId);
   assert.equal((payload as any).impersonator.role, 'ADMIN');
@@ -50,7 +50,7 @@ test('issueImpersonationToken issues short-lived token with dual-identity claims
 });
 
 test('requireAuth middleware recognizes and extracts impersonator context', async () => {
-  const targetUser = { id: randomUUID(), role: 'USER' };
+  const targetUser = { id: randomUUID() };
   const adminId = randomUUID();
   const sessionId = randomUUID();
   const reason = 'Debugging patient record';
@@ -78,7 +78,6 @@ test('requireAuth middleware recognizes and extracts impersonator context', asyn
 
   assert.ok(calledNext);
   assert.equal(req.user.id, targetUser.id);
-  assert.equal(req.user.role, 'USER');
   assert.equal(req.isImpersonated, true);
   assert.ok(req.impersonator);
   assert.equal(req.impersonator.userId, adminId);

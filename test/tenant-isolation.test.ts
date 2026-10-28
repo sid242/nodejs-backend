@@ -58,7 +58,7 @@ test('Multi-Tenant Edge Case 1: Unauthenticated and zero-membership users withou
 
   try {
     const reqAuth: any = {
-      user: { id: userNoTenants.id, role: 'USER', status: 'ACTIVE' },
+      user: { id: userNoTenants.id, status: 'ACTIVE' },
       headers: {},
       params: {},
       query: {},

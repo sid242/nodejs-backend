@@ -123,7 +123,6 @@ test('Phase 1: S5 - Token separation: Customer token rejected by requirePlatform
   const customerUser = {
     id: '11111111-1111-1111-1111-111111111111',
     email: 'customer@example.com',
-    role: 'USER' as const,
     name: 'Customer User',
     status: 'ACTIVE' as const,
     emailVerifiedAt: new Date(),
@@ -288,7 +287,7 @@ test('Phase 1: S5 - Support session header is rejected if caller is not the sess
       'x-tenant-id': tenant.id,
       'x-support-session-id': session.id,
     },
-    user: { id: '44444444-4444-4444-4444-444444444444', role: 'USER' },
+    user: { id: '44444444-4444-4444-4444-444444444444' },
     staff: undefined, // Not staff
   };
 

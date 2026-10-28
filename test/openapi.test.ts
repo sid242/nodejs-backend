@@ -30,10 +30,9 @@ test('OpenAPI spec contains all core API endpoints and tags', () => {
 
   // User routes
   assert.ok(paths.includes('/api/v1/users/me'));
-  assert.ok(paths.includes('/api/v1/users'));
-  assert.ok(paths.includes('/api/v1/users/{userId}'));
-  assert.ok(paths.includes('/api/v1/users/{userId}/role'));
-  assert.ok(paths.includes('/api/v1/users/{userId}/status'));
+  assert.ok(paths.includes('/api/v1/platform/users'));
+  assert.ok(paths.includes('/api/v1/platform/users/{userId}'));
+  assert.ok(paths.includes('/api/v1/platform/users/{userId}/status'));
 
   // Files routes
   assert.ok(paths.includes('/api/v1/files'));

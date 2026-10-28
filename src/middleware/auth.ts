@@ -1,4 +1,4 @@
-import type { NextFunction, Request, RequestHandler, Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 
 import { ACCESS_TOKEN_COOKIE, AUTH_HEADERS, AUTH_MESSAGES } from '@/constants/index.js';
 import { AppError } from '@/lib/errors.js';
@@ -21,7 +21,7 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     if (payload?.typ !== 'USER') {
       return next(AppError.unauthorized('Invalid access token type'));
     }
-    req.user = { id: payload.sub as string, role: payload?.role ?? 'USER' };
+    req.user = { id: payload.sub as string };
 
     if (payload?.impersonator) {
       const imp = payload.impersonator;
@@ -56,7 +56,7 @@ export async function optionalAuth(
     if (token) {
       const payload = verifyAccessToken(token);
       if (payload?.typ === 'USER') {
-        req.user = { id: payload.sub as string, role: payload?.role ?? 'USER' };
+        req.user = { id: payload.sub as string };
 
         if (payload?.impersonator) {
           const imp = payload.impersonator;
@@ -73,10 +73,3 @@ export async function optionalAuth(
   }
   next();
 }
-
-export const requireRole =
-  (...roles: string[]): RequestHandler =>
-  (req: Request, _res: Response, next: NextFunction): void => {
-    if (!req.user || !roles.includes(req.user.role)) throw AppError.forbidden();
-    next();
-  };

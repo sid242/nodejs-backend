@@ -517,7 +517,7 @@ export async function startSupportSession(
         sessionId: session.id,
       };
       const tokenResult = await issueImpersonationToken(
-        { id: targetUser.id, role: targetUser.role },
+        { id: targetUser.id },
         impersonatorClaim,
         data.durationMinutes,
       );

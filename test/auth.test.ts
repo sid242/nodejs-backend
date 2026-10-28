@@ -6,7 +6,7 @@ const TEST_ACCESS_SECRET = 'a'.repeat(32);
 const TEST_REFRESH_SECRET = 'b'.repeat(32);
 
 test('JWT access token signing and verification', () => {
-  const payload = { role: 'USER' };
+  const payload = { typ: 'USER' };
   const token = jwt.sign(payload, TEST_ACCESS_SECRET, {
     subject: 'user-123',
     expiresIn: '15m',
@@ -14,11 +14,11 @@ test('JWT access token signing and verification', () => {
 
   const verified = jwt.verify(token, TEST_ACCESS_SECRET) as jwt.JwtPayload;
   assert.equal(verified.sub, 'user-123');
-  assert.equal(verified.role, 'USER');
+  assert.equal(verified.typ, 'USER');
 });
 
 test('JWT expired token throws TokenExpiredError', async () => {
-  const token = jwt.sign({ role: 'USER' }, TEST_ACCESS_SECRET, {
+  const token = jwt.sign({ typ: 'USER' }, TEST_ACCESS_SECRET, {
     subject: 'user-123',
     expiresIn: '1ms',
   });
@@ -213,7 +213,7 @@ test('changePasswordDto validates currentPassword and newPassword rules', async 
 test('issueTokens generates valid access and refresh tokens and stores in Redis', async () => {
   const { issueTokens, verifyAccessToken, consumeRefreshToken } =
     await import('../src/modules/auth/tokens.js');
-  const user = { id: 'test-usr-1', role: 'ADMIN' };
+  const user = { id: 'test-usr-1' };
   const tokens = await issueTokens(user);
 
   assert.ok(tokens.accessToken);
@@ -221,7 +221,6 @@ test('issueTokens generates valid access and refresh tokens and stores in Redis'
 
   const payload = verifyAccessToken(tokens.accessToken);
   assert.equal(payload.sub, user.id);
-  assert.equal(payload.role, user.role);
 
   // Consume (single-use rotation)
   const consumedUserId = await consumeRefreshToken(tokens.refreshToken);
@@ -237,7 +236,7 @@ test('issueTokens generates valid access and refresh tokens and stores in Redis'
 test('revokeRefreshToken explicitly revokes refresh token from Redis', async () => {
   const { issueTokens, revokeRefreshToken, consumeRefreshToken } =
     await import('../src/modules/auth/tokens.js');
-  const user = { id: 'test-usr-2', role: 'USER' };
+  const user = { id: 'test-usr-2' };
   const tokens = await issueTokens(user);
 
   await revokeRefreshToken(tokens.refreshToken);
@@ -251,7 +250,7 @@ test('revokeRefreshToken explicitly revokes refresh token from Redis', async () 
 test('revokeAllUserTokens revokes all active refresh tokens for that user', async () => {
   const { issueTokens, revokeAllUserTokens, consumeRefreshToken } =
     await import('../src/modules/auth/tokens.js');
-  const user = { id: 'test-usr-3', role: 'USER' };
+  const user = { id: 'test-usr-3' };
   const t1 = await issueTokens(user);
   const t2 = await issueTokens(user);
 

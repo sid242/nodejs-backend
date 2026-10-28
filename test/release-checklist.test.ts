@@ -60,7 +60,7 @@ test('Release Checklist 1 & 2: Cross-Tenant Isolation & Header Tampering Prevent
 
   try {
     const req: any = {
-      user: { id: user.id, role: 'USER', status: 'ACTIVE' },
+      user: { id: user.id, status: 'ACTIVE' },
       headers: { 'x-tenant-id': tenantB.id },
       params: {},
       query: {},
@@ -93,7 +93,7 @@ test('Release Checklist 1 & 2: Cross-Tenant Isolation & Header Tampering Prevent
 
 test('Release Checklist 3: Platform Privilege Separation (Tenant Admin cannot access Platform API)', async () => {
   const req: any = {
-    user: { id: randomUUID(), role: 'USER', status: 'ACTIVE' },
+    user: { id: randomUUID(), status: 'ACTIVE' },
     headers: {},
     cookies: {},
   };
@@ -110,7 +110,7 @@ test('Release Checklist 3: Platform Privilege Separation (Tenant Admin cannot ac
 
   // Test that a customer user access token signed with JWT_ACCESS_SECRET is rejected by platform auth
   const customerUserJwt = jwt.sign(
-    { sub: randomUUID(), email: 'user@tenant.com', role: 'USER' },
+    { sub: randomUUID(), email: 'user@tenant.com', typ: 'USER' },
     env.JWT_ACCESS_SECRET,
     { expiresIn: '15m' },
   );
@@ -383,7 +383,7 @@ test('Release Checklist 10: Suspended Tenants Lose Access', async () => {
 
   try {
     const req: any = {
-      user: { id: user.id, role: 'USER', status: 'ACTIVE' },
+      user: { id: user.id, status: 'ACTIVE' },
       headers: { 'x-tenant-id': tenant.id },
       params: {},
       query: {},

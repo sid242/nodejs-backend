@@ -33,22 +33,6 @@ export async function getUserById(id: string): Promise<PublicUser> {
   return user;
 }
 
-export async function updateUserRole(
-  targetUserId: string,
-  role: 'USER' | 'ADMIN',
-): Promise<PublicUser> {
-  const updated = await userRepo.updateRole(targetUserId, role);
-  if (!updated) throw AppError.notFound('User not found');
-
-  // Invalidate cache and revoke active refresh tokens so next refresh cycle issues updated role claim
-  await Promise.all([
-    cache.del(`user:${targetUserId}`),
-    cache.delByPrefix('users:list:'),
-    revokeAllUserTokens(targetUserId),
-  ]);
-  return updated;
-}
-
 export async function updateUserStatus(
   targetUserId: string,
   status: 'PENDING_VERIFICATION' | 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED',

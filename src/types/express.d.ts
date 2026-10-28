@@ -2,7 +2,6 @@ import 'express';
 
 export interface AuthenticatedUser {
   id: string;
-  role: 'USER' | 'ADMIN' | string;
   status?: string;
 }
 

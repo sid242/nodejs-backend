@@ -14,14 +14,26 @@ export const PLATFORM_PERMISSIONS = {
   ROLES_MANAGE: 'platform_roles::manage',
   PERMISSIONS_READ: 'platform_permissions::read',
 
+  // Platform User Administration
+  USERS_READ: 'platform_users::read',
+  USERS_UPDATE: 'platform_users::update',
+  USERS_SUSPEND: 'platform_users::suspend',
+
+  // RBAC Catalog Management
+  RBAC_CATALOG_MANAGE: 'rbac_catalog::manage',
+
   // Tenant Lifecycle Oversight
   TENANTS_READ: 'tenants::read',
+  TENANTS_CREATE: 'tenants::create',
   TENANTS_MANAGE: 'tenants::manage',
   TENANTS_SUSPEND: 'tenants::suspend',
 
   // Audited Customer Support Delegation
   SUPPORT_START: 'tenant_support::start',
   SUPPORT_END: 'tenant_support::end',
+  SUPPORT_WRITE: 'tenant_support::write',
+  SUPPORT_IMPERSONATE: 'tenant_support::impersonate',
+  SUPPORT_END_ANY: 'tenant_support::end_any',
 
   // Billing & Subscriptions
   BILLING_READ: 'billing::read',
@@ -158,6 +170,62 @@ export const PLATFORM_PERMISSION_CATALOGUE: PlatformPermissionDefinition[] = [
     resource: 'system_health',
     action: 'read',
   },
+  {
+    key: PLATFORM_PERMISSIONS.USERS_READ,
+    name: 'View Global Users',
+    description: 'Inspect global user identities, verification statuses, and activity',
+    resource: 'platform_users',
+    action: 'read',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.USERS_UPDATE,
+    name: 'Update Global Users',
+    description: 'Modify user profiles and metadata',
+    resource: 'platform_users',
+    action: 'update',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.USERS_SUSPEND,
+    name: 'Suspend Global Users',
+    description: 'Suspend or deactivate global customer user accounts',
+    resource: 'platform_users',
+    action: 'suspend',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.RBAC_CATALOG_MANAGE,
+    name: 'Manage System RBAC Catalog',
+    description: 'Create, update, or remove system domain modules and default permissions',
+    resource: 'rbac_catalog',
+    action: 'manage',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.TENANTS_CREATE,
+    name: 'Provision Tenants',
+    description: 'Create and provision new tenant workspaces',
+    resource: 'tenants',
+    action: 'create',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.SUPPORT_WRITE,
+    name: 'Full Support Access',
+    description: 'Execute write operations during an active tenant support delegation session',
+    resource: 'tenant_support',
+    action: 'write',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.SUPPORT_IMPERSONATE,
+    name: 'Impersonate Tenant Member',
+    description: 'Act as a specific tenant member within an audited support session',
+    resource: 'tenant_support',
+    action: 'impersonate',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.SUPPORT_END_ANY,
+    name: 'End Any Support Session',
+    description: 'Terminate any active support session across the platform',
+    resource: 'tenant_support',
+    action: 'end_any',
+  },
 ];
 
 export const SYSTEM_PLATFORM_ROLES = {
@@ -174,8 +242,10 @@ export const SYSTEM_PLATFORM_ROLES = {
       'View tenant metadata, manage tickets, initiate controlled tenant support sessions',
     permissions: [
       PLATFORM_PERMISSIONS.TENANTS_READ,
+      PLATFORM_PERMISSIONS.USERS_READ,
       PLATFORM_PERMISSIONS.SUPPORT_START,
       PLATFORM_PERMISSIONS.SUPPORT_END,
+      PLATFORM_PERMISSIONS.SUPPORT_WRITE,
       PLATFORM_PERMISSIONS.AUDIT_READ,
       PLATFORM_PERMISSIONS.HEALTH_READ,
     ],

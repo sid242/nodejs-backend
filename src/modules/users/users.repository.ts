@@ -39,11 +39,6 @@ export async function findPaginated({
   return { items: items as PublicUser[], total, page, limit };
 }
 
-export async function updateRole(id: string, role: 'USER' | 'ADMIN'): Promise<PublicUser | null> {
-  const [user] = await db.update(users).set({ role }).where(eq(users.id, id)).returning(publicUser);
-  return (user as PublicUser) ?? null;
-}
-
 export async function updateStatus(
   id: string,
   status: 'PENDING_VERIFICATION' | 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED',

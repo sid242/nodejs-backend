@@ -103,7 +103,7 @@ test('requirePermission middleware blocks unauthorized user with 403 Forbidden',
 test('requireTenantRole blocks user without matching tenant role', () => {
   const req: any = {
     membership: { roles: ['VIEWER'] },
-    user: { role: 'USER' },
+    user: { id: 'usr-1' },
   };
   let caughtError: any = null;
   const next = (err?: any) => {
@@ -121,7 +121,7 @@ test('requireTenantRole blocks user without matching tenant role', () => {
 test('requireTenantRole allows user with matching tenant role', () => {
   const req: any = {
     membership: { roles: ['OWNER'] },
-    user: { role: 'USER' },
+    user: { id: 'usr-1' },
   };
   let called = false;
   const next = (err?: any) => {

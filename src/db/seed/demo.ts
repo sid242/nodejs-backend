@@ -293,18 +293,16 @@ export async function seedDemo(): Promise<void> {
       email: superAdminEmail,
       passwordHash: adminPasswordHash,
       name: 'Siddharth SuperAdmin',
-      role: 'USER',
       status: 'ACTIVE',
       emailVerifiedAt: new Date(),
     });
-    logger.info('   ✔ Provisioned user account for demo platform operator (role: USER).');
+    logger.info('   ✔ Provisioned user account for demo platform operator.');
   } else {
     await db
       .update(users)
       .set({
         passwordHash: adminPasswordHash,
         status: 'ACTIVE',
-        role: 'USER',
         emailVerifiedAt: existingPlatformAdminUser.emailVerifiedAt ?? new Date(),
       })
       .where(eq(users.id, existingPlatformAdminUser.id));
@@ -392,7 +390,6 @@ export async function seedDemo(): Promise<void> {
             email: memberDef.email,
             passwordHash,
             name: memberDef.name,
-            role: 'USER',
             status: 'ACTIVE',
             emailVerifiedAt: new Date(),
           })
@@ -406,7 +403,6 @@ export async function seedDemo(): Promise<void> {
             name: memberDef.name,
             passwordHash,
             status: 'ACTIVE',
-            role: 'USER',
             emailVerifiedAt: userRecord.emailVerifiedAt ?? new Date(),
           })
           .where(eq(users.id, userRecord.id));

@@ -5,7 +5,6 @@ import { bearerAuth, errorResponse, successResponse } from '@/docs/helpers.js';
 import {
   listUsersQueryDto,
   updateMeDto,
-  updateUserRoleDto,
   updateUserStatusDto,
 } from '@/modules/users/users.dto.js';
 
@@ -13,7 +12,6 @@ export const UserSchema = z.object({
   id: z.string().uuid().openapi({ example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' }),
   email: z.string().email().openapi({ example: 'jane.doe@example.com' }),
   name: z.string().openapi({ example: 'Jane Doe' }),
-  role: z.enum(['USER', 'ADMIN']).openapi({ example: 'USER' }),
   status: z
     .enum(['PENDING_VERIFICATION', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED'])
     .openapi({ example: 'ACTIVE' }),
@@ -28,7 +26,6 @@ export function registerUsersDocs(registry: OpenAPIRegistry): { UserSchema: type
   registry.register('User', UserSchema);
 
   const UpdateMeInput = registry.register('UpdateMeInput', updateMeDto);
-  const UpdateUserRoleInput = registry.register('UpdateUserRoleInput', updateUserRoleDto);
   const UpdateUserStatusInput = registry.register('UpdateUserStatusInput', updateUserStatusDto);
 
   const PaginatedUsersData = registry.register(
@@ -81,10 +78,10 @@ export function registerUsersDocs(registry: OpenAPIRegistry): { UserSchema: type
 
   registry.registerPath({
     method: 'get',
-    path: '/api/v1/users',
-    summary: 'List users (Admin only)',
-    description: 'Returns paginated list of all users. Requires ADMIN role.',
-    tags: ['Users'],
+    path: '/api/v1/platform/users',
+    summary: 'List users (Platform Staff)',
+    description: 'Returns paginated list of all users. Requires platform_users::read permission.',
+    tags: ['Platform Staff'],
     security: [{ [bearerAuth.name]: [] }],
     request: {
       query: listUsersQueryDto,
@@ -92,49 +89,31 @@ export function registerUsersDocs(registry: OpenAPIRegistry): { UserSchema: type
     responses: {
       200: successResponse(PaginatedUsersData, 'Paginated list of users'),
       401: errorResponse('Unauthorized'),
-      403: errorResponse('Forbidden - Admin access required'),
+      403: errorResponse('Forbidden - Platform permission required'),
     },
   });
 
   registry.registerPath({
     method: 'get',
-    path: '/api/v1/users/{userId}',
-    summary: 'Get user details by ID (Admin only)',
-    description: 'Returns full profile of specified user. Requires ADMIN role.',
-    tags: ['Users'],
+    path: '/api/v1/platform/users/{userId}',
+    summary: 'Get user details by ID (Platform Staff)',
+    description: 'Returns full profile of specified user. Requires platform_users::read permission.',
+    tags: ['Platform Staff'],
     security: [{ [bearerAuth.name]: [] }],
     responses: {
       200: successResponse(UserSchema, 'User profile details'),
       401: errorResponse('Unauthorized'),
-      403: errorResponse('Forbidden - Admin access required'),
+      403: errorResponse('Forbidden - Platform permission required'),
       404: errorResponse('User not found'),
     },
   });
 
   registry.registerPath({
     method: 'patch',
-    path: '/api/v1/users/{userId}/role',
-    summary: 'Update user system role (Admin only)',
-    description: 'Elevates or revokes global system admin privileges. Requires ADMIN role.',
-    tags: ['Users'],
-    security: [{ [bearerAuth.name]: [] }],
-    request: {
-      body: { content: { 'application/json': { schema: UpdateUserRoleInput } } },
-    },
-    responses: {
-      200: successResponse(UserSchema, 'User role updated'),
-      401: errorResponse('Unauthorized'),
-      403: errorResponse('Forbidden - Admin access required'),
-      404: errorResponse('User not found'),
-    },
-  });
-
-  registry.registerPath({
-    method: 'patch',
-    path: '/api/v1/users/{userId}/status',
-    summary: 'Update user account status (Admin only)',
-    description: 'Suspends, activates, or deactivates user account. Requires ADMIN role.',
-    tags: ['Users'],
+    path: '/api/v1/platform/users/{userId}/status',
+    summary: 'Update user account status (Platform Staff)',
+    description: 'Suspends, activates, or deactivates user account. Requires platform_users::suspend permission.',
+    tags: ['Platform Staff'],
     security: [{ [bearerAuth.name]: [] }],
     request: {
       body: { content: { 'application/json': { schema: UpdateUserStatusInput } } },
@@ -142,7 +121,7 @@ export function registerUsersDocs(registry: OpenAPIRegistry): { UserSchema: type
     responses: {
       200: successResponse(UserSchema, 'User status updated'),
       401: errorResponse('Unauthorized'),
-      403: errorResponse('Forbidden - Admin access required'),
+      403: errorResponse('Forbidden - Platform permission required'),
       404: errorResponse('User not found'),
     },
   });

@@ -23,7 +23,6 @@ async function consumeRateLimit(key: string, limit: number, windowMs: number): P
 
 export interface SocketUser {
   id: string;
-  role: string;
 }
 
 export interface SocketManager {
@@ -73,7 +72,7 @@ export function initSocket(httpServer: HttpServer): SocketManager {
         60_000,
       );
       if (!allowed) throw new Error('rate_limited');
-      socket.data.user = { id: payload.sub as string, role: payload?.role ?? 'USER' };
+      socket.data.user = { id: payload.sub as string };
       next();
     })().catch(() => next(new Error('unauthorized')));
   });
@@ -116,14 +115,10 @@ export function initSocket(httpServer: HttpServer): SocketManager {
 
     /**
      * Room authorization guard:
-     * - Admin rooms ('admin:*') require ADMIN role.
      * - Private user rooms ('user:*') require matching user ID.
      * - Public rooms ('public:*' or generic IDs) can be joined by authenticated users.
      */
     async function authorizeRoomAccess(u: SocketUser, roomId: string): Promise<boolean> {
-      if (roomId.startsWith('admin:') && u.role !== 'ADMIN') {
-        return false;
-      }
       if (roomId.startsWith('user:') && roomId !== `user:${u.id}`) {
         return false;
       }

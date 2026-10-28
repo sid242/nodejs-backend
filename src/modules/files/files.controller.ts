@@ -6,7 +6,7 @@ import { AppResponse } from '@/lib/responses.js';
 import * as service from '@/modules/files/files.service.js';
 
 export const listFiles = asyncHandler(async (req: Request, res: Response) => {
-  const files = await service.listFiles(req.user!.id, req.user?.role, req.tenant?.id);
+  const files = await service.listFiles(req.user!.id, req.tenant?.id);
   AppResponse.ok(files).send(res);
 });
 
@@ -25,7 +25,6 @@ export const getDownloadUrl = asyncHandler(async (req: Request, res: Response) =
   const result = await service.getDownloadUrl(
     req.user!.id,
     (req.valid?.params?.id ?? req.params.id) as string,
-    req.user?.role,
     req.tenant?.id,
     disposition,
   );
@@ -33,7 +32,7 @@ export const getDownloadUrl = asyncHandler(async (req: Request, res: Response) =
 });
 
 export const deleteFile = asyncHandler(async (req: Request, res: Response) => {
-  await service.deleteFile(req.user!.id, req.valid?.params.id, req.user?.role, req.tenant?.id);
+  await service.deleteFile(req.user!.id, req.valid?.params.id, req.tenant?.id);
   res.status(204).end();
 });
 

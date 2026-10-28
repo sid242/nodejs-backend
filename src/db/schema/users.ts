@@ -1,6 +1,6 @@
 import { index, integer, json, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
-import { roleEnum, userStatusEnum } from './enums';
+import { userStatusEnum } from './enums.js';
 
 export const users = pgTable(
   'User',
@@ -9,7 +9,6 @@ export const users = pgTable(
     email: text('email').notNull().unique(),
     passwordHash: text('passwordHash').notNull(),
     name: text('name').notNull(),
-    role: roleEnum('role').notNull().default('USER'),
     status: userStatusEnum('status').notNull().default('PENDING_VERIFICATION'),
 
     // Verification details
@@ -51,7 +50,6 @@ export const publicUser = {
   id: users.id,
   email: users.email,
   name: users.name,
-  role: users.role,
   status: users.status,
   emailVerifiedAt: users.emailVerifiedAt,
   phoneNumber: users.phoneNumber,
@@ -64,7 +62,6 @@ export type PublicUser = {
   id: string;
   email: string;
   name: string;
-  role: 'USER' | 'ADMIN';
   status: 'PENDING_VERIFICATION' | 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
   emailVerifiedAt: Date | null;
   phoneNumber?: string | null;

@@ -24,11 +24,6 @@ export const getUser = asyncHandler(async (req: Request, res: Response) => {
   AppResponse.ok(user).send(res);
 });
 
-export const updateUserRole = asyncHandler(async (req: Request, res: Response) => {
-  const user = await service.updateUserRole(String(req.params.userId), req.valid?.body.role);
-  AppResponse.ok(user, 'User role updated successfully').send(res);
-});
-
 export const updateUserStatus = asyncHandler(async (req: Request, res: Response) => {
   const user = await service.updateUserStatus(String(req.params.userId), req.valid?.body.status);
   AppResponse.ok(user, 'User status updated successfully').send(res);
