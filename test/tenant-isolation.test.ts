@@ -4,7 +4,8 @@ import { eq, inArray } from 'drizzle-orm';
 
 import { closeDb, db } from '../src/config/db';
 import { closeRedisClients } from '../src/config/redis';
-import { tenantMembers, tenants, users } from '../src/db/schema/index';
+import { files, tenantMembers, tenants, users } from '../src/db/schema/index';
+import { withTenantTransaction } from '../src/db/rls';
 import { AppError } from '../src/lib/errors';
 import { requireTenant, resolveTenantContext } from '../src/middleware/tenant';
 import { tenantsRepo } from '../src/modules/tenants/tenants.repository';
@@ -361,5 +362,90 @@ test('Multi-Tenant Edge Case 6: User attempting to access a tenant they do not b
   } finally {
     await db.delete(tenants).where(eq(tenants.id, victimTenant.id));
     await db.delete(users).where(eq(users.id, intruderUser.id));
+  }
+});
+
+test('Multi-Tenant Edge Case 7: PostgreSQL Row-Level Security (RLS) enforces kernel-level tenant isolation', async () => {
+  const [testUser] = await db
+    .insert(users)
+    .values({
+      email: `rls-user-${Date.now()}@example.com`,
+      name: 'RLS User',
+      passwordHash: '$2a$12$dummyhashforrlstest0000000000000000000000000000000',
+      status: 'ACTIVE',
+    })
+    .returning();
+  assert.ok(testUser);
+
+  const tenantA = await tenantsRepo.createTenant({
+    name: 'RLS Org Alpha',
+    slug: `rls-alpha-${Date.now()}`,
+    plan: 'PRO',
+  });
+  const tenantB = await tenantsRepo.createTenant({
+    name: 'RLS Org Beta',
+    slug: `rls-beta-${Date.now()}`,
+    plan: 'PRO',
+  });
+
+  try {
+    // 1. Insert file in tenantA within tenantA transaction
+    const fileA = await withTenantTransaction(tenantA.id, async (tx) => {
+      const [inserted] = await tx
+        .insert(files)
+        .values({
+          key: `rls-test-key-a-${Date.now()}`,
+          filename: 'alpha-doc.pdf',
+          contentType: 'application/pdf',
+          size: 1024,
+          ownerId: testUser.id,
+          tenantId: tenantA.id,
+        })
+        .returning();
+      return inserted;
+    });
+    assert.ok(fileA);
+
+    // 2. Inside tenantA transaction, query files WITHOUT WHERE clause -> see fileA
+    await withTenantTransaction(tenantA.id, async (tx) => {
+      const rows = await tx.select().from(files);
+      const matching = rows.find((r: any) => r.id === fileA.id);
+      assert.ok(matching, 'Tenant A must see its own file under RLS');
+    });
+
+    // 3. Inside tenantB transaction, query files WITHOUT WHERE clause -> fileA MUST NOT BE VISIBLE
+    await withTenantTransaction(tenantB.id, async (tx) => {
+      const rows = await tx.select().from(files);
+      const matching = rows.find((r: any) => r.id === fileA.id);
+      assert.equal(matching, undefined, 'RLS must hide Tenant A files from Tenant B queries even without WHERE tenantId');
+    });
+
+    // 4. Attempt to insert a row with tenantA.id inside tenantB transaction -> RLS WITH CHECK policy violation
+    let policyViolationCaught = false;
+    try {
+      await withTenantTransaction(tenantB.id, async (tx) => {
+        await tx.insert(files).values({
+          key: `rls-cross-tenant-${Date.now()}`,
+          filename: 'cross-tenant.pdf',
+          contentType: 'application/pdf',
+          size: 2048,
+          ownerId: testUser.id,
+          tenantId: tenantA.id, // Trying to insert for Tenant A while in Tenant B session
+        });
+      });
+    } catch (err: any) {
+      policyViolationCaught = true;
+      const fullMsg = `${err.message} ${err.cause?.message ?? ''}`;
+      assert.match(
+        fullMsg,
+        /violates row-level security policy/i,
+        'Kernel-level RLS check must reject inserting cross-tenant record',
+      );
+    }
+    assert.ok(policyViolationCaught, 'Expected cross-tenant insert to fail with RLS policy error');
+  } finally {
+    await db.delete(files).where(eq(files.ownerId, testUser.id));
+    await db.delete(tenants).where(inArray(tenants.id, [tenantA.id, tenantB.id]));
+    await db.delete(users).where(eq(users.id, testUser.id));
   }
 });

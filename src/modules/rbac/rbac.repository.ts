@@ -231,8 +231,13 @@ export async function setRolePermissions(roleId: string, permissionIds: string[]
   });
 }
 
-export async function assignRoleToMember(memberId: string, roleId: string): Promise<void> {
-  await db.insert(tenantMemberRoles).values({ memberId, roleId }).onConflictDoNothing();
+export async function assignRoleToMember(memberId: string, roleId: string, tenantId?: string): Promise<void> {
+  let resolvedTenantId = tenantId;
+  if (!resolvedTenantId) {
+    const [member] = await db.select({ tenantId: tenantMembers.tenantId }).from(tenantMembers).where(eq(tenantMembers.id, memberId)).limit(1);
+    resolvedTenantId = member?.tenantId;
+  }
+  await db.insert(tenantMemberRoles).values({ memberId, roleId, tenantId: resolvedTenantId }).onConflictDoNothing();
 }
 
 export async function removeRoleFromMember(memberId: string, roleId: string): Promise<void> {

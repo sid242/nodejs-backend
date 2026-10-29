@@ -1,4 +1,4 @@
-import { index, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { tenants } from './tenants';
 
@@ -28,7 +28,6 @@ export const tenantBrandings = pgTable(
   (table) => [
     uniqueIndex('TenantBranding_tenantId_unique').on(table.tenantId),
     uniqueIndex('TenantBranding_customDomain_unique').on(table.customDomain),
-    index('TenantBranding_customDomain_idx').on(table.customDomain),
   ],
 );
 

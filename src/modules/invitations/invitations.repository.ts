@@ -217,7 +217,7 @@ export async function executeAcceptanceTransaction(data: {
     // 2. Assign the role granted by the invitation
     await tx
       .insert(tenantMemberRoles)
-      .values({ memberId, roleId: data.roleId })
+      .values({ memberId, roleId: data.roleId, tenantId: data.tenantId })
       .onConflictDoNothing();
 
     // 3. Mark invitation as ACCEPTED

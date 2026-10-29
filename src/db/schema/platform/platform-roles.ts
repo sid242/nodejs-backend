@@ -13,7 +13,7 @@ export const platformRoles = pgTable(
   'PlatformRole',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    key: text('key').notNull().unique(), // e.g. SUPER_ADMIN, SUPPORT_STAFF, BILLING_STAFF, etc.
+    key: text('key').notNull(), // e.g. SUPER_ADMIN, SUPPORT_STAFF, BILLING_STAFF, etc.
     name: text('name').notNull(),
     description: text('description'),
     isSystem: boolean('isSystem').notNull().default(false),
@@ -37,7 +37,7 @@ export const platformPermissions = pgTable(
   'PlatformPermission',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    key: text('key').notNull().unique(), // resource::action format (e.g. platform_staff::read)
+    key: text('key').notNull(), // resource::action format (e.g. platform_staff::read)
     name: text('name').notNull(),
     description: text('description'),
     resource: text('resource').notNull(), // e.g. platform_staff, tenants, billing, platform_audit

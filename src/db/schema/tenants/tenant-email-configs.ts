@@ -1,6 +1,5 @@
 import {
   boolean,
-  index,
   integer,
   pgTable,
   text,
@@ -35,7 +34,6 @@ export const tenantEmailConfigs = pgTable(
   },
   (table) => [
     uniqueIndex('TenantEmailConfig_tenantId_unique').on(table.tenantId),
-    index('TenantEmailConfig_tenantId_idx').on(table.tenantId),
   ],
 );
 

@@ -21,7 +21,6 @@ export const verificationTokens = pgTable(
   },
   (table) => [
     index('VerificationToken_userId_type_idx').on(table.userId, table.type),
-    index('VerificationToken_tokenHash_type_idx').on(table.tokenHash, table.type),
     index('VerificationToken_expiresAt_idx').on(table.expiresAt),
   ],
 );

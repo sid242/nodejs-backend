@@ -219,6 +219,7 @@ export async function provisionTenantTransaction(data: {
         .values({
           memberId: member.id,
           roleId: ownerRole.id,
+          tenantId: tenant.id,
         })
         .onConflictDoNothing();
     }

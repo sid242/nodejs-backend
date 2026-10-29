@@ -1,3 +1,4 @@
+import { isNotNull, isNull } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -92,7 +93,8 @@ export const roles = pgTable(
   (table) => [
     index('AppRole_tenantId_idx').on(table.tenantId),
     index('AppRole_tenantId_createdAt_idx').on(table.tenantId, table.createdAt),
-    uniqueIndex('AppRole_tenantId_name_idx').on(table.tenantId, table.name),
+    uniqueIndex('AppRole_tenant_name_unique').on(table.tenantId, table.name).where(isNotNull(table.tenantId)),
+    uniqueIndex('AppRole_system_name_unique').on(table.name).where(isNull(table.tenantId)),
   ],
 );
 
@@ -128,11 +130,13 @@ export const tenantMemberRoles = pgTable(
     roleId: uuid('roleId')
       .notNull()
       .references(() => roles.id, { onDelete: 'cascade' }),
+    tenantId: uuid('tenantId').references(() => tenants.id, { onDelete: 'cascade' }),
   },
   (table) => [
     primaryKey({ columns: [table.memberId, table.roleId] }),
     index('TenantMemberRole_memberId_idx').on(table.memberId),
     index('TenantMemberRole_roleId_idx').on(table.roleId),
+    index('TenantMemberRole_tenantId_idx').on(table.tenantId),
   ],
 );
 
