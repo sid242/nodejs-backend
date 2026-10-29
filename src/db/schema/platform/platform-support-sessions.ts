@@ -5,7 +5,7 @@ import {
   supportSessionScopeEnum,
   supportSessionStatusEnum,
 } from '../enums';
-import { tenantMembers, tenants } from '../tenants/index';
+import { tenantMembers, tenants } from '../tenancy/index';
 import { users } from '../identity/users';
 import { platformStaff } from './platform-staff';
 

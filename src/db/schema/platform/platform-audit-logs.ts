@@ -1,6 +1,6 @@
 import { index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
-import { tenants } from '../tenants/index';
+import { tenants } from '../tenancy/index';
 import { platformStaff } from './platform-staff';
 
 export const platformAuditLogs = pgTable(
