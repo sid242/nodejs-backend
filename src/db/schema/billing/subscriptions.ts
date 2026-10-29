@@ -10,9 +10,9 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
-import { actorTypeEnum, subscriptionStatusEnum } from './enums';
+import { actorTypeEnum, subscriptionStatusEnum } from '../enums';
 import { plans } from './plans';
-import { tenants } from './tenants/tenants';
+import { tenants } from '../tenancy/tenants';
 
 export const subscriptions = pgTable(
   'Subscription',

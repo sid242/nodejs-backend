@@ -11,7 +11,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
-import { appModules } from './rbac';
+import { appModules } from '../access/rbac';
 
 export interface PlanLimits {
   maxMembers: number | null;

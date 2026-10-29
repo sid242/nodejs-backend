@@ -11,7 +11,7 @@ import {
 
 import { plans } from './plans';
 import { subscriptions } from './subscriptions';
-import { tenants } from './tenants/tenants';
+import { tenants } from '../tenancy/tenants';
 
 export const invoices = pgTable(
   'Invoice',

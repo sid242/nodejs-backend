@@ -1,6 +1,6 @@
 import { index, integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
-import { verificationTokenTypeEnum } from './enums';
+import { verificationTokenTypeEnum } from '../enums';
 import { users } from './users';
 
 export const verificationTokens = pgTable(
