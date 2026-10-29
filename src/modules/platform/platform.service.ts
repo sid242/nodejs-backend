@@ -3,6 +3,19 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 import { db } from '@/config/db';
+import { eq, inArray } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+
+import { type Database } from '@/config/db';
+import * as schema from '@/db/schema/index';
+import {
+  checkTenantDbHealth,
+  closeDedicatedPool,
+  getDedicatedPoolStats,
+} from '@/lib/db-manager';
+import type { MigrateTenantDatabaseDto } from './platform.dto';
+
 import { env } from '@/config/env';
 import { logger } from '@/config/logger';
 import {
@@ -1095,4 +1108,291 @@ export async function updateTenantSubscription(
   });
 
   return updated;
+}
+
+
+// ==========================================
+// 8. Tenant Database Routing & Lifecycle Management
+// ==========================================
+
+export async function migrateTenantToDedicated(
+  actorStaffId: string,
+  tenantId: string,
+  options?: MigrateTenantDatabaseDto,
+  requestId?: string,
+) {
+  const [tenant] = await db
+    .select()
+    .from(schema.tenants)
+    .where(eq(schema.tenants.id, tenantId))
+    .limit(1);
+
+  if (!tenant) throw AppError.notFound('Tenant not found');
+
+  if (tenant.databaseMode === 'dedicated') {
+    throw AppError.conflict('Tenant is already running on an isolated dedicated database');
+  }
+
+  const defaultSanitizedId = tenant.id.replace(/-/g, '_');
+  const databaseName = options?.customDatabaseName?.trim() || `tenant_${defaultSanitizedId}`;
+  const databaseKey = `dedicated-${tenant.id}`;
+  const poolLimit = options?.poolLimit ?? 5;
+  const connectionUrl = options?.connectionUrl?.trim() || env.DATABASE_URL;
+
+  // Step 1: Provision dedicated PostgreSQL database and apply Drizzle migrations
+  const dbResult = await provisionDedicatedDatabase(tenant.id, {
+    customDatabaseName: databaseName,
+    customDatabaseKey: databaseKey,
+    poolLimit,
+    connectionUrl,
+  });
+
+  // Step 2: Open temporary direct connection to newly provisioned database
+  const targetUrl = new URL(connectionUrl);
+  targetUrl.pathname = `/${dbResult.databaseName}`;
+  const dedicatedClient = postgres(targetUrl.toString(), { max: 2, idle_timeout: 10 });
+  const dedicatedDb = drizzle({ client: dedicatedClient, schema }) as unknown as Database;
+
+  const recordsMigrated = {
+    members: 0,
+    subscriptions: 0,
+    invoices: 0,
+    files: 0,
+    modules: 0,
+    branding: 0,
+  };
+
+  try {
+    // 2a. Replicate tenant record
+    await dedicatedDb
+      .insert(schema.tenants)
+      .values({
+        ...tenant,
+        databaseMode: 'dedicated',
+        databaseKey: dbResult.databaseKey,
+      })
+      .onConflictDoNothing();
+
+    // 2b. Replicate tenant branding
+    const brandings = await db
+      .select()
+      .from(schema.tenantBrandings)
+      .where(eq(schema.tenantBrandings.tenantId, tenant.id));
+    if (brandings?.length) {
+      await dedicatedDb.insert(schema.tenantBrandings).values(brandings).onConflictDoNothing();
+      recordsMigrated.branding = brandings.length;
+    }
+
+    // 2c. Replicate tenant members & roles (replicate member user accounts first for FK integrity)
+    const members = await db
+      .select()
+      .from(schema.tenantMembers)
+      .where(eq(schema.tenantMembers.tenantId, tenant.id));
+    if (members?.length) {
+      const userIds = [...new Set(members.map((m) => m.userId))];
+      if (userIds.length > 0) {
+        const memberUsers = await db
+          .select()
+          .from(schema.users)
+          .where(inArray(schema.users.id, userIds));
+        if (memberUsers?.length) {
+          await dedicatedDb.insert(schema.users).values(memberUsers).onConflictDoNothing();
+        }
+      }
+
+      await dedicatedDb.insert(schema.tenantMembers).values(members).onConflictDoNothing();
+      recordsMigrated.members = members.length;
+
+      const memberIds = members.map((m) => m.id);
+      if (memberIds.length > 0) {
+        const memberRoles = await db
+          .select()
+          .from(schema.tenantMemberRoles)
+          .where(inArray(schema.tenantMemberRoles.memberId, memberIds));
+        if (memberRoles?.length) {
+          await dedicatedDb.insert(schema.tenantMemberRoles).values(memberRoles).onConflictDoNothing();
+        }
+      }
+    }
+
+    // 2d. Replicate tenant custom roles
+    const customRoles = await db
+      .select()
+      .from(schema.roles)
+      .where(eq(schema.roles.tenantId, tenant.id));
+    if (customRoles?.length) {
+      await dedicatedDb.insert(schema.roles).values(customRoles).onConflictDoNothing();
+    }
+
+    // 2e. Replicate tenant modules
+    const modules = await db
+      .select()
+      .from(schema.tenantModules)
+      .where(eq(schema.tenantModules.tenantId, tenant.id));
+    if (modules?.length) {
+      await dedicatedDb.insert(schema.tenantModules).values(modules).onConflictDoNothing();
+      recordsMigrated.modules = modules.length;
+    }
+
+    // 2f. Replicate subscriptions and subscription events
+    const subs = await db
+      .select()
+      .from(schema.subscriptions)
+      .where(eq(schema.subscriptions.tenantId, tenant.id));
+    if (subs?.length) {
+      await dedicatedDb.insert(schema.subscriptions).values(subs).onConflictDoNothing();
+      recordsMigrated.subscriptions = subs.length;
+
+      const subEvents = await db
+        .select()
+        .from(schema.subscriptionEvents)
+        .where(eq(schema.subscriptionEvents.tenantId, tenant.id));
+      if (subEvents?.length) {
+        await dedicatedDb.insert(schema.subscriptionEvents).values(subEvents).onConflictDoNothing();
+      }
+    }
+
+    // 2g. Replicate invoices (line items are jsonb on the invoice record)
+    const invs = await db
+      .select()
+      .from(schema.invoices)
+      .where(eq(schema.invoices.tenantId, tenant.id));
+    if (invs?.length) {
+      await dedicatedDb.insert(schema.invoices).values(invs).onConflictDoNothing();
+      recordsMigrated.invoices = invs.length;
+    }
+
+    // 2h. Replicate files
+    const fileRecords = await db
+      .select()
+      .from(schema.files)
+      .where(eq(schema.files.tenantId, tenant.id));
+    if (fileRecords?.length) {
+      await dedicatedDb.insert(schema.files).values(fileRecords).onConflictDoNothing();
+      recordsMigrated.files = fileRecords.length;
+    }
+  } finally {
+    await dedicatedClient.end({ timeout: 5 }).catch(() => {});
+  }
+
+  // Step 3: Atomically update central tenant registry in primary database
+  const [updatedTenant] = await db
+    .update(schema.tenants)
+    .set({
+      databaseMode: 'dedicated',
+      databaseKey: dbResult.databaseKey,
+      metadata: {
+        ...(tenant.metadata as Record<string, unknown> | null),
+        databaseName: dbResult.databaseName,
+        poolLimit: dbResult.poolLimit,
+        schemaVersion: dbResult.schemaVersion,
+        connectionUrl: options?.connectionUrl ? options.connectionUrl : undefined,
+        migratedToDedicatedAt: new Date().toISOString(),
+        migratedByStaffId: actorStaffId,
+      },
+    })
+    .where(eq(schema.tenants.id, tenant.id))
+    .returning();
+
+  // Invalidate any active pool in cache
+  await closeDedicatedPool(dbResult.databaseKey);
+
+  // Step 4: Record immutable platform audit entry
+  await platformRepo.logPlatformAction({
+    actorStaffId,
+    action: 'tenant.database_migrated',
+    targetType: 'tenant',
+    targetId: tenant.id,
+    tenantId: tenant.id,
+    metadata: {
+      previousMode: 'shared',
+      newMode: 'dedicated',
+      databaseName: dbResult.databaseName,
+      databaseKey: dbResult.databaseKey,
+      recordsMigrated,
+    },
+    requestId,
+  });
+
+  return {
+    tenant: updatedTenant,
+    databaseName: dbResult.databaseName,
+    databaseKey: dbResult.databaseKey,
+    recordsMigrated,
+  };
+}
+
+export async function rollbackTenantToShared(
+  actorStaffId: string,
+  tenantId: string,
+  requestId?: string,
+) {
+  const [tenant] = await db
+    .select()
+    .from(schema.tenants)
+    .where(eq(schema.tenants.id, tenantId))
+    .limit(1);
+
+  if (!tenant) throw AppError.notFound('Tenant not found');
+
+  if (tenant.databaseMode !== 'dedicated') {
+    throw AppError.badRequest('Tenant is not currently running on a dedicated database');
+  }
+
+  const previousKey = tenant.databaseKey;
+  const [updatedTenant] = await db
+    .update(schema.tenants)
+    .set({
+      databaseMode: 'shared',
+      databaseKey: 'primary',
+      metadata: {
+        ...(tenant.metadata as Record<string, unknown> | null),
+        rolledBackToSharedAt: new Date().toISOString(),
+        rolledBackByStaffId: actorStaffId,
+        previousDatabaseKey: previousKey,
+      },
+    })
+    .where(eq(schema.tenants.id, tenant.id))
+    .returning();
+
+  // Close and evict dedicated pool
+  await closeDedicatedPool(previousKey);
+
+  await platformRepo.logPlatformAction({
+    actorStaffId,
+    action: 'tenant.database_rollback_shared',
+    targetType: 'tenant',
+    targetId: tenant.id,
+    tenantId: tenant.id,
+    metadata: {
+      previousMode: 'dedicated',
+      newMode: 'shared',
+      previousDatabaseKey: previousKey,
+    },
+    requestId,
+  });
+
+  return {
+    tenant: updatedTenant,
+    previousDatabaseKey: previousKey,
+    rolledBackAt: new Date().toISOString(),
+  };
+}
+
+export async function getTenantDatabaseHealth(tenantId: string) {
+  const [tenant] = await db
+    .select({
+      id: schema.tenants.id,
+    })
+    .from(schema.tenants)
+    .where(eq(schema.tenants.id, tenantId))
+    .limit(1);
+
+  if (!tenant) throw AppError.notFound('Tenant not found');
+
+  return checkTenantDbHealth(tenantId);
+}
+
+export function getDatabasePoolStats() {
+  return getDedicatedPoolStats();
 }

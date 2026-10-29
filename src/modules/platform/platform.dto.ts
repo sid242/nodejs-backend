@@ -202,3 +202,10 @@ export const updatePlatformTenantSubscriptionDto = z.object({
 export type UpdatePlatformTenantSubscriptionDto = z.infer<
   typeof updatePlatformTenantSubscriptionDto
 >;
+
+export const migrateTenantDatabaseDto = z.object({
+  customDatabaseName: z.string().trim().max(63).optional(),
+  poolLimit: z.coerce.number().int().min(1).max(50).default(5).optional(),
+  connectionUrl: z.string().trim().url().optional(),
+});
+export type MigrateTenantDatabaseDto = z.infer<typeof migrateTenantDatabaseDto>;

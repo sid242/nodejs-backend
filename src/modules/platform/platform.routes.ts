@@ -231,6 +231,34 @@ router.patch(
 );
 
 // ==========================================
+// 5.1 Dedicated Database Lifecycle & Health
+// ==========================================
+router.post(
+  '/tenants/:id/database/migrate-to-dedicated',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.TENANTS_MANAGE),
+  validate({ body: dto.migrateTenantDatabaseDto }),
+  controller.migrateTenantDatabase,
+);
+
+router.post(
+  '/tenants/:id/database/rollback-to-shared',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.TENANTS_MANAGE),
+  controller.rollbackTenantDatabase,
+);
+
+router.get(
+  '/tenants/:id/database/health',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.HEALTH_READ),
+  controller.getTenantDatabaseHealth,
+);
+
+router.get(
+  '/system/database-pools',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.HEALTH_READ),
+  controller.getDatabasePoolStats,
+);
+
+// ==========================================
 // 6. Global User Administration
 // ==========================================
 router.get(

@@ -307,3 +307,37 @@ export const updateTenantSubscription = asyncHandler(async (req: Request, res: R
   );
   AppResponse.ok(result, 'Tenant subscription updated successfully').send(res);
 });
+
+
+// ==========================================
+// 6. Tenant Dedicated Database Lifecycle Handlers
+// ==========================================
+
+export const migrateTenantDatabase = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.migrateTenantToDedicated(
+    req.staff!.id,
+    req.params.id as string,
+    req.valid?.body,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.ok(result, 'Tenant successfully migrated to dedicated database cluster').send(res);
+});
+
+export const rollbackTenantDatabase = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.rollbackTenantToShared(
+    req.staff!.id,
+    req.params.id as string,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.ok(result, 'Tenant successfully rolled back to shared database').send(res);
+});
+
+export const getTenantDatabaseHealth = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.getTenantDatabaseHealth(req.params.id as string);
+  AppResponse.ok(result, 'Tenant database health check completed').send(res);
+});
+
+export const getDatabasePoolStats = asyncHandler(async (_req: Request, res: Response) => {
+  const result = service.getDatabasePoolStats();
+  AppResponse.ok(result, 'Dedicated database connection pools statistics retrieved').send(res);
+});
