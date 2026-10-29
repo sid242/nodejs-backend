@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { ZodError } from 'zod';
 
 import { AppError } from '@/lib/errors';
+import { captureException } from '@/observability/sentry';
 
 export function notFound(req: Request, res: Response): void {
   res.status(404).json({
@@ -53,6 +54,11 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   if (log) {
     if (status >= 500) log.error({ err }, 'unhandled error');
     else log.warn({ code, message }, 'request failed');
+  }
+
+  // Report 5xx unexpected server errors to Sentry
+  if (status >= 500) {
+    captureException(err, { req });
   }
 
   res.status(status).json({ error: { code, message, details }, requestId: req?.id });

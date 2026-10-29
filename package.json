@@ -39,6 +39,7 @@
     "@bull-board/api": "^5.23.0",
     "@bull-board/express": "^5.23.0",
     "@prometheus-io/client": "^0.16.1",
+    "@sentry/node": "^8.55.2",
     "@socket.io/redis-adapter": "^8.3.0",
     "@socket.io/redis-emitter": "^5.1.0",
     "bcryptjs": "^2.4.3",

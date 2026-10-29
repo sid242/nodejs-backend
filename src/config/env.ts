@@ -74,6 +74,10 @@ const schema = z.object({
 
   BULL_BOARD_USER: z.string().default('admin'),
   BULL_BOARD_PASSWORD: z.string().optional(),
+
+  // Observability & Sentry
+  SENTRY_DSN: z.string().optional(),
+  SENTRY_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(1.0),
 });
 
 const parsed = schema.safeParse(process.env);

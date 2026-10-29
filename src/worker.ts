@@ -1,9 +1,12 @@
 import { closeDb } from '@/config/db';
 import { logger } from '@/config/logger';
 import { closeRedisClients } from '@/config/redis';
+import { initSentry } from '@/observability/sentry';
 import { closeQueues } from '@/queues/index';
 import { registerSchedulers, startWorkers } from '@/queues/workers/index';
 import { closeSocketEmitter } from '@/sockets/emitter';
+
+initSentry();
 
 // Separate process from the API => scale and deploy independently (e.g. autoscale on queue depth).
 const workers = startWorkers();

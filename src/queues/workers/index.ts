@@ -3,6 +3,7 @@ import { Worker, type Processor, type WorkerOptions } from 'bullmq';
 import { env } from '@/config/env';
 import { logger } from '@/config/logger';
 import { createRedis } from '@/config/redis';
+import { captureJobException } from '@/observability/sentry';
 import { maintenanceQueue, QUEUES } from '@/queues/index';
 import { processEmail } from '@/queues/workers/email.worker';
 import { processFile } from '@/queues/workers/file.worker';
@@ -37,6 +38,14 @@ function createWorker(
         ? `[ALERT] Job permanently failed in queue "${name}" (exhausted all attempts)`
         : 'Job attempt failed',
     );
+    if (job) {
+      captureJobException(err, {
+        id: job.id,
+        name: job.name,
+        data: job.data,
+        queueName: name,
+      });
+    }
   });
   worker.on('error', (err) => logger.error({ err, queue: name }, 'worker error'));
   return worker;
