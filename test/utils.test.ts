@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { AppResponse } from '@/lib/responses';
-import { forEachConcurrent, parseList, safeFilename } from '@/lib/utils';
+import { forEachConcurrent, generateSlug, parseList, safeFilename, slugify } from '@/lib/utils';
 
 test('safeFilename removes slashes and spaces (no path traversal in S3 keys)', () => {
   const out = safeFilename('../../etc/pass wd.png');
@@ -44,4 +44,16 @@ test('AppResponse creates a consistent success envelope', () => {
     meta: { page: 1 },
     requestId: 'request-1',
   });
+});
+
+test('generateSlug formats strings into URL-safe slugs correctly', () => {
+  assert.equal(generateSlug('Acme Corporation'), 'acme-corporation');
+  assert.equal(generateSlug('Docs / API Guides'), 'docs-api-guides');
+  assert.equal(generateSlug('---Hello   World---'), 'hello-world');
+  assert.equal(generateSlug('Special @#$ Characters!'), 'special-characters');
+  assert.equal(generateSlug('Nested / Category - Subcategory'), 'nested-category-subcategory');
+  assert.equal(generateSlug(''), '');
+  assert.equal(generateSlug(null as unknown as string), '');
+  assert.equal(generateSlug(undefined as unknown as string), '');
+  assert.equal(slugify('Slugify Alias'), 'slugify-alias');
 });

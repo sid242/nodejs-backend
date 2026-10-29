@@ -1,6 +1,7 @@
 import type { EmailTemplate } from '@/db/schema/index';
 import { AppError } from '@/lib/errors';
 import { sendEmail } from '@/lib/mailer';
+import { generateSlug } from '@/lib/utils';
 
 import type {
   CreateEmailTemplateDto,
@@ -24,13 +25,6 @@ export function renderVariables(template: string, variables: Record<string, stri
   });
 }
 
-function generateSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-}
 
 export async function listTemplates(tenantId: string, options: ListEmailTemplatesQueryDto) {
   return repo.findTemplatesByTenant(tenantId, options);
