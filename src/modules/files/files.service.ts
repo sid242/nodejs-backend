@@ -58,16 +58,18 @@ export async function requestUpload(
   { filename, contentType }: RequestUploadDto,
   tenantId?: string,
 ): Promise<RequestUploadResult> {
-  const key = tenantId
-    ? `uploads/tenants/${tenantId}/${randomUUID()}-${safeFilename(filename)}`
-    : `uploads/${userId}/${randomUUID()}-${safeFilename(filename)}`;
+  if (!tenantId) {
+    throw AppError.badRequest('Tenant context is required for file upload');
+  }
+
+  const key = `uploads/tenants/${tenantId}/${randomUUID()}-${safeFilename(filename)}`;
 
   const file = await fileRepo.createFile({
     key,
     filename,
     contentType,
     ownerId: userId,
-    tenantId: tenantId ?? null,
+    tenantId,
   });
 
   try {

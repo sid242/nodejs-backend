@@ -1,4 +1,5 @@
-import { index, integer, json, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { isNull } from 'drizzle-orm';
+import { index, integer, json, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { userStatusEnum } from './enums';
 
@@ -6,7 +7,7 @@ export const users = pgTable(
   'User',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    email: text('email').notNull().unique(),
+    email: text('email').notNull(),
     passwordHash: text('passwordHash').notNull(),
     name: text('name').notNull(),
     status: userStatusEnum('status').notNull().default('PENDING_VERIFICATION'),
@@ -37,6 +38,7 @@ export const users = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    uniqueIndex('User_email_active_unique').on(table.email).where(isNull(table.deletedAt)),
     index('User_status_idx').on(table.status),
     index('User_createdAt_idx').on(table.createdAt),
     index('User_deletedAt_idx').on(table.deletedAt),

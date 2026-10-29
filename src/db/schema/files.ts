@@ -1,4 +1,4 @@
-import { index, integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { bigint, index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 import { fileStatusEnum } from './enums';
 import { tenants } from './tenants';
@@ -11,12 +11,14 @@ export const files = pgTable(
     key: text('key').notNull().unique(),
     filename: text('filename').notNull(),
     contentType: text('contentType').notNull(),
-    size: integer('size'),
+    size: bigint('size', { mode: 'number' }),
     status: fileStatusEnum('status').notNull().default('PENDING'),
     ownerId: uuid('ownerId')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    tenantId: uuid('tenantId').references(() => tenants.id, { onDelete: 'cascade' }),
+    tenantId: uuid('tenantId')
+      .notNull()
+      .references(() => tenants.id, { onDelete: 'cascade' }),
     createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [

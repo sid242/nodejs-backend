@@ -437,6 +437,7 @@ export async function seedDemo(): Promise<void> {
           .values({
             memberId: memberRecord.id,
             roleId: targetRole.id,
+            tenantId: tenantRecord.id,
           })
           .onConflictDoNothing();
       }

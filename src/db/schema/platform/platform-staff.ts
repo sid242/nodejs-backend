@@ -6,7 +6,7 @@ export const platformStaff = pgTable(
   'PlatformStaff',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    email: text('email').notNull().unique(),
+    email: text('email').notNull(),
     passwordHash: text('passwordHash').notNull(),
     displayName: text('displayName').notNull(),
     status: text('status').notNull().default('ACTIVE'), // ACTIVE, SUSPENDED, DEACTIVATED
