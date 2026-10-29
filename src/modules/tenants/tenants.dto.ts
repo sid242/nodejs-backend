@@ -1,5 +1,28 @@
 import { z } from 'zod';
 
+export const RESERVED_SLUGS = [
+  'www',
+  'app',
+  'api',
+  'admin',
+  'platform',
+  'login',
+  'register',
+  'logout',
+  'accept-invite',
+  'onboarding',
+  'settings',
+  'static',
+  'assets',
+  'docs',
+  'health',
+  'metrics',
+  'support',
+  'billing',
+  'pricing',
+  'auth',
+] as const;
+
 export const createTenantDto = z
   .object({
     name: z.string().trim().min(2).max(100),
@@ -8,7 +31,10 @@ export const createTenantDto = z
       .trim()
       .min(2)
       .max(50)
-      .regex(/^[a-z0-9-]+$/, 'Slug must only contain lowercase alphanumeric characters and hyphens'),
+      .regex(/^[a-z0-9-]+$/, 'Slug must only contain lowercase alphanumeric characters and hyphens')
+      .refine((s) => !RESERVED_SLUGS.includes(s.toLowerCase() as any), {
+        message: 'This workspace slug is reserved and cannot be used',
+      }),
   })
   .strict();
 

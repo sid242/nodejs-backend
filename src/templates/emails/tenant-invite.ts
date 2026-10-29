@@ -1,5 +1,5 @@
-import { baseLayout } from './base.js';
-import type { EmailTemplateResult } from './welcome.js';
+import { baseLayout } from './base';
+import type { EmailTemplateResult } from './welcome';
 
 export interface RenderTenantInviteEmailOptions {
   name?: string;

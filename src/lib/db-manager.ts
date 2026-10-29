@@ -1,11 +1,11 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 
-import { db as primaryDb, type Database } from '@/config/db.js';
-import { env } from '@/config/env.js';
-import { logger } from '@/config/logger.js';
-import * as schema from '@/db/schema/index.js';
-import { AppError } from '@/lib/errors.js';
+import { db as primaryDb, type Database } from '@/config/db';
+import { env } from '@/config/env';
+import { logger } from '@/config/logger';
+import * as schema from '@/db/schema/index';
+import { AppError } from '@/lib/errors';
 
 interface DedicatedPoolEntry {
   client: ReturnType<typeof postgres>;

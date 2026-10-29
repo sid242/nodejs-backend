@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 
-import { env } from '@/config/env.js';
+import { env } from '@/config/env';
 
 const digest = (s: string): Buffer => createHash('sha256').update(s).digest();
 const safeEqual = (a: string, b?: string): boolean => {

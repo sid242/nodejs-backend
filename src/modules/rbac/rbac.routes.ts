@@ -1,12 +1,12 @@
 import { Router } from 'express';
 
-import { requireAuth } from '@/middleware/auth.js';
-import { requirePermission } from '@/middleware/rbac.js';
-import { requireTenant } from '@/middleware/tenant.js';
-import { validate } from '@/middleware/validate.js';
+import { requireAuth } from '@/middleware/auth';
+import { requirePermission } from '@/middleware/rbac';
+import { requireTenant } from '@/middleware/tenant';
+import { validate } from '@/middleware/validate';
 
-import * as controller from './rbac.controller.js';
-import * as dto from './rbac.dto.js';
+import * as controller from './rbac.controller';
+import * as dto from './rbac.dto';
 
 const router: Router = Router();
 

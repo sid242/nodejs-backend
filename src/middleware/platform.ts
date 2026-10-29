@@ -1,10 +1,10 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
 
-import { env } from '@/config/env.js';
-import { AUTH_HEADERS } from '@/constants/index.js';
-import { AppError } from '@/lib/errors.js';
-import * as platformRepo from '@/modules/platform/platform.repository.js';
+import { env } from '@/config/env';
+import { AUTH_HEADERS } from '@/constants/index';
+import { AppError } from '@/lib/errors';
+import * as platformRepo from '@/modules/platform/platform.repository';
 
 export const PLATFORM_STAFF_TOKEN_COOKIE = 'platform_staff_token';
 

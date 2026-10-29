@@ -1,9 +1,9 @@
 import { Router } from 'express';
 
-import { requireAuth } from '@/middleware/auth.js';
-import { validate } from '@/middleware/validate.js';
-import * as controller from '@/modules/users/users.controller.js';
-import { updateMeDto } from '@/modules/users/users.dto.js';
+import { requireAuth } from '@/middleware/auth';
+import { validate } from '@/middleware/validate';
+import * as controller from '@/modules/users/users.controller';
+import { updateMeDto } from '@/modules/users/users.dto';
 
 const router = Router();
 router.use(requireAuth);

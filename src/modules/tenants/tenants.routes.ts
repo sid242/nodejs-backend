@@ -1,12 +1,19 @@
 import { Router } from 'express';
 
-import { requireAuth } from '@/middleware/auth.js';
-import { requirePermission } from '@/middleware/rbac.js';
-import { requireTenant } from '@/middleware/tenant.js';
-import { validate } from '@/middleware/validate.js';
+import { optionalAuth, requireAuth } from '@/middleware/auth';
+import { authLimiter } from '@/middleware/rate-limit';
+import { requirePermission } from '@/middleware/rbac';
+import { blockInSupportSession, requireSupportOrUser } from '@/middleware/support';
+import { requireTenant } from '@/middleware/tenant';
+import { validate } from '@/middleware/validate';
+import * as billingController from '@/modules/billing/billing.controller';
+import * as billingDto from '@/modules/billing/billing.dto';
+import * as invitationsController from '@/modules/invitations/invitations.controller';
+import * as invitationsDto from '@/modules/invitations/invitations.dto';
+import { invitationsRouter } from '@/modules/invitations/invitations.routes';
 
-import * as controller from './tenants.controller.js';
-import * as dto from './tenants.dto.js';
+import * as controller from './tenants.controller';
+import * as dto from './tenants.dto';
 
 const router: Router = Router();
 
@@ -17,11 +24,20 @@ router.get(
   controller.resolvePublicTenant,
 );
 
-// Public invitation acceptance (authenticates invitee via single-use magic token)
+// Public invitation endpoints
+router.get(
+  '/invitations/preview',
+  optionalAuth,
+  validate({ query: invitationsDto.previewInvitationQueryDto }),
+  invitationsController.previewInvitation,
+);
+
 router.post(
   '/invitations/accept',
-  validate({ body: dto.acceptInviteDto }),
-  controller.acceptInvitation,
+  optionalAuth,
+  authLimiter,
+  validate({ body: invitationsDto.acceptInvitationDto }),
+  invitationsController.acceptInvitation,
 );
 
 // Global tenant endpoints for logged-in user
@@ -29,7 +45,38 @@ router.post('/', requireAuth, validate({ body: dto.createTenantDto }), controlle
 
 router.get('/', requireAuth, controller.getMyTenants);
 
-router.get('/:tenantId/context', requireAuth, requireTenant, controller.getTenantContext);
+// Tenant context & user entitlement endpoints
+router.get('/:tenantId/context', requireSupportOrUser, requireTenant, controller.getTenantContext);
+router.get('/:tenantId/me', requireSupportOrUser, requireTenant, controller.getTenantMe);
+
+router.get(
+  '/:tenantId/support-access',
+  requireSupportOrUser,
+  requireTenant,
+  requirePermission('audit:read'),
+  controller.getSupportAccess,
+);
+
+// Mount tenant-scoped invitation subrouter
+router.use('/:tenantId/invitations', invitationsRouter);
+
+// Tenant billing endpoints
+router.get(
+  '/:tenantId/billing',
+  requireSupportOrUser,
+  requireTenant,
+  requirePermission('billing:read'),
+  billingController.getTenantBillingOverview,
+);
+
+router.post(
+  '/:tenantId/billing/change-request',
+  requireSupportOrUser,
+  requireTenant,
+  requirePermission('billing:read'),
+  validate({ body: billingDto.subscriptionChangeRequestDto }),
+  billingController.requestSubscriptionChange,
+);
 
 router.get(
   '/:tenantId',
@@ -104,6 +151,7 @@ router.post(
   '/:tenantId/members/:memberId/transfer-ownership',
   requireAuth,
   requireTenant,
+  blockInSupportSession('Ownership transfer'),
   requirePermission('roles:assign'),
   validate({ body: dto.transferOwnershipDto }),
   controller.transferOwnership,
@@ -139,6 +187,7 @@ router.put(
   '/:tenantId/settings/email',
   requireAuth,
   requireTenant,
+  blockInSupportSession('SMTP configuration'),
   requirePermission('tenants:update'),
   validate({ body: dto.upsertTenantEmailConfigDto }),
   controller.upsertTenantEmailConfig,
@@ -148,6 +197,7 @@ router.post(
   '/:tenantId/settings/email/test',
   requireAuth,
   requireTenant,
+  blockInSupportSession('SMTP configuration test'),
   requirePermission('tenants:update'),
   validate({ body: dto.testTenantEmailConfigDto }),
   controller.testTenantEmailConfig,
@@ -157,6 +207,7 @@ router.delete(
   '/:tenantId/settings/email',
   requireAuth,
   requireTenant,
+  blockInSupportSession('SMTP configuration'),
   requirePermission('tenants:update'),
   controller.deleteTenantEmailConfig,
 );

@@ -1,14 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import type { PresignedPost } from '@aws-sdk/s3-presigned-post';
 
-import { logger } from '@/config/logger.js';
-import type { FileRecord } from '@/db/schema/index.js';
-import { AppError } from '@/lib/errors.js';
-import { createDownloadUrl, createUploadPost, deleteObject, headObject } from '@/lib/s3.js';
-import { safeFilename } from '@/lib/utils.js';
-import { ALLOWED_TYPES, type RequestUploadDto } from '@/modules/files/files.dto.js';
-import * as fileRepo from '@/modules/files/files.repository.js';
-import { fileQueue } from '@/queues/index.js';
+import { logger } from '@/config/logger';
+import type { FileRecord } from '@/db/schema/index';
+import { AppError } from '@/lib/errors';
+import { createDownloadUrl, createUploadPost, deleteObject, headObject } from '@/lib/s3';
+import { safeFilename } from '@/lib/utils';
+import { ALLOWED_TYPES, type RequestUploadDto } from '@/modules/files/files.dto';
+import * as fileRepo from '@/modules/files/files.repository';
+import { fileQueue } from '@/queues/index';
 
 export { ALLOWED_TYPES };
 

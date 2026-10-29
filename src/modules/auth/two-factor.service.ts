@@ -2,18 +2,18 @@ import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { Secret, TOTP } from 'otpauth';
 
-import { redis } from '@/config/redis.js';
-import { AUTH_MESSAGES, REDIS_PREFIXES, TOKEN_EXPIRATION } from '@/constants/index.js';
-import type { PublicUser } from '@/db/schema/index.js';
-import { cache } from '@/lib/cache.js';
-import { decrypt, encrypt } from '@/lib/crypto.js';
-import { AppError } from '@/lib/errors.js';
-import * as authRepo from '@/modules/auth/auth.repository.js';
-import { issueTokens, type AuthTokens } from '@/modules/auth/tokens.js';
+import { redis } from '@/config/redis';
+import { AUTH_MESSAGES, REDIS_PREFIXES, TOKEN_EXPIRATION } from '@/constants/index';
+import type { PublicUser } from '@/db/schema/index';
+import { cache } from '@/lib/cache';
+import { decrypt, encrypt } from '@/lib/crypto';
+import { AppError } from '@/lib/errors';
+import * as authRepo from '@/modules/auth/auth.repository';
+import { issueTokens, type AuthTokens } from '@/modules/auth/tokens';
 import {
   createHashedVerificationToken,
   verifyAndConsumeHashedToken,
-} from '@/modules/auth/verification.repository.js';
+} from '@/modules/auth/verification.repository';
 
 const APP_NAME = 'App';
 const RECOVERY_CODE_COUNT = 8;

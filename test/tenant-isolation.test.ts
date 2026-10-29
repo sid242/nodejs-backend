@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { eq, inArray } from 'drizzle-orm';
 
-import { closeDb, db } from '../src/config/db.js';
-import { closeRedisClients } from '../src/config/redis.js';
-import { tenantMembers, tenants, users } from '../src/db/schema/index.js';
-import { AppError } from '../src/lib/errors.js';
-import { requireTenant, resolveTenantContext } from '../src/middleware/tenant.js';
-import { tenantsRepo } from '../src/modules/tenants/tenants.repository.js';
+import { closeDb, db } from '../src/config/db';
+import { closeRedisClients } from '../src/config/redis';
+import { tenantMembers, tenants, users } from '../src/db/schema/index';
+import { AppError } from '../src/lib/errors';
+import { requireTenant, resolveTenantContext } from '../src/middleware/tenant';
+import { tenantsRepo } from '../src/modules/tenants/tenants.repository';
 
 after(async () => {
   await Promise.allSettled([closeRedisClients(), closeDb()]);

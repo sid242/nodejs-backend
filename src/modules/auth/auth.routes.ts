@@ -1,16 +1,15 @@
 import { Router } from 'express';
 
-import { optionalAuth, requireAuth } from '@/middleware/auth.js';
-import { blockIfImpersonating } from '@/middleware/impersonate-guard.js';
-import { authLimiter } from '@/middleware/rate-limit.js';
-import { validate } from '@/middleware/validate.js';
-import * as controller from '@/modules/auth/auth.controller.js';
+import { optionalAuth, requireAuth } from '@/middleware/auth';
+import { authLimiter } from '@/middleware/rate-limit';
+import { blockInSupportSession } from '@/middleware/support';
+import { validate } from '@/middleware/validate';
+import * as controller from '@/modules/auth/auth.controller';
 import {
   changePasswordDto,
   disableTwoFactorDto,
   enableTwoFactorDto,
   forgotPasswordDto,
-  impersonateUserDto,
   loginDto,
   refreshTokenDto,
   registerDto,
@@ -21,7 +20,7 @@ import {
   verifyEmailDto,
   verifyMagicLinkDto,
   verifyTwoFactorChallengeDto,
-} from '@/modules/auth/auth.dto.js';
+} from '@/modules/auth/auth.dto';
 
 const router = Router();
 router.use(authLimiter);
@@ -45,7 +44,7 @@ router.post('/reset-password', validate({ body: resetPasswordDto }), controller.
 router.post(
   '/change-password',
   requireAuth,
-  blockIfImpersonating('Change Password'),
+  blockInSupportSession('Change Password'),
   validate({ body: changePasswordDto }),
   controller.changePassword,
 );
@@ -70,20 +69,20 @@ router.delete(
 router.post(
   '/2fa/setup',
   requireAuth,
-  blockIfImpersonating('2FA Setup'),
+  blockInSupportSession('2FA Setup'),
   controller.setupTwoFactor,
 );
 router.post(
   '/2fa/enable',
   requireAuth,
-  blockIfImpersonating('2FA Enable'),
+  blockInSupportSession('2FA Enable'),
   validate({ body: enableTwoFactorDto }),
   controller.enableTwoFactor,
 );
 router.post(
   '/2fa/disable',
   requireAuth,
-  blockIfImpersonating('2FA Disable'),
+  blockInSupportSession('2FA Disable'),
   validate({ body: disableTwoFactorDto }),
   controller.disableTwoFactor,
 );
@@ -93,15 +92,5 @@ router.post(
   controller.verifyTwoFactorChallenge,
 );
 router.get('/2fa/status', requireAuth, controller.getTwoFactorStatus);
-
-// --- Controlled Impersonation ---
-router.post(
-  '/impersonate',
-  requireAuth,
-  blockIfImpersonating('Impersonation'),
-  validate({ body: impersonateUserDto }),
-  controller.impersonate,
-);
-router.post('/stop-impersonate', requireAuth, controller.stopImpersonation);
 
 export default router;

@@ -1,6 +1,6 @@
 import { index, json, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
-import { platformRoles } from './platform-roles.js';
+import { platformRoles } from './platform-roles';
 
 export const platformStaff = pgTable(
   'PlatformStaff',

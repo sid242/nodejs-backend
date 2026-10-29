@@ -1,12 +1,12 @@
 import { Worker, type Processor, type WorkerOptions } from 'bullmq';
 
-import { env } from '@/config/env.js';
-import { logger } from '@/config/logger.js';
-import { createRedis } from '@/config/redis.js';
-import { maintenanceQueue, QUEUES } from '@/queues/index.js';
-import { processEmail } from '@/queues/workers/email.worker.js';
-import { processFile } from '@/queues/workers/file.worker.js';
-import { processMaintenance } from '@/queues/workers/maintenance.worker.js';
+import { env } from '@/config/env';
+import { logger } from '@/config/logger';
+import { createRedis } from '@/config/redis';
+import { maintenanceQueue, QUEUES } from '@/queues/index';
+import { processEmail } from '@/queues/workers/email.worker';
+import { processFile } from '@/queues/workers/file.worker';
+import { processMaintenance } from '@/queues/workers/maintenance.worker';
 
 function createWorker(
   name: string,
@@ -63,5 +63,17 @@ export async function registerSchedulers(): Promise<void> {
     'cleanup-pending-files',
     { pattern: '0 * * * *' }, // hourly
     { name: 'cleanup-pending-files' },
+  );
+
+  await maintenanceQueue.upsertJobScheduler(
+    'expire-support-sessions',
+    { pattern: '* * * * *' }, // every minute
+    { name: 'expire-support-sessions' },
+  );
+
+  await maintenanceQueue.upsertJobScheduler(
+    'expire-trialing-subscriptions',
+    { pattern: '0 * * * *' }, // hourly
+    { name: 'expire-trialing-subscriptions' },
   );
 }

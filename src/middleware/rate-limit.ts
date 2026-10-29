@@ -2,8 +2,8 @@ import type { Request, RequestHandler, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { RedisStore } from 'rate-limit-redis';
 
-import { env } from '@/config/env.js';
-import { redis } from '@/config/redis.js';
+import { env } from '@/config/env';
+import { redis } from '@/config/redis';
 
 export interface RateLimiterOptions {
   name: string;

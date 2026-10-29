@@ -3,7 +3,7 @@ import { BullMQAdapter } from '@bull-board/api/bullMQAdapter.js';
 import { ExpressAdapter } from '@bull-board/express';
 import type { Router } from 'express';
 
-import { allQueues } from '@/queues/index.js';
+import { allQueues } from '@/queues/index';
 
 export function bullBoardRouter(basePath = '/admin/queues'): Router {
   const serverAdapter = new ExpressAdapter();

@@ -1,12 +1,12 @@
 import type { OpenAPIRegistry } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
 
-import { bearerAuth, errorResponse, successResponse } from '@/docs/helpers.js';
+import { bearerAuth, errorResponse, successResponse } from '@/docs/helpers';
 import {
   listUsersQueryDto,
   updateMeDto,
   updateUserStatusDto,
-} from '@/modules/users/users.dto.js';
+} from '@/modules/users/users.dto';
 
 export const UserSchema = z.object({
   id: z.string().uuid().openapi({ example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' }),

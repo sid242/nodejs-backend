@@ -1,6 +1,6 @@
-import { index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { boolean, index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
-import { tenantStatusEnum } from '../enums.js';
+import { tenantStatusEnum } from '../enums';
 
 export const tenants = pgTable(
   'Tenant',
@@ -10,6 +10,7 @@ export const tenants = pgTable(
     slug: text('slug').notNull().unique(),
     status: tenantStatusEnum('status').notNull().default('ACTIVE'),
     plan: text('plan').notNull().default('FREE'),
+    allowSupportAccess: boolean('allowSupportAccess').notNull().default(true),
     // Hybrid Shared / Dedicated Database Routing
     databaseMode: text('databaseMode').notNull().default('shared'), // 'shared' | 'dedicated'
     databaseKey: text('databaseKey').notNull().default('primary'), // trusted routing key

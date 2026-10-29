@@ -1,18 +1,18 @@
 import { and, eq, isNull } from 'drizzle-orm';
 
-import { db } from '@/config/db.js';
-import { roles } from '@/db/schema/index.js';
-import { cache } from '@/lib/cache.js';
-import { AppError } from '@/lib/errors.js';
+import { db } from '@/config/db';
+import { roles } from '@/db/schema/index';
+import { cache } from '@/lib/cache';
+import { AppError } from '@/lib/errors';
 
-import { SYSTEM_MODULE_DEFINITIONS } from './modules.registry.js';
-import * as dto from './rbac.dto.js';
+import { SYSTEM_MODULE_DEFINITIONS } from './modules.registry';
+import * as dto from './rbac.dto';
 import {
   rbacRepo,
   type AppModule,
   type ModuleWithPermissions,
   type Permission,
-} from './rbac.repository.js';
+} from './rbac.repository';
 
 export const SYSTEM_PERMISSIONS = SYSTEM_MODULE_DEFINITIONS.flatMap((m) =>
   m.permissions.map((p) => ({

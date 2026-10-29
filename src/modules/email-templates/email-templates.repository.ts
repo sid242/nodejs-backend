@@ -1,7 +1,7 @@
 import { and, desc, eq, ilike, or, sql } from 'drizzle-orm';
 
-import { db } from '@/config/db.js';
-import { emailTemplates, type EmailTemplate, type NewEmailTemplate } from '@/db/schema/index.js';
+import { db } from '@/config/db';
+import { emailTemplates, type EmailTemplate, type NewEmailTemplate } from '@/db/schema/index';
 
 export interface FindEmailTemplatesOptions {
   page?: number;

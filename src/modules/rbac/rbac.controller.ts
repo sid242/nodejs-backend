@@ -1,11 +1,11 @@
 import type { Request, Response } from 'express';
 
-import { asyncHandler } from '@/lib/async-handler.js';
-import { AppError } from '@/lib/errors.js';
-import { AppResponse } from '@/lib/responses.js';
+import { asyncHandler } from '@/lib/async-handler';
+import { AppError } from '@/lib/errors';
+import { AppResponse } from '@/lib/responses';
 
-import * as rbacRepo from './rbac.repository.js';
-import * as rbacService from './rbac.service.js';
+import * as rbacRepo from './rbac.repository';
+import * as rbacService from './rbac.service';
 
 export const listPermissions = asyncHandler(async (_req: Request, res: Response) => {
   const perms = await rbacRepo.findAllPermissions();

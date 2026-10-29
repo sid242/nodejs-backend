@@ -1,9 +1,6 @@
 import { Router } from 'express';
 
-import { requireAuth } from '@/middleware/auth';
 import { requirePlatformAuth, requirePlatformPermission } from '@/middleware/platform';
-import { requirePermission } from '@/middleware/rbac';
-import { requireTenant } from '@/middleware/tenant';
 import { validate } from '@/middleware/validate';
 import { PLATFORM_PERMISSIONS } from '@/modules/platform/platform.permissions';
 
@@ -13,28 +10,59 @@ import * as dto from './billing.dto';
 const router: Router = Router();
 
 // ==========================================
-// 1. Tenant-Scoped Invoices & Billing Routes
+// 1. Public Pricing & Plans Catalog
 // ==========================================
-router.get(
-  '/invoices',
-  requireAuth,
-  requireTenant,
-  requirePermission('tenants:read'),
-  validate({ query: dto.listInvoicesQueryDto }),
-  controller.getTenantInvoices,
-);
-
-router.get(
-  '/invoices/:id',
-  requireAuth,
-  requireTenant,
-  requirePermission('tenants:read'),
-  validate({ params: dto.invoiceIdParamDto }),
-  controller.getTenantInvoiceById,
-);
+router.get('/', controller.listPublicPlans);
+router.get('/:id', validate({ params: dto.planIdParamDto }), controller.getPlanById);
 
 // ==========================================
-// 2. Platform Staff Billing Administration
+// 2. Platform Staff Plans Catalog
+// ==========================================
+router.get(
+  '/platform/plans',
+  requirePlatformAuth,
+  requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_READ),
+  validate({ query: dto.listPlansQueryDto }),
+  controller.listPlatformPlans,
+);
+
+router.post(
+  '/platform/plans',
+  requirePlatformAuth,
+  requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_MANAGE),
+  validate({ body: dto.createPlanDto }),
+  controller.createPlan,
+);
+
+router.patch(
+  '/platform/plans/:id',
+  requirePlatformAuth,
+  requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_MANAGE),
+  validate({ params: dto.planIdParamDto, body: dto.updatePlanDto }),
+  controller.updatePlan,
+);
+
+// ==========================================
+// 3. Platform Staff Tenant Subscriptions
+// ==========================================
+router.get(
+  '/platform/tenants/:id/subscription',
+  requirePlatformAuth,
+  requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_READ),
+  validate({ params: dto.tenantSubscriptionParamDto }),
+  controller.getPlatformTenantSubscription,
+);
+
+router.put(
+  '/platform/tenants/:id/subscription',
+  requirePlatformAuth,
+  requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_MANAGE),
+  validate({ params: dto.tenantSubscriptionParamDto, body: dto.updateSubscriptionDto }),
+  controller.updatePlatformTenantSubscription,
+);
+
+// ==========================================
+// 4. Platform Staff Invoices Management
 // ==========================================
 router.get(
   '/platform/invoices',

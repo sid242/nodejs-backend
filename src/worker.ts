@@ -1,9 +1,9 @@
-import { closeDb } from '@/config/db.js';
-import { logger } from '@/config/logger.js';
-import { closeRedisClients } from '@/config/redis.js';
-import { closeQueues } from '@/queues/index.js';
-import { registerSchedulers, startWorkers } from '@/queues/workers/index.js';
-import { closeSocketEmitter } from '@/sockets/emitter.js';
+import { closeDb } from '@/config/db';
+import { logger } from '@/config/logger';
+import { closeRedisClients } from '@/config/redis';
+import { closeQueues } from '@/queues/index';
+import { registerSchedulers, startWorkers } from '@/queues/workers/index';
+import { closeSocketEmitter } from '@/sockets/emitter';
 
 // Separate process from the API => scale and deploy independently (e.g. autoscale on queue depth).
 const workers = startWorkers();

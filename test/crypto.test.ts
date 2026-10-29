@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { decrypt, encrypt } from '@/lib/crypto.js';
+import { decrypt, encrypt } from '@/lib/crypto';
 
 test('AES-256-GCM encryption & decryption roundtrip succeeds', () => {
   const secretText = 'SuperSecretSmtpPassword123!@#';

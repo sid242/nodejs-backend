@@ -1,2 +1,2 @@
-export * from '@/constants/auth.constants.js';
-export * from '@/constants/queue.constants.js';
+export * from '@/constants/auth.constants';
+export * from '@/constants/queue.constants';

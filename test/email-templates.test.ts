@@ -6,7 +6,7 @@ import {
   renderStaffCredentialsEmail,
   renderVerifyEmail,
   renderWelcomeEmail,
-} from '@/templates/emails/index.js';
+} from '@/templates/emails/index';
 
 test('renderWelcomeEmail produces valid subject and includes user name', () => {
   const result = renderWelcomeEmail({ name: 'Alice' });

@@ -1,10 +1,10 @@
 import type { Request, Response } from 'express';
 
-import { asyncHandler } from '@/lib/async-handler.js';
-import { AppResponse } from '@/lib/responses.js';
+import { asyncHandler } from '@/lib/async-handler';
+import { AppResponse } from '@/lib/responses';
 
-import * as platform2FaService from './platform-2fa.service.js';
-import * as service from './platform.service.js';
+import * as platform2FaService from './platform-2fa.service';
+import * as service from './platform.service';
 
 // ==========================================
 // 1. Staff Authentication & Handlers
@@ -194,12 +194,21 @@ export const listPermissions = asyncHandler(async (_req: Request, res: Response)
 
 export const startSupportSession = asyncHandler(async (req: Request, res: Response) => {
   const result = await service.startSupportSession(
-    req.staff!.id,
+    req.staff!,
     req.params.id as string,
     req.valid?.body,
     req.id ? String(req.id) : undefined,
   );
   AppResponse.created(result, 'Tenant support session initiated and audited').send(res);
+});
+
+export const enterSupportSession = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.enterSupportSession(
+    req.staff!.id,
+    req.params.id as string,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.ok(result, 'Support session entered successfully').send(res);
 });
 
 export const endSupportSession = asyncHandler(async (req: Request, res: Response) => {

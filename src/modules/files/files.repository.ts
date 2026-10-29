@@ -1,7 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm';
 
-import { db } from '@/config/db.js';
-import { files, type FileRecord, type NewFileRecord } from '@/db/schema/index.js';
+import { db } from '@/config/db';
+import { files, type FileRecord, type NewFileRecord } from '@/db/schema/index';
 
 export async function findById(id: string, tenantId?: string): Promise<FileRecord | null> {
   const conditions = [eq(files.id, id)];

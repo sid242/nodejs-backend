@@ -1,14 +1,14 @@
 import type { Request, Response } from 'express';
 
-import { REFRESH_TOKEN_COOKIE } from '@/constants/index.js';
-import { asyncHandler } from '@/lib/async-handler.js';
-import { AppError } from '@/lib/errors.js';
-import { AppResponse } from '@/lib/responses.js';
-import * as service from '@/modules/auth/auth.service.js';
-import { clearAuthCookies, setAuthCookies } from '@/modules/auth/cookies.js';
-import * as sessionsRepo from '@/modules/auth/sessions.repository.js';
-import { revokeRefreshToken } from '@/modules/auth/tokens.js';
-import * as twoFactorService from '@/modules/auth/two-factor.service.js';
+import { REFRESH_TOKEN_COOKIE } from '@/constants/index';
+import { asyncHandler } from '@/lib/async-handler';
+import { AppError } from '@/lib/errors';
+import { AppResponse } from '@/lib/responses';
+import * as service from '@/modules/auth/auth.service';
+import { clearAuthCookies, setAuthCookies } from '@/modules/auth/cookies';
+import * as sessionsRepo from '@/modules/auth/sessions.repository';
+import { revokeRefreshToken } from '@/modules/auth/tokens';
+import * as twoFactorService from '@/modules/auth/two-factor.service';
 
 export const register = asyncHandler(async (req: Request, res: Response) => {
   const result = await service.register(req.valid?.body);
@@ -89,27 +89,6 @@ export const revokeSession = asyncHandler(async (req: Request, res: Response) =>
   const success = await sessionsRepo.revokeSessionById(String(req.params.sessionId), req.user!.id);
   if (!success) throw AppError.notFound('Session not found');
   AppResponse.ok({ message: 'Session revoked successfully' }).send(res);
-});
-
-export const impersonate = asyncHandler(async (req: Request, res: Response) => {
-  const result = await service.impersonateUser(req.user!, req.valid?.body, {
-    ip: req.ip,
-    userAgent: req.headers['user-agent'],
-    tenantId: req.tenant?.id,
-  });
-  AppResponse.ok(result, 'Impersonation session started successfully').send(res);
-});
-
-export const stopImpersonation = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.impersonator) {
-    throw AppError.badRequest('Not currently in an active impersonation session');
-  }
-  const result = await service.stopImpersonation(req.impersonator, req.user!.id, {
-    ip: req.ip,
-    userAgent: req.headers['user-agent'],
-    tenantId: req.tenant?.id,
-  });
-  AppResponse.ok(result, 'Impersonation session stopped successfully').send(res);
 });
 
 export const requestMagicLink = asyncHandler(async (req: Request, res: Response) => {

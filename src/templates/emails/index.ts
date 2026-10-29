@@ -1,17 +1,17 @@
-export { baseLayout, type BaseLayoutOptions } from './base.js';
+export { baseLayout, type BaseLayoutOptions } from './base';
 export {
   renderWelcomeEmail,
   type RenderWelcomeEmailOptions,
   type EmailTemplateResult,
-} from './welcome.js';
+} from './welcome';
 export {
   renderPasswordResetEmail,
   type RenderPasswordResetEmailOptions,
-} from './password-reset.js';
-export { renderVerifyEmail, type RenderVerifyEmailOptions } from './verify-email.js';
-export { renderMagicLinkEmail, type RenderMagicLinkEmailOptions } from './magic-link.js';
-export { renderTenantInviteEmail, type RenderTenantInviteEmailOptions } from './tenant-invite.js';
+} from './password-reset';
+export { renderVerifyEmail, type RenderVerifyEmailOptions } from './verify-email';
+export { renderMagicLinkEmail, type RenderMagicLinkEmailOptions } from './magic-link';
+export { renderTenantInviteEmail, type RenderTenantInviteEmailOptions } from './tenant-invite';
 export {
   renderStaffCredentialsEmail,
   type RenderStaffCredentialsEmailOptions,
-} from './staff-credentials.js';
+} from './staff-credentials';

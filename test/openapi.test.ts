@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { generateOpenApiDocument, openApiDocument } from '@/docs/openapi.js';
+import { generateOpenApiDocument, openApiDocument } from '@/docs/openapi';
 
 test('OpenAPI specification generates valid 3.0.3 document', () => {
   const doc = generateOpenApiDocument();

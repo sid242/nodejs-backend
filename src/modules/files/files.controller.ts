@@ -1,9 +1,9 @@
 import type { Request, Response } from 'express';
 
-import { createRedis } from '@/config/redis.js';
-import { asyncHandler } from '@/lib/async-handler.js';
-import { AppResponse } from '@/lib/responses.js';
-import * as service from '@/modules/files/files.service.js';
+import { createRedis } from '@/config/redis';
+import { asyncHandler } from '@/lib/async-handler';
+import { AppResponse } from '@/lib/responses';
+import * as service from '@/modules/files/files.service';
 
 export const listFiles = asyncHandler(async (req: Request, res: Response) => {
   const files = await service.listFiles(req.user!.id, req.tenant?.id);

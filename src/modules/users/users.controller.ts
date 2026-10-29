@@ -1,8 +1,8 @@
 import type { Request, Response } from 'express';
 
-import { asyncHandler } from '@/lib/async-handler.js';
-import { AppResponse } from '@/lib/responses.js';
-import * as service from '@/modules/users/users.service.js';
+import { asyncHandler } from '@/lib/async-handler';
+import { AppResponse } from '@/lib/responses';
+import * as service from '@/modules/users/users.service';
 
 export const getMe = asyncHandler(async (req: Request, res: Response) => {
   const user = await service.getMe(req.user!.id);

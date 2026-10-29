@@ -3,41 +3,37 @@ import dns from 'node:dns/promises';
 import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
 
-import { db } from '@/config/db.js';
-import { env } from '@/config/env.js';
-import {
-  appModules,
-  tenantMemberRoles,
-  tenantModules,
-  type PublicTenant,
-  type PublicTenantBranding,
-  type PublicTenantEmailConfig,
-  type PublicUser,
-  type Tenant,
-  type TenantMember,
-} from '@/db/schema/index.js';
-import { cache } from '@/lib/cache.js';
-import { decrypt, encrypt } from '@/lib/crypto.js';
-import { AppError } from '@/lib/errors.js';
-import { invalidateTenantEmailCache, verifySmtpConnection } from '@/lib/mailer.js';
-import { createUploadPost } from '@/lib/s3.js';
-import { safeFilename } from '@/lib/utils.js';
-import * as auditRepo from '@/modules/audit/audit.repository.js';
-import { logSecurityEvent } from '@/modules/audit/audit.service.js';
-import * as authRepo from '@/modules/auth/auth.repository.js';
+import { env } from '@/config/env';
+import type {
+  PublicTenant,
+  PublicTenantBranding,
+  PublicTenantEmailConfig,
+  PublicUser,
+  Tenant,
+  TenantMember,
+} from '@/db/schema/index';
+import { cache } from '@/lib/cache';
+import { decrypt, encrypt } from '@/lib/crypto';
+import { AppError } from '@/lib/errors';
+import { invalidateTenantEmailCache, verifySmtpConnection } from '@/lib/mailer';
+import { createUploadPost } from '@/lib/s3';
+import { safeFilename } from '@/lib/utils';
+import * as auditRepo from '@/modules/audit/audit.repository';
+import { logSecurityEvent } from '@/modules/audit/audit.service';
+import * as authRepo from '@/modules/auth/auth.repository';
 import {
   createMagicLinkToken,
   issueTokens,
   revokeAllUserTokens,
   verifyAndConsumeMagicLinkToken,
-} from '@/modules/auth/tokens.js';
-import * as plansService from '@/modules/plans/plans.service.js';
-import { rbacRepo } from '@/modules/rbac/rbac.repository.js';
-import * as rbacService from '@/modules/rbac/rbac.service.js';
-import { emailQueue } from '@/queues/index.js';
+} from '@/modules/auth/tokens';
+import * as billingService from '@/modules/billing/billing.service';
+import { rbacRepo } from '@/modules/rbac/rbac.repository';
+import * as rbacService from '@/modules/rbac/rbac.service';
+import { emailQueue } from '@/queues/index';
 
-import { tenantBrandingRepo } from './tenant-branding.repository.js';
-import { tenantEmailRepo } from './tenant-email.repository.js';
+import { tenantBrandingRepo } from './tenant-branding.repository';
+import { tenantEmailRepo } from './tenant-email.repository';
 import type {
   CreateTenantDto,
   RequestBrandingUploadUrlDto,
@@ -46,8 +42,8 @@ import type {
   UpdateTenantBrandingDto,
   UpdateTenantDto,
   UpsertTenantEmailConfigDto,
-} from './tenants.dto.js';
-import { tenantsRepo } from './tenants.repository.js';
+} from './tenants.dto';
+import { tenantsRepo } from './tenants.repository';
 
 export const DEFAULT_TENANT_PLAN = 'FREE';
 
@@ -61,76 +57,14 @@ export async function createTenantOrganization(
     throw AppError.conflict('A tenant with this slug already exists');
   }
 
-  // Wrap all relational provisioning steps in an atomic database transaction
+  // Provision tenant, owner membership, role, modules, and trialing subscription atomically in repository
   let tenantRecord: Tenant;
   try {
-    tenantRecord = await db.transaction(async (tx) => {
-      // 1. Create tenant record via repository with DEFAULT plan
-      const tenant = await tenantsRepo.createTenant(
-        {
-          name: data?.name,
-          slug: cleanSlug,
-          plan: DEFAULT_TENANT_PLAN,
-          status: 'ACTIVE',
-        },
-        tx,
-      );
-
-      if (!tenant) throw AppError.internal('Failed to create tenant organization');
-
-      // 2. Add creator as initial member via repository
-      const member = await tenantsRepo.addTenantMember(
-        {
-          tenantId: tenant.id,
-          userId: creatorUserId,
-          status: 'ACTIVE',
-        },
-        tx,
-      );
-
-      if (!member) throw AppError.internal('Failed to assign initial tenant member');
-
-      // 3. Look up OWNER role (global system role)
-      const systemRoles = await rbacRepo.findRolesByTenant(null);
-      let ownerRole = systemRoles?.find((r) => r?.name === rbacService.SYSTEM_ROLES.OWNER);
-
-      if (!ownerRole) {
-        await rbacService.seedDefaultRbac();
-        const refreshed = await rbacRepo.findRolesByTenant(null);
-        ownerRole = refreshed?.find((r) => r?.name === rbacService.SYSTEM_ROLES.OWNER);
-      }
-
-      if (!ownerRole) {
-        throw AppError.internal('Failed to resolve or assign Owner system role for workspace');
-      }
-
-      await tx
-        .insert(tenantMemberRoles)
-        .values({
-          memberId: member.id,
-          roleId: ownerRole.id,
-        })
-        .onConflictDoNothing();
-
-      // 4. Provision default tenant modules
-      const allModules = await tx.select({ id: appModules.id }).from(appModules);
-      if (allModules?.length > 0) {
-        await tx
-          .insert(tenantModules)
-          .values(
-            allModules.map((m) => ({
-              tenantId: tenant.id,
-              moduleId: m.id,
-              isEnabled: true,
-            })),
-          )
-          .onConflictDoNothing();
-      }
-
-      // 5. Assign initial subscription
-      await plansService.assignInitialSubscription(tenant.id, tenant?.plan ?? 'FREE');
-
-      return tenant;
+    tenantRecord = await tenantsRepo.provisionTenantTransaction({
+      creatorUserId,
+      name: data.name,
+      slug: cleanSlug,
+      planKey: DEFAULT_TENANT_PLAN,
     });
   } catch (err: unknown) {
     const errObj = (typeof err === 'object' && err !== null ? err : {}) as Record<string, unknown>;
@@ -221,7 +155,7 @@ export async function addMemberToTenant(
   message?: string;
 }> {
   // 1. Enforce SaaS Plan Seat Limits
-  await plansService.checkTenantSeatLimit(tenantId);
+  await billingService.enforceLimit(tenantId, 'maxMembers');
 
   const normalizedEmail = userEmail.toLowerCase().trim();
   let targetUser = await authRepo.findByEmail(normalizedEmail);
@@ -554,13 +488,16 @@ export async function bulkInviteMembers(
   successful: Array<{ email: string; role: string; inviteUrl?: string }>;
   failed: Array<{ email: string; reason: string }>;
 }> {
-  const sub = await plansService.getTenantSubscription(tenantId);
-  const remainingSeats = sub?.usage?.remainingSeats ?? 0;
-
-  if (remainingSeats < invites.length) {
-    throw AppError.forbidden(
-      `Cannot invite ${invites.length} members. Only ${remainingSeats} seat(s) remaining on your current plan. Please upgrade your subscription.`,
-    );
+  const overview = await billingService.getTenantBillingOverview(tenantId);
+  const maxMembers = overview.limits.maxMembers;
+  if (maxMembers !== null) {
+    const currentMembers = overview.usage.members;
+    const remainingSeats = Math.max(0, maxMembers - currentMembers);
+    if (remainingSeats < invites.length) {
+      throw AppError.forbidden(
+        `Cannot invite ${invites.length} members. Only ${remainingSeats} seat(s) remaining on your current plan. Please upgrade your subscription.`,
+      );
+    }
   }
 
   const successful: Array<{ email: string; role: string; inviteUrl?: string }> = [];

@@ -1,7 +1,7 @@
 import type { CookieOptions, Response } from 'express';
 
-import { env } from '@/config/env.js';
-import { ACCESS_TOKEN_COOKIE, COOKIE_PATHS, REFRESH_TOKEN_COOKIE } from '@/constants/index.js';
+import { env } from '@/config/env';
+import { ACCESS_TOKEN_COOKIE, COOKIE_PATHS, REFRESH_TOKEN_COOKIE } from '@/constants/index';
 
 export { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE };
 

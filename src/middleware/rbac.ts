@@ -1,6 +1,6 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
-import { AppError } from '@/lib/errors.js';
+import { AppError } from '@/lib/errors';
 
 export function requirePermission(permission: string): RequestHandler {
   return (req: Request, _res: Response, next: NextFunction): void => {

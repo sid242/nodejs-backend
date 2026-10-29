@@ -9,8 +9,8 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
-import { platformRoles } from './platform-roles.js';
-import { platformStaff } from './platform-staff.js';
+import { platformRoles } from './platform-roles';
+import { platformStaff } from './platform-staff';
 
 export const platformUserGroups = pgTable(
   'PlatformUserGroup',

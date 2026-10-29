@@ -1,8 +1,8 @@
 import bcrypt from 'bcryptjs';
 import { eq, inArray } from 'drizzle-orm';
 
-import { closeDb, db } from '@/config/db.js';
-import { cacheRedis, closeRedisClients } from '@/config/redis.js';
+import { closeDb, db } from '@/config/db';
+import { cacheRedis, closeRedisClients } from '@/config/redis';
 import {
   auditLogs,
   platformAuditLogs,
@@ -11,7 +11,7 @@ import {
   platformSupportSessions,
   tenants,
   users,
-} from '@/db/schema/index.js';
+} from '@/db/schema/index';
 
 const DEMO_PASSWORD = 'Password@123456';
 

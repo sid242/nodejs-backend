@@ -3,25 +3,25 @@ import { after, test } from 'node:test';
 import { eq } from 'drizzle-orm';
 import jwt from 'jsonwebtoken';
 
-import { closeDb, db } from '../src/config/db.js';
-import { env } from '../src/config/env.js';
-import { closeRedisClients } from '../src/config/redis.js';
+import { closeDb, db } from '../src/config/db';
+import { env } from '../src/config/env';
+import { closeRedisClients } from '../src/config/redis';
 import {
   platformRoles,
   platformStaff,
   platformSupportSessions,
   users,
-} from '../src/db/schema/index.js';
-import { requireAuth } from '../src/middleware/auth.js';
-import { requirePlatformAuth } from '../src/middleware/platform.js';
-import { resolveTenantContext } from '../src/middleware/tenant.js';
-import * as authRepo from '../src/modules/auth/auth.repository.js';
-import * as authService from '../src/modules/auth/auth.service.js';
-import { createMagicLinkToken, issueTokens } from '../src/modules/auth/tokens.js';
-import * as filesRepo from '../src/modules/files/files.repository.js';
-import * as platformService from '../src/modules/platform/platform.service.js';
-import { tenantsRepo } from '../src/modules/tenants/tenants.repository.js';
-import * as tenantsService from '../src/modules/tenants/tenants.service.js';
+} from '../src/db/schema/index';
+import { requireAuth } from '../src/middleware/auth';
+import { requirePlatformAuth } from '../src/middleware/platform';
+import { resolveTenantContext } from '../src/middleware/tenant';
+import * as authRepo from '../src/modules/auth/auth.repository';
+import * as authService from '../src/modules/auth/auth.service';
+import { createMagicLinkToken, issueTokens } from '../src/modules/auth/tokens';
+import * as filesRepo from '../src/modules/files/files.repository';
+import * as platformService from '../src/modules/platform/platform.service';
+import { tenantsRepo } from '../src/modules/tenants/tenants.repository';
+import * as tenantsService from '../src/modules/tenants/tenants.service';
 
 after(async () => {
   await Promise.allSettled([closeRedisClients(), closeDb()]);

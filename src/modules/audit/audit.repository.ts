@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, ilike, inArray, lte, or, sql } from 'drizzle-orm';
 
-import { db } from '@/config/db.js';
-import { auditLogs, type AuditLog, type NewAuditLog } from '@/db/schema/index.js';
+import { db } from '@/config/db';
+import { auditLogs, type AuditLog, type NewAuditLog } from '@/db/schema/index';
 
 export async function createAuditLog(data: NewAuditLog): Promise<AuditLog> {
   const [record] = await db.insert(auditLogs).values(data).returning();

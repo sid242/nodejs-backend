@@ -1,9 +1,9 @@
 import bcrypt from 'bcryptjs';
 import { eq, sql } from 'drizzle-orm';
 
-import { closeDb, db } from '@/config/db.js';
-import { logger } from '@/config/logger.js';
-import { cacheRedis, closeRedisClients, redis } from '@/config/redis.js';
+import { closeDb, db } from '@/config/db';
+import { logger } from '@/config/logger';
+import { cacheRedis, closeRedisClients, redis } from '@/config/redis';
 import {
   appModules,
   auditLogs,
@@ -17,12 +17,12 @@ import {
   tenantModules,
   tenants,
   users,
-} from '@/db/schema/index.js';
-import { assignInitialSubscription, seedDefaultPlans } from '@/modules/plans/plans.service.js';
-import * as platformRepo from '@/modules/platform/platform.repository.js';
-import { seedPlatformDefaults } from '@/modules/platform/platform.service.js';
-import { rbacRepo } from '@/modules/rbac/rbac.repository.js';
-import { seedDefaultRbac } from '@/modules/rbac/rbac.service.js';
+} from '@/db/schema/index';
+import { assignInitialSubscription, seedDefaultPlans } from '@/modules/billing/billing.service';
+import * as platformRepo from '@/modules/platform/platform.repository';
+import { seedPlatformDefaults } from '@/modules/platform/platform.service';
+import { rbacRepo } from '@/modules/rbac/rbac.repository';
+import { seedDefaultRbac } from '@/modules/rbac/rbac.service';
 
 // Guard: Demo data must never run in production
 if (process.env.NODE_ENV === 'production') {

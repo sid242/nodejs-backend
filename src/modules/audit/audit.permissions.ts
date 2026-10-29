@@ -1,4 +1,4 @@
-import type { DomainModuleDefinition } from '@/modules/rbac/modules.types.js';
+import type { DomainModuleDefinition } from '@/modules/rbac/modules.types';
 
 export const auditModuleDefinition: DomainModuleDefinition = {
   key: 'audit',

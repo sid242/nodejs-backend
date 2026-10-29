@@ -3,13 +3,13 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Secret, TOTP } from 'otpauth';
 
-import { env } from '@/config/env.js';
-import { redis } from '@/config/redis.js';
-import { AUTH_MESSAGES, REDIS_PREFIXES, TOKEN_EXPIRATION } from '@/constants/index.js';
-import { decrypt, encrypt } from '@/lib/crypto.js';
-import { AppError } from '@/lib/errors.js';
+import { env } from '@/config/env';
+import { redis } from '@/config/redis';
+import { AUTH_MESSAGES, REDIS_PREFIXES, TOKEN_EXPIRATION } from '@/constants/index';
+import { decrypt, encrypt } from '@/lib/crypto';
+import { AppError } from '@/lib/errors';
 
-import * as platformRepo from './platform.repository.js';
+import * as platformRepo from './platform.repository';
 
 const APP_NAME = 'SaaS Platform';
 const RECOVERY_CODE_COUNT = 8;

@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { ZodError } from 'zod';
 
-import { AppError } from '@/lib/errors.js';
+import { AppError } from '@/lib/errors';
 
 export function notFound(req: Request, res: Response): void {
   res.status(404).json({

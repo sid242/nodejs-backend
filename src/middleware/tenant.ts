@@ -1,16 +1,20 @@
 import type { NextFunction, Request, Response } from 'express';
 
-import { AppError } from '@/lib/errors.js';
-import * as platformRepo from '@/modules/platform/platform.repository.js';
-import { resolveUserPermissions, SYSTEM_ROLES } from '@/modules/rbac/rbac.service.js';
-import * as tenantsRepo from '@/modules/tenants/tenants.repository.js';
-import * as usersRepo from '@/modules/users/users.repository.js';
+import { AppError } from '@/lib/errors';
+import * as platformRepo from '@/modules/platform/platform.repository';
+import { resolveUserPermissions, SYSTEM_ROLES } from '@/modules/rbac/rbac.service';
+import * as tenantsRepo from '@/modules/tenants/tenants.repository';
+import * as usersRepo from '@/modules/users/users.repository';
 
 export async function resolveTenantContext(
   req: Request,
   _res: Response,
   next: NextFunction,
 ): Promise<void> {
+  if (req.isSupportSession && req.tenant) {
+    return next();
+  }
+
   if (!req.user && !req.staff) {
     return next();
   }
@@ -74,9 +78,14 @@ export async function resolveTenantContext(
       ) {
         activeSupportSession = session;
         req.supportSession = {
+          id: session.id,
           sessionId: session.id,
           staffId: session.staffId,
           tenantId: session.tenantId,
+          mode: session.mode as any,
+          scope: session.scope as any,
+          targetUserId: session.targetUserId,
+          targetMemberId: session.targetMemberId,
           reason: session.reason,
           expiresAt: session.expiresAt,
         };
@@ -163,7 +172,11 @@ export async function requireTenant(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
-  if (!req.user && !req.staff) {
+  if (req.isSupportSession && req.tenant) {
+    return next();
+  }
+
+  if (!req.user && !req.staff && !req.isSupportSession) {
     return next(AppError.unauthorized('Authentication required to access tenant resources'));
   }
 

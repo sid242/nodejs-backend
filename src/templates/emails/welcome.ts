@@ -1,4 +1,4 @@
-import { baseLayout } from './base.js';
+import { baseLayout } from './base';
 
 export interface RenderWelcomeEmailOptions {
   name?: string;

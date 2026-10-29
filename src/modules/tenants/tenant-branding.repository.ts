@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 
-import { db } from '@/config/db.js';
-import { tenantBrandings, type NewTenantBranding, type TenantBranding } from '@/db/schema/index.js';
+import { db } from '@/config/db';
+import { tenantBrandings, type NewTenantBranding, type TenantBranding } from '@/db/schema/index';
 
 export async function findBrandingByTenantId(tenantId: string): Promise<TenantBranding | null> {
   const [record] = await db

@@ -1,20 +1,20 @@
 import { Router } from 'express';
 
-import { requirePlatformAuth, requirePlatformPermission } from '@/middleware/platform.js';
-import { validate } from '@/middleware/validate.js';
+import { requirePlatformAuth, requirePlatformPermission } from '@/middleware/platform';
+import { validate } from '@/middleware/validate';
 import {
   disableTwoFactorDto,
   enableTwoFactorDto,
   verifyTwoFactorChallengeDto,
-} from '@/modules/auth/auth.dto.js';
+} from '@/modules/auth/auth.dto';
+import * as rbacController from '@/modules/rbac/rbac.controller';
+import * as rbacDto from '@/modules/rbac/rbac.dto';
+import * as usersController from '@/modules/users/users.controller';
+import * as usersDto from '@/modules/users/users.dto';
 
-import * as controller from './platform.controller.js';
-import * as dto from './platform.dto.js';
-import { PLATFORM_PERMISSIONS } from './platform.permissions.js';
-import * as rbacController from '@/modules/rbac/rbac.controller.js';
-import * as rbacDto from '@/modules/rbac/rbac.dto.js';
-import * as usersController from '@/modules/users/users.controller.js';
-import * as usersDto from '@/modules/users/users.dto.js';
+import * as controller from './platform.controller';
+import * as dto from './platform.dto';
+import { PLATFORM_PERMISSIONS } from './platform.permissions';
 
 const router: Router = Router();
 
@@ -142,6 +142,12 @@ router.post(
   requirePlatformPermission(PLATFORM_PERMISSIONS.SUPPORT_START),
   validate({ body: dto.startSupportSessionDto }),
   controller.startSupportSession,
+);
+
+router.post(
+  '/support-sessions/:id/enter',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.SUPPORT_START),
+  controller.enterSupportSession,
 );
 
 router.post(

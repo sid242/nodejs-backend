@@ -1,42 +1,36 @@
-import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 
-import { env } from '@/config/env.js';
-import { AUTH_MESSAGES, REDIS_PREFIXES } from '@/constants/index.js';
-import type { PublicUser, User } from '@/db/schema/index.js';
-import { cache } from '@/lib/cache.js';
-import { AppError } from '@/lib/errors.js';
-import { logSecurityEvent } from '@/modules/audit/audit.service.js';
+import { env } from '@/config/env';
+import { AUTH_MESSAGES, REDIS_PREFIXES } from '@/constants/index';
+import type { PublicUser, User } from '@/db/schema';
+import { cache } from '@/lib/cache';
+import { AppError } from '@/lib/errors';
 import type {
   ChangePasswordDto,
   ForgotPasswordDto,
-  ImpersonateUserDto,
   LoginDto,
   RegisterDto,
   ResetPasswordDto,
   VerifyEmailDto,
-} from '@/modules/auth/auth.dto.js';
-import * as authRepo from '@/modules/auth/auth.repository.js';
+} from '@/modules/auth/auth.dto';
+import * as authRepo from '@/modules/auth/auth.repository';
 import {
   consumeRefreshToken,
   createEmailVerificationToken,
   createMagicLinkToken,
   createPasswordResetToken,
-  issueImpersonationToken,
   issueTokens,
   revokeAllUserTokens,
-  revokeImpersonationSession,
   verifyAndConsumeEmailVerificationToken,
   verifyAndConsumeMagicLinkToken,
   verifyAndConsumePasswordResetToken,
   type AuthTokens,
-  type ImpersonatorClaim,
-} from '@/modules/auth/tokens.js';
+} from '@/modules/auth/tokens';
 import {
   createTwoFactorChallenge,
   type TwoFactorChallengeData,
-} from '@/modules/auth/two-factor.service.js';
-import { emailQueue } from '@/queues/index.js';
+} from '@/modules/auth/two-factor.service';
+import { emailQueue } from '@/queues/index';
 
 // Compared against when the user doesn't exist, so response time doesn't reveal valid emails.
 const DUMMY_HASH = bcrypt.hashSync('dummy-password', 12);
@@ -220,112 +214,6 @@ export async function verifyEmail({
   await cache.del(`${REDIS_PREFIXES.USER_CACHE}${userId}`);
 
   return { user, message: AUTH_MESSAGES.EMAIL_VERIFIED_SUCCESS };
-}
-
-export interface ImpersonationResult {
-  accessToken: string;
-  sessionId: string;
-  expiresInSeconds: number;
-  expiresInMinutes: number;
-  targetUser: PublicUser;
-}
-
-export async function impersonateUser(
-  adminUser: { id: string },
-  data: ImpersonateUserDto,
-  clientMeta?: { ip?: string; userAgent?: string; tenantId?: string },
-): Promise<ImpersonationResult> {
-  if (adminUser.id === data.targetUserId) {
-    throw AppError.badRequest(AUTH_MESSAGES.CANNOT_IMPERSONATE_SELF);
-  }
-
-  const target = await authRepo.findById(data.targetUserId);
-  if (!target || target.deletedAt) {
-    throw AppError.notFound('Target user not found');
-  }
-
-  if (target.status === 'SUSPENDED' || target.status === 'DEACTIVATED') {
-    throw AppError.forbidden(
-      `Cannot impersonate account with status: ${target.status.toLowerCase()}`,
-    );
-  }
-
-  const sessionId = randomUUID();
-  const durationMinutes = data.durationMinutes ?? 30;
-
-  const impersonatorClaim: ImpersonatorClaim = {
-    userId: adminUser.id,
-    role: 'ADMIN',
-    reason: data.reason,
-    sessionId,
-  };
-
-  const tokenResult = await issueImpersonationToken(
-    { id: target.id },
-    impersonatorClaim,
-    durationMinutes,
-  );
-
-  // Record immutable audit event
-  await logSecurityEvent({
-    tenantId: clientMeta?.tenantId,
-    userId: adminUser.id,
-    action: 'AUTH_IMPERSONATE_START',
-    entityType: 'User',
-    entityId: target.id,
-    ipAddress: clientMeta?.ip,
-    userAgent: clientMeta?.userAgent,
-    metadata: {
-      targetEmail: target.email,
-      reason: data.reason,
-      sessionId,
-      durationMinutes,
-    },
-  });
-
-  const targetUser: PublicUser = {
-    id: target.id,
-    email: target.email,
-    name: target.name,
-    status: target.status,
-    emailVerifiedAt: target.emailVerifiedAt,
-    phoneNumber: target.phoneNumber,
-    phoneVerifiedAt: target.phoneVerifiedAt,
-    twoFactorEnabledAt: target.twoFactorEnabledAt,
-    createdAt: target.createdAt,
-  };
-
-  return {
-    accessToken: tokenResult.accessToken,
-    sessionId,
-    expiresInSeconds: tokenResult.expiresInSeconds,
-    expiresInMinutes: durationMinutes,
-    targetUser,
-  };
-}
-
-export async function stopImpersonation(
-  impersonator: ImpersonatorClaim,
-  targetUserId: string,
-  clientMeta?: { ip?: string; userAgent?: string; tenantId?: string },
-): Promise<{ message: string }> {
-  await revokeImpersonationSession(impersonator.sessionId);
-
-  await logSecurityEvent({
-    tenantId: clientMeta?.tenantId,
-    userId: impersonator.userId,
-    action: 'AUTH_IMPERSONATE_STOP',
-    entityType: 'User',
-    entityId: targetUserId,
-    ipAddress: clientMeta?.ip,
-    userAgent: clientMeta?.userAgent,
-    metadata: {
-      sessionId: impersonator.sessionId,
-      reason: impersonator.reason,
-    },
-  });
-
-  return { message: AUTH_MESSAGES.IMPERSONATION_STOPPED };
 }
 
 export interface MagicLinkRequestResult {

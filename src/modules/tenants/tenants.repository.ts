@@ -2,7 +2,13 @@ import { and, desc, eq, isNull } from 'drizzle-orm';
 
 import { db, type DbExecutor } from '@/config/db';
 import {
+  appModules,
+  plans,
+  subscriptionEvents,
+  subscriptions,
+  tenantMemberRoles,
   tenantMembers,
+  tenantModules,
   tenants,
   users,
   type NewTenant,
@@ -10,6 +16,8 @@ import {
   type Tenant,
   type TenantMember,
 } from '@/db/schema';
+import * as rbacRepo from '@/modules/rbac/rbac.repository';
+import * as rbacService from '@/modules/rbac/rbac.service';
 
 export async function createTenant(data: NewTenant, executor: DbExecutor = db): Promise<Tenant> {
   const [record] = await executor.insert(tenants).values(data).returning();
@@ -165,6 +173,113 @@ export async function findMembershipsByUserId(userId: string): Promise<TenantMem
   return db.select().from(tenantMembers).where(eq(tenantMembers.userId, userId));
 }
 
+export async function provisionTenantTransaction(data: {
+  creatorUserId: string;
+  name: string;
+  slug: string;
+  planKey: string;
+}): Promise<Tenant> {
+  return db.transaction(async (tx) => {
+    // 1. Create tenant record
+    const [tenant] = await tx
+      .insert(tenants)
+      .values({
+        name: data.name,
+        slug: data.slug,
+        plan: data.planKey,
+        status: 'ACTIVE',
+      })
+      .returning();
+
+    if (!tenant) throw new Error('Failed to create tenant organization');
+
+    // 2. Add creator as initial active member
+    const [member] = await tx
+      .insert(tenantMembers)
+      .values({
+        tenantId: tenant.id,
+        userId: data.creatorUserId,
+        status: 'ACTIVE',
+      })
+      .returning();
+
+    if (!member) throw new Error('Failed to assign initial tenant member');
+
+    // 3. Resolve OWNER system role
+    const systemRoles = await rbacRepo.findRolesByTenant(null);
+    let ownerRole = systemRoles?.find((r) => r?.name === rbacService.SYSTEM_ROLES.OWNER);
+    if (!ownerRole) {
+      await rbacService.seedDefaultRbac();
+      const refreshed = await rbacRepo.findRolesByTenant(null);
+      ownerRole = refreshed?.find((r) => r?.name === rbacService.SYSTEM_ROLES.OWNER);
+    }
+    if (ownerRole) {
+      await tx
+        .insert(tenantMemberRoles)
+        .values({
+          memberId: member.id,
+          roleId: ownerRole.id,
+        })
+        .onConflictDoNothing();
+    }
+
+    // 4. Provision default tenant modules
+    const allModules = await tx.select({ id: appModules.id }).from(appModules);
+    if (allModules?.length > 0) {
+      await tx
+        .insert(tenantModules)
+        .values(
+          allModules.map((m) => ({
+            tenantId: tenant.id,
+            moduleId: m.id,
+            isEnabled: true,
+          })),
+        )
+        .onConflictDoNothing();
+    }
+
+    // 5. Look up plan and assign initial trialing subscription
+    const [planRecord] = await tx
+      .select()
+      .from(plans)
+      .where(eq(plans.key, data.planKey.toUpperCase()))
+      .limit(1);
+
+    if (planRecord) {
+      const trialDays = planRecord.trialDays ?? 14;
+      const trialEndsAt = new Date(Date.now() + trialDays * 24 * 3600 * 1000);
+
+      const [sub] = await tx
+        .insert(subscriptions)
+        .values({
+          tenantId: tenant.id,
+          planId: planRecord.id,
+          status: 'TRIALING',
+          trialEndsAt,
+          currentPeriodStart: new Date(),
+          currentPeriodEnd: trialEndsAt,
+          provider: 'manual',
+        })
+        .returning();
+
+      if (sub) {
+        await tx.insert(subscriptionEvents).values({
+          subscriptionId: sub.id,
+          tenantId: tenant.id,
+          type: 'TRIAL_STARTED',
+          fromPlanId: null,
+          toPlanId: planRecord.id,
+          actorType: 'USER',
+          actorId: data.creatorUserId,
+          metadata: { planKey: data.planKey, trialDays },
+        });
+      }
+    }
+
+    return tenant;
+  });
+}
+
 export const tenantsRepo = {
   createTenant,
   findTenantById,
@@ -179,4 +294,5 @@ export const tenantsRepo = {
   findTenantMembers,
   removeTenantMember,
   updateTenantMemberStatus,
+  provisionTenantTransaction,
 };

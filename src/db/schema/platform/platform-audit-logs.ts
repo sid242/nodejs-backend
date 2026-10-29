@@ -1,6 +1,7 @@
 import { index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
-import { platformStaff } from './platform-staff.js';
+import { tenants } from '../tenants/index';
+import { platformStaff } from './platform-staff';
 
 export const platformAuditLogs = pgTable(
   'PlatformAuditLog',
@@ -12,7 +13,8 @@ export const platformAuditLogs = pgTable(
     action: text('action').notNull(),
     targetType: text('targetType').notNull(), // e.g. 'staff', 'role', 'tenant', 'billing'
     targetId: text('targetId'),
-    tenantId: uuid('tenantId'), // nullable: populated when action targets a specific tenant
+    tenantId: uuid('tenantId').references(() => tenants.id, { onDelete: 'set null' }),
+    supportSessionId: uuid('supportSessionId'),
     metadata: jsonb('metadata'), // allow-listed fields only
     requestId: text('requestId'),
     ipAddress: text('ipAddress'),
@@ -24,6 +26,7 @@ export const platformAuditLogs = pgTable(
     index('PlatformAuditLog_action_idx').on(table.action),
     index('PlatformAuditLog_targetType_idx').on(table.targetType),
     index('PlatformAuditLog_tenantId_idx').on(table.tenantId),
+    index('PlatformAuditLog_supportSessionId_idx').on(table.supportSessionId),
     index('PlatformAuditLog_createdAt_idx').on(table.createdAt),
   ],
 );

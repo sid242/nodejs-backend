@@ -1,12 +1,12 @@
 import bcrypt from 'bcryptjs';
 
-import { closeDb } from '@/config/db.js';
-import { env } from '@/config/env.js';
-import { logger } from '@/config/logger.js';
-import { closeRedisClients } from '@/config/redis.js';
-import * as platformRepo from '@/modules/platform/platform.repository.js';
-import { seedPlatformDefaults } from '@/modules/platform/platform.service.js';
-import { seedDefaultRbac } from '@/modules/rbac/rbac.service.js';
+import { closeDb } from '@/config/db';
+import { env } from '@/config/env';
+import { logger } from '@/config/logger';
+import { closeRedisClients } from '@/config/redis';
+import * as platformRepo from '@/modules/platform/platform.repository';
+import { seedPlatformDefaults } from '@/modules/platform/platform.service';
+import { seedDefaultRbac } from '@/modules/rbac/rbac.service';
 
 export async function bootstrap(): Promise<void> {
   logger.info('====================================================');

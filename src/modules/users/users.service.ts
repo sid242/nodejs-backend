@@ -1,9 +1,9 @@
-import type { PublicUser } from '@/db/schema/index.js';
-import { cache } from '@/lib/cache.js';
-import { AppError } from '@/lib/errors.js';
-import { revokeAllUserTokens } from '@/modules/auth/tokens.js';
-import type { ListUsersQueryDto, UpdateMeDto } from '@/modules/users/users.dto.js';
-import * as userRepo from '@/modules/users/users.repository.js';
+import type { PublicUser } from '@/db/schema/index';
+import { cache } from '@/lib/cache';
+import { AppError } from '@/lib/errors';
+import { revokeAllUserTokens } from '@/modules/auth/tokens';
+import type { ListUsersQueryDto, UpdateMeDto } from '@/modules/users/users.dto';
+import * as userRepo from '@/modules/users/users.repository';
 
 export const getMe = (id: string): Promise<PublicUser> =>
   cache.wrap(`user:${id}`, 300, async () => {

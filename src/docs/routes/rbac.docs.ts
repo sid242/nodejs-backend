@@ -1,7 +1,7 @@
 import type { OpenAPIRegistry } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
 
-import { bearerAuth, errorResponse, successResponse } from '@/docs/helpers.js';
+import { bearerAuth, errorResponse, successResponse } from '@/docs/helpers';
 import {
   createModuleDto,
   createPermissionDto,
@@ -10,7 +10,7 @@ import {
   updateModuleDto,
   updatePermissionDto,
   updateRoleDto,
-} from '@/modules/rbac/rbac.dto.js';
+} from '@/modules/rbac/rbac.dto';
 
 export const PermissionSchema = z.object({
   id: z.string().uuid(),

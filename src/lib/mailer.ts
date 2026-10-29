@@ -1,11 +1,11 @@
 import { SendEmailCommand, SESv2Client } from '@aws-sdk/client-sesv2';
 import nodemailer from 'nodemailer';
 
-import { env, isProd } from '@/config/env.js';
-import { logger } from '@/config/logger.js';
-import { cache } from '@/lib/cache.js';
-import { decrypt } from '@/lib/crypto.js';
-import { tenantEmailRepo } from '@/modules/tenants/tenant-email.repository.js';
+import { env, isProd } from '@/config/env';
+import { logger } from '@/config/logger';
+import { cache } from '@/lib/cache';
+import { decrypt } from '@/lib/crypto';
+import { tenantEmailRepo } from '@/modules/tenants/tenant-email.repository';
 
 const ses = new SESv2Client({ region: env.AWS_REGION });
 

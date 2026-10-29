@@ -1,8 +1,8 @@
 import type { OpenAPIRegistry } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
 
-import { errorResponse, successResponse } from '@/docs/helpers.js';
-import { UserSchema } from '@/docs/routes/users.docs.js';
+import { errorResponse, successResponse } from '@/docs/helpers';
+import { UserSchema } from '@/docs/routes/users.docs';
 import {
   disableTwoFactorDto,
   enableTwoFactorDto,
@@ -15,7 +15,7 @@ import {
   resetPasswordDto,
   verifyEmailDto,
   verifyTwoFactorChallengeDto,
-} from '@/modules/auth/auth.dto.js';
+} from '@/modules/auth/auth.dto';
 
 export function registerAuthDocs(registry: OpenAPIRegistry): void {
   const RegisterInput = registry.register('RegisterInput', registerDto);

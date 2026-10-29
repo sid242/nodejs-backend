@@ -1,12 +1,12 @@
 import type { Job } from 'bullmq';
 import { and, asc, eq, inArray, lt } from 'drizzle-orm';
 
-import { db } from '@/config/db.js';
-import { env } from '@/config/env.js';
-import { logger } from '@/config/logger.js';
-import { files } from '@/db/schema/index.js';
-import { deleteObject } from '@/lib/s3.js';
-import { forEachConcurrent } from '@/lib/utils.js';
+import { db } from '@/config/db';
+import { env } from '@/config/env';
+import { logger } from '@/config/logger';
+import { files, platformSupportSessions, subscriptions } from '@/db/schema';
+import { deleteObject } from '@/lib/s3';
+import { forEachConcurrent } from '@/lib/utils';
 
 export async function processMaintenance(job: Job): Promise<{ removed: number; failed: number }> {
   if (job.name === 'cleanup-pending-files') {
@@ -35,5 +35,32 @@ export async function processMaintenance(job: Job): Promise<{ removed: number; f
     );
     return { removed: deletedIds.length, failed: stale.length - deletedIds.length };
   }
+
+  if (job.name === 'expire-support-sessions') {
+    const now = new Date();
+    const expired = await db
+      .update(platformSupportSessions)
+      .set({ status: 'EXPIRED', endedAt: now })
+      .where(and(eq(platformSupportSessions.status, 'ACTIVE'), lt(platformSupportSessions.expiresAt, now)))
+      .returning();
+    if (expired.length > 0) {
+      logger.info({ count: expired.length }, 'Expired stale platform support sessions');
+    }
+    return { removed: expired.length, failed: 0 };
+  }
+
+  if (job.name === 'expire-trialing-subscriptions') {
+    const now = new Date();
+    const expiredTrials = await db
+      .update(subscriptions)
+      .set({ status: 'EXPIRED', updatedAt: now })
+      .where(and(eq(subscriptions.status, 'TRIALING'), lt(subscriptions.trialEndsAt, now)))
+      .returning();
+    if (expiredTrials.length > 0) {
+      logger.info({ count: expiredTrials.length }, 'Marked expired trialing subscriptions as EXPIRED');
+    }
+    return { removed: expiredTrials.length, failed: 0 };
+  }
+
   throw new Error(`Unknown maintenance job: ${job.name}`);
 }

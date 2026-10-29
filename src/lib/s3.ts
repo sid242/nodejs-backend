@@ -9,8 +9,8 @@ import {
 import { createPresignedPost, type PresignedPost } from '@aws-sdk/s3-presigned-post';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
-import { env } from '@/config/env.js';
-import { safeFilename } from '@/lib/utils.js';
+import { env } from '@/config/env';
+import { safeFilename } from '@/lib/utils';
 
 // Credentials come from the default provider chain: IAM task role on AWS, env keys locally.
 export const s3 = new S3Client({

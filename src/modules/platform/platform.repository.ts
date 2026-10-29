@@ -1,6 +1,6 @@
 import { and, desc, eq, gte, ilike, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 
-import { db } from '@/config/db.js';
+import { db } from '@/config/db';
 import {
   plans,
   platformAuditLogs,
@@ -24,14 +24,14 @@ import {
   type PlatformPermission,
   type PlatformRole,
   type PlatformStaff,
-} from '@/db/schema/index.js';
+} from '@/db/schema/index';
 
 import type {
   ListPlatformTenantsQueryDto,
   ListStaffQueryDto,
   QueryPlatformAuditLogsDto,
   UpdateStaffDto,
-} from './platform.dto.js';
+} from './platform.dto';
 
 // ==========================================
 // 1. Platform Staff Queries
@@ -312,12 +312,17 @@ export async function findSupportSessionById(id: string) {
   return session ?? null;
 }
 
-export async function terminateSupportSession(id: string) {
+export async function terminateSupportSession(
+  id: string,
+  options?: { endedByStaffId?: string; endOutcome?: string; status?: 'TERMINATED' | 'EXPIRED' },
+) {
   const [session] = await db
     .update(platformSupportSessions)
     .set({
-      status: 'TERMINATED',
+      status: options?.status ?? 'TERMINATED',
       endedAt: new Date(),
+      ...(options?.endedByStaffId ? { endedByStaffId: options.endedByStaffId } : {}),
+      ...(options?.endOutcome ? { endOutcome: options.endOutcome } : {}),
     })
     .where(eq(platformSupportSessions.id, id))
     .returning();
@@ -355,6 +360,28 @@ export async function listSupportSessionsPaginated(filters?: { page?: number; li
     page,
     limit,
   };
+}
+
+export async function listTenantSupportSessions(tenantId: string) {
+  return db
+    .select({
+      id: platformSupportSessions.id,
+      staffId: platformSupportSessions.staffId,
+      staffEmail: platformStaff.email,
+      staffDisplayName: platformStaff.displayName,
+      mode: platformSupportSessions.mode,
+      scope: platformSupportSessions.scope,
+      reason: platformSupportSessions.reason,
+      ticketRef: platformSupportSessions.ticketRef,
+      status: platformSupportSessions.status,
+      startedAt: platformSupportSessions.startedAt,
+      endedAt: platformSupportSessions.endedAt,
+      expiresAt: platformSupportSessions.expiresAt,
+    })
+    .from(platformSupportSessions)
+    .leftJoin(platformStaff, eq(platformSupportSessions.staffId, platformStaff.id))
+    .where(eq(platformSupportSessions.tenantId, tenantId))
+    .orderBy(desc(platformSupportSessions.startedAt));
 }
 
 // ==========================================
@@ -474,7 +501,6 @@ export async function findTenantsPaginated(filters: ListPlatformTenantsQueryDto)
         ),
         subscriptionId: subscriptions.id,
         subscriptionStatus: subscriptions.status,
-        seatCount: subscriptions.seatCount,
         trialEndsAt: subscriptions.trialEndsAt,
       })
       .from(tenants)
@@ -540,7 +566,6 @@ export async function findTenantDetailById(id: string) {
         planName: plans.name,
         planCode: plans.key,
         status: subscriptions.status,
-        seatCount: subscriptions.seatCount,
         currentPeriodStart: subscriptions.currentPeriodStart,
         currentPeriodEnd: subscriptions.currentPeriodEnd,
         cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd,
@@ -591,7 +616,6 @@ export async function findSubscriptionByTenantId(tenantId: string) {
       tenantId: subscriptions.tenantId,
       planId: subscriptions.planId,
       status: subscriptions.status,
-      seatCount: subscriptions.seatCount,
       currentPeriodStart: subscriptions.currentPeriodStart,
       currentPeriodEnd: subscriptions.currentPeriodEnd,
       cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd,

@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, test } from 'node:test';
 
-import { closeDb, db } from '../src/config/db.js';
-import { closeRedisClients } from '../src/config/redis.js';
-import { users } from '../src/db/schema/index.js';
-import { rbacRepo } from '../src/modules/rbac/rbac.repository.js';
-import * as rbacService from '../src/modules/rbac/rbac.service.js';
-import { tenantsRepo } from '../src/modules/tenants/tenants.repository.js';
-import * as tenantsService from '../src/modules/tenants/tenants.service.js';
+import { closeDb, db } from '../src/config/db';
+import { closeRedisClients } from '../src/config/redis';
+import { users } from '../src/db/schema/index';
+import { rbacRepo } from '../src/modules/rbac/rbac.repository';
+import * as rbacService from '../src/modules/rbac/rbac.service';
+import { tenantsRepo } from '../src/modules/tenants/tenants.repository';
+import * as tenantsService from '../src/modules/tenants/tenants.service';
 
 after(async () => {
   await Promise.allSettled([closeRedisClients(), closeDb()]);

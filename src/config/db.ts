@@ -1,7 +1,7 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 
-import { env } from '@/config/env.js';
+import { env } from '@/config/env';
 
 // Per-process pool caps prevent horizontal API/worker scaling from exhausting Postgres.
 const client = postgres(env.DATABASE_URL, {

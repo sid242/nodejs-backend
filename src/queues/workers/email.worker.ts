@@ -1,6 +1,6 @@
 import type { Job } from 'bullmq';
 
-import { sendEmail } from '@/lib/mailer.js';
+import { sendEmail } from '@/lib/mailer';
 import {
   renderMagicLinkEmail,
   renderPasswordResetEmail,
@@ -8,7 +8,7 @@ import {
   renderTenantInviteEmail,
   renderVerifyEmail,
   renderWelcomeEmail,
-} from '@/templates/emails/index.js';
+} from '@/templates/emails/index';
 
 // Throwing => BullMQ retries with the backoff defined on the queue.
 export async function processEmail(job: Job): Promise<void> {

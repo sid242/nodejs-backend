@@ -4,23 +4,23 @@ import { after, test } from 'node:test';
 import { eq, inArray } from 'drizzle-orm';
 import jwt from 'jsonwebtoken';
 
-import { closeDb, db } from '../src/config/db.js';
-import { env } from '../src/config/env.js';
-import { closeRedisClients } from '../src/config/redis.js';
-import { platformStaff, tenantMembers, tenants, users } from '../src/db/schema/index.js';
-import { AppError } from '../src/lib/errors.js';
-import { requirePlatformAuth, requirePlatformPermission } from '../src/middleware/platform.js';
-import { resolveTenantContext } from '../src/middleware/tenant.js';
-import * as authRepo from '../src/modules/auth/auth.repository.js';
+import { closeDb, db } from '../src/config/db';
+import { env } from '../src/config/env';
+import { closeRedisClients } from '../src/config/redis';
+import { platformStaff, tenantMembers, tenants, users } from '../src/db/schema/index';
+import { AppError } from '../src/lib/errors';
+import { requirePlatformAuth, requirePlatformPermission } from '../src/middleware/platform';
+import { resolveTenantContext } from '../src/middleware/tenant';
+import * as authRepo from '../src/modules/auth/auth.repository';
 import {
   createMagicLinkToken,
   verifyAndConsumeMagicLinkToken,
-} from '../src/modules/auth/tokens.js';
-import * as plansService from '../src/modules/plans/plans.service.js';
-import * as platformService from '../src/modules/platform/platform.service.js';
-import { rbacRepo } from '../src/modules/rbac/rbac.repository.js';
-import { tenantsRepo } from '../src/modules/tenants/tenants.repository.js';
-import * as tenantsService from '../src/modules/tenants/tenants.service.js';
+} from '../src/modules/auth/tokens';
+import * as billingService from '../src/modules/billing/billing.service';
+import * as platformService from '../src/modules/platform/platform.service';
+import { rbacRepo } from '../src/modules/rbac/rbac.repository';
+import { tenantsRepo } from '../src/modules/tenants/tenants.repository';
+import * as tenantsService from '../src/modules/tenants/tenants.service';
 
 after(async () => {
   await Promise.allSettled([closeRedisClients(), closeDb()]);
@@ -434,14 +434,14 @@ test('Release Checklist 11: SaaS Plan Seat Limits Block Over-Quota Member Invite
       memberIds.push(member.id);
     }
 
-    // Now calling checkTenantSeatLimit must reject with 403 Forbidden
+    // Now calling enforceLimit must reject with 403 Forbidden
     await assert.rejects(
       async () => {
-        await plansService.checkTenantSeatLimit(tenant.id);
+        await billingService.enforceLimit(tenant.id, 'maxMembers');
       },
       (err: any) => {
         assert.equal(err.status, 403);
-        assert.ok(err.message.includes('Plan seat limit reached'));
+        assert.equal(err.code, 'PLAN_LIMIT_REACHED');
         return true;
       },
     );

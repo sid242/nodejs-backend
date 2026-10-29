@@ -1,7 +1,7 @@
 import type { Job } from 'bullmq';
 
-import * as fileRepo from '@/modules/files/files.repository.js';
-import { emitToUser } from '@/sockets/emitter.js';
+import * as fileRepo from '@/modules/files/files.repository';
+import { emitToUser } from '@/sockets/emitter';
 
 export interface FileJobData {
   fileId: string;

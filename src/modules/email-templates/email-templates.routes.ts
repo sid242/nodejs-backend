@@ -1,17 +1,17 @@
 import { Router } from 'express';
 
-import { requireAuth } from '@/middleware/auth.js';
-import { resolveTenantContext } from '@/middleware/tenant.js';
-import { validate } from '@/middleware/validate.js';
+import { requireAuth } from '@/middleware/auth';
+import { resolveTenantContext } from '@/middleware/tenant';
+import { validate } from '@/middleware/validate';
 
-import * as controller from './email-templates.controller.js';
+import * as controller from './email-templates.controller';
 import {
   createEmailTemplateDto,
   listEmailTemplatesQueryDto,
   templateIdParamDto,
   testSendEmailTemplateDto,
   updateEmailTemplateDto,
-} from './email-templates.dto.js';
+} from './email-templates.dto';
 
 const router = Router();
 router.use(requireAuth);

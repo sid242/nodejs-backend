@@ -2,19 +2,19 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, test } from 'node:test';
 
-import { closeDb, db } from '../src/config/db.js';
-import { closeRedisClients } from '../src/config/redis.js';
-import { platformStaff } from '../src/db/schema/index.js';
-import { createMagicLinkToken } from '../src/modules/auth/tokens.js';
+import { closeDb, db } from '../src/config/db';
+import { closeRedisClients } from '../src/config/redis';
+import { platformStaff } from '../src/db/schema/index';
+import { createMagicLinkToken } from '../src/modules/auth/tokens';
 import {
   listPlatformTenantsQueryDto,
   provisionTenantDto,
   suspendTenantDto,
-} from '../src/modules/platform/platform.dto.js';
-import * as platformRepo from '../src/modules/platform/platform.repository.js';
-import * as platformService from '../src/modules/platform/platform.service.js';
-import { tenantsRepo } from '../src/modules/tenants/tenants.repository.js';
-import * as tenantsService from '../src/modules/tenants/tenants.service.js';
+} from '../src/modules/platform/platform.dto';
+import * as platformRepo from '../src/modules/platform/platform.repository';
+import * as platformService from '../src/modules/platform/platform.service';
+import { tenantsRepo } from '../src/modules/tenants/tenants.repository';
+import * as tenantsService from '../src/modules/tenants/tenants.service';
 
 after(async () => {
   await Promise.allSettled([closeRedisClients(), closeDb()]);

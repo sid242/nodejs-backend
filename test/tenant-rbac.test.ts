@@ -1,16 +1,16 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 
-import { closeDb } from '../src/config/db.js';
-import { closeRedisClients } from '../src/config/redis.js';
-import { AppError } from '../src/lib/errors.js';
-import { requirePermission, requireTenantRole } from '../src/middleware/rbac.js';
-import { hashToken } from '../src/modules/auth/verification.repository.js';
-import { SYSTEM_MODULE_DEFINITIONS } from '../src/modules/rbac/modules.registry.js';
-import * as rbacDto from '../src/modules/rbac/rbac.dto.js';
-import * as rbacRepo from '../src/modules/rbac/rbac.repository.js';
-import { SYSTEM_PERMISSIONS, SYSTEM_ROLES } from '../src/modules/rbac/rbac.service.js';
-import * as rbacService from '../src/modules/rbac/rbac.service.js';
+import { closeDb } from '../src/config/db';
+import { closeRedisClients } from '../src/config/redis';
+import { AppError } from '../src/lib/errors';
+import { requirePermission, requireTenantRole } from '../src/middleware/rbac';
+import { hashToken } from '../src/modules/auth/verification.repository';
+import { SYSTEM_MODULE_DEFINITIONS } from '../src/modules/rbac/modules.registry';
+import * as rbacDto from '../src/modules/rbac/rbac.dto';
+import * as rbacRepo from '../src/modules/rbac/rbac.repository';
+import { SYSTEM_PERMISSIONS, SYSTEM_ROLES } from '../src/modules/rbac/rbac.service';
+import * as rbacService from '../src/modules/rbac/rbac.service';
 
 after(async () => {
   await Promise.allSettled([closeRedisClients(), closeDb()]);

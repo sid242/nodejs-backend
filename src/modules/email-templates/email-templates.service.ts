@@ -1,14 +1,14 @@
-import type { EmailTemplate } from '@/db/schema/index.js';
-import { AppError } from '@/lib/errors.js';
-import { sendEmail } from '@/lib/mailer.js';
+import type { EmailTemplate } from '@/db/schema/index';
+import { AppError } from '@/lib/errors';
+import { sendEmail } from '@/lib/mailer';
 
 import type {
   CreateEmailTemplateDto,
   ListEmailTemplatesQueryDto,
   TestSendEmailTemplateDto,
   UpdateEmailTemplateDto,
-} from './email-templates.dto.js';
-import * as repo from './email-templates.repository.js';
+} from './email-templates.dto';
+import * as repo from './email-templates.repository';
 
 export function extractVariables(html: string, subject = ''): string[] {
   const combined = `${html} ${subject}`;

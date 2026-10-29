@@ -30,10 +30,15 @@ export interface TenantMembershipContext {
 }
 
 export interface PlatformSupportSessionContext {
+  id: string;
   sessionId: string;
   staffId: string;
   tenantId: string;
-  reason: string;
+  mode: 'TENANT_SCOPED' | 'AS_MEMBER';
+  scope: 'READ_ONLY' | 'FULL';
+  targetUserId?: string | null;
+  targetMemberId?: string | null;
+  reason?: string;
   expiresAt: Date;
 }
 
@@ -57,6 +62,7 @@ declare global {
       user?: AuthenticatedUser;
       staff?: AuthenticatedStaff;
       supportSession?: PlatformSupportSessionContext;
+      isSupportSession?: boolean;
       impersonator?: ImpersonatorContext;
       isImpersonated?: boolean;
       tenant?: AuthenticatedTenant;

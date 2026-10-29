@@ -2,18 +2,18 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, test } from 'node:test';
 
-import { closeDb, db } from '@/config/db.js';
-import { closeRedisClients } from '@/config/redis.js';
-import { users } from '@/db/schema/index.js';
-import { tenantBrandingRepo } from '@/modules/tenants/tenant-branding.repository.js';
+import { closeDb, db } from '@/config/db';
+import { closeRedisClients } from '@/config/redis';
+import { users } from '@/db/schema/index';
+import { tenantBrandingRepo } from '@/modules/tenants/tenant-branding.repository';
 import {
   requestBrandingUploadUrlDto,
   resolvePublicTenantDto,
   updateTenantBrandingDto,
   verifyCustomDomainDto,
-} from '@/modules/tenants/tenants.dto.js';
-import { tenantsRepo } from '@/modules/tenants/tenants.repository.js';
-import * as tenantsService from '@/modules/tenants/tenants.service.js';
+} from '@/modules/tenants/tenants.dto';
+import { tenantsRepo } from '@/modules/tenants/tenants.repository';
+import * as tenantsService from '@/modules/tenants/tenants.service';
 
 after(async () => {
   await Promise.allSettled([closeRedisClients(), closeDb()]);

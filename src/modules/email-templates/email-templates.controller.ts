@@ -1,10 +1,10 @@
 import type { Request, Response } from 'express';
 
-import { asyncHandler } from '@/lib/async-handler.js';
-import { AppError } from '@/lib/errors.js';
-import { AppResponse } from '@/lib/responses.js';
+import { asyncHandler } from '@/lib/async-handler';
+import { AppError } from '@/lib/errors';
+import { AppResponse } from '@/lib/responses';
 
-import * as service from './email-templates.service.js';
+import * as service from './email-templates.service';
 
 export const listTemplates = asyncHandler(async (req: Request, res: Response) => {
   const tenantId = req.tenant?.id;

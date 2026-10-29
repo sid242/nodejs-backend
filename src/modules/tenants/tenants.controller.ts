@@ -1,9 +1,11 @@
 import type { Request, Response } from 'express';
 
-import { asyncHandler } from '@/lib/async-handler.js';
-import { AppResponse } from '@/lib/responses.js';
+import { asyncHandler } from '@/lib/async-handler';
+import { AppResponse } from '@/lib/responses';
+import * as billingService from '@/modules/billing/billing.service';
+import * as platformRepo from '@/modules/platform/platform.repository';
 
-import * as tenantsService from './tenants.service.js';
+import * as tenantsService from './tenants.service';
 
 export const createTenant = asyncHandler(async (req: Request, res: Response) => {
   const result = await tenantsService.createTenantOrganization(req.user!.id, req.valid!.body);
@@ -21,6 +23,38 @@ export const getTenantContext = asyncHandler(async (req: Request, res: Response)
     membership: req.membership,
     permissions: req.permissions,
   }).send(res);
+});
+
+export const getTenantMe = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenant!.id;
+  const entitlements = await billingService.getTenantEntitlements(tenantId);
+
+  AppResponse.ok({
+    membership: req.membership,
+    roles: req.membership?.roles ?? [],
+    permissions: req.permissions ?? [],
+    modules: entitlements?.effectiveModules ?? [],
+    plan: entitlements?.planKey ?? req.tenant?.plan,
+    planName: entitlements?.planName,
+    subscriptionStatus: entitlements?.subscriptionStatus,
+    limits: entitlements?.limits ?? null,
+    support:
+      req.isSupportSession && req.supportSession
+        ? {
+            id: req.supportSession.id,
+            staffId: req.supportSession.staffId,
+            mode: req.supportSession.mode,
+            scope: req.supportSession.scope,
+            expiresAt: req.supportSession.expiresAt,
+          }
+        : null,
+  }).send(res);
+});
+
+export const getSupportAccess = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenant!.id;
+  const sessions = await platformRepo.listTenantSupportSessions(tenantId);
+  AppResponse.ok(sessions).send(res);
 });
 
 export const getTenant = asyncHandler(async (req: Request, res: Response) => {

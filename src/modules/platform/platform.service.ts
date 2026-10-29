@@ -2,31 +2,30 @@ import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
-import { db } from '@/config/db.js';
-import { env } from '@/config/env.js';
-import { logger } from '@/config/logger.js';
+import { db } from '@/config/db';
+import { env } from '@/config/env';
+import { logger } from '@/config/logger';
 import {
   appModules,
   platformPermissions,
   tenantBrandings,
   tenantModules,
-} from '@/db/schema/index.js';
-import { cache } from '@/lib/cache.js';
-import { AppError } from '@/lib/errors.js';
-import { provisionDedicatedDatabase } from '@/lib/provision-db.js';
-import * as authRepo from '@/modules/auth/auth.repository.js';
+} from '@/db/schema';
+import { cache } from '@/lib/cache';
+import { AppError } from '@/lib/errors';
+import { provisionDedicatedDatabase } from '@/lib/provision-db';
+import * as authRepo from '@/modules/auth/auth.repository';
 import {
   createMagicLinkToken,
-  issueImpersonationToken,
-  type ImpersonatorClaim,
-} from '@/modules/auth/tokens.js';
-import * as plansService from '@/modules/plans/plans.service.js';
-import { rbacRepo } from '@/modules/rbac/rbac.repository.js';
-import * as rbacService from '@/modules/rbac/rbac.service.js';
-import { tenantsRepo } from '@/modules/tenants/tenants.repository.js';
-import { emailQueue } from '@/queues/index.js';
+  issueSupportToken,
+} from '@/modules/auth/tokens';
+import * as billingService from '@/modules/billing/billing.service';
+import { rbacRepo } from '@/modules/rbac/rbac.repository';
+import * as rbacService from '@/modules/rbac/rbac.service';
+import { tenantsRepo } from '@/modules/tenants/tenants.repository';
+import { emailQueue } from '@/queues/index';
 
-import { createPlatformTwoFactorChallenge } from './platform-2fa.service.js';
+import { createPlatformTwoFactorChallenge } from './platform-2fa.service';
 import type {
   CreatePlatformRoleDto,
   CreateStaffDto,
@@ -40,9 +39,13 @@ import type {
   UpdatePlatformTenantDto,
   UpdatePlatformTenantSubscriptionDto,
   UpdateStaffDto,
-} from './platform.dto.js';
-import { PLATFORM_PERMISSION_CATALOGUE, SYSTEM_PLATFORM_ROLES } from './platform.permissions.js';
-import * as platformRepo from './platform.repository.js';
+} from './platform.dto';
+import {
+  PLATFORM_PERMISSION_CATALOGUE,
+  PLATFORM_PERMISSIONS,
+  SYSTEM_PLATFORM_ROLES,
+} from './platform.permissions';
+import * as platformRepo from './platform.repository';
 
 // ==========================================
 // 1. Staff Management & Authentication
@@ -126,9 +129,17 @@ export interface StaffActorContext {
   permissions?: string[];
 }
 
-async function resolveActorContext(actor: string | StaffActorContext): Promise<StaffActorContext> {
+async function resolveActorContext(
+  actor: string | StaffActorContext,
+): Promise<Required<StaffActorContext>> {
   if (typeof actor !== 'string') {
-    if (actor.roleKey && actor.permissions) return actor;
+    if (actor.roleKey && actor.permissions) {
+      return {
+        id: actor.id,
+        roleKey: actor.roleKey,
+        permissions: actor.permissions,
+      };
+    }
     const staff = await platformRepo.findStaffById(actor.id);
     const permissions = staff ? await platformRepo.getRolePermissionKeys(staff.roleId) : [];
     return {
@@ -482,60 +493,102 @@ export async function listPermissions() {
 // ==========================================
 
 export async function startSupportSession(
-  staffId: string,
+  actor: string | StaffActorContext,
   tenantId: string,
   data: StartSupportSessionDto,
   requestId?: string,
 ) {
-  const expiresAt = new Date(Date.now() + data.durationMinutes * 60 * 1000);
+  const actorCtx = await resolveActorContext(actor);
 
-  // If no targetUserId specified, target the first active member of this tenant
-  let targetUserId = data.targetUserId;
-  if (!targetUserId) {
-    const members = await platformRepo.findTenantMembers(tenantId);
-    targetUserId = members[0]?.userId;
+  const tenant = await tenantsRepo.findTenantById(tenantId);
+  if (!tenant || tenant.deletedAt) {
+    throw AppError.notFound('Tenant organization not found');
   }
 
+  // 1. Permission checks for scope & mode
+  if (
+    data.scope === 'FULL' &&
+    !actorCtx.permissions.includes(PLATFORM_PERMISSIONS.SUPPORT_WRITE) &&
+    actorCtx.roleKey !== 'SUPER_ADMIN'
+  ) {
+    throw AppError.forbidden('Requires tenant_support::write permission for FULL scope support sessions');
+  }
+
+  if (
+    data.mode === 'AS_MEMBER' &&
+    !actorCtx.permissions.includes(PLATFORM_PERMISSIONS.SUPPORT_IMPERSONATE) &&
+    actorCtx.roleKey !== 'SUPER_ADMIN'
+  ) {
+    throw AppError.forbidden('Requires tenant_support::impersonate permission for AS_MEMBER mode support sessions');
+  }
+
+  // DEFAULT: AS_MEMBER + FULL additionally requires the tenant not to have allowSupportAccess = false
+  if (
+    data.mode === 'AS_MEMBER' &&
+    data.scope === 'FULL' &&
+    (tenant as any).allowSupportAccess === false
+  ) {
+    throw AppError.forbidden('This workspace has disabled full impersonation support access');
+  }
+
+  let targetUserId = data.targetUserId;
+  let targetMemberId = data.targetMemberId;
+
+  // 2. Validate target member if AS_MEMBER mode
+  if (data.mode === 'AS_MEMBER') {
+    let member = null;
+    if (targetMemberId) {
+      member = await tenantsRepo.findTenantMemberById(targetMemberId);
+    } else if (targetUserId) {
+      member = await tenantsRepo.findTenantMember(tenantId, targetUserId);
+    }
+
+    if (!member || member.status !== 'ACTIVE' || member.tenantId !== tenantId) {
+      throw AppError.badRequest('Target member not found or is not active in this workspace');
+    }
+
+    targetMemberId = member.id;
+    targetUserId = member.userId;
+
+    // Target is not OWNER unless caller is SUPER_ADMIN
+    const resolvedTarget = await rbacService.resolveUserPermissions(tenantId, targetUserId);
+    const isOwner = resolvedTarget.roles.some((r) => r.toUpperCase() === rbacService.SYSTEM_ROLES.OWNER);
+    if (isOwner && actorCtx.roleKey !== 'SUPER_ADMIN') {
+      throw AppError.forbidden('Only Super Admin may initiate a support session targeting a workspace Owner');
+    }
+  }
+
+  const durationMinutes = Math.min(120, Math.max(5, data.durationMinutes ?? 30));
+  const expiresAt = new Date(Date.now() + durationMinutes * 60 * 1000);
+
   const session = await platformRepo.createSupportSession({
-    staffId,
+    staffId: actorCtx.id,
     tenantId,
-    targetUserId,
+    mode: data.mode,
+    scope: data.scope,
+    targetUserId: targetUserId ?? null,
+    targetMemberId: targetMemberId ?? null,
     reason: data.reason,
+    ticketRef: data.ticketRef,
     status: 'ACTIVE',
     expiresAt,
   });
 
-  // Issue impersonation token so the staff can seamlessly enter the customer dashboard
-  let accessToken: string | undefined;
-  if (targetUserId) {
-    const targetUser = await authRepo.findById(targetUserId);
-    if (targetUser) {
-      const impersonatorClaim: ImpersonatorClaim = {
-        userId: staffId,
-        role: 'SUPER_ADMIN',
-        reason: data.reason,
-        sessionId: session.id,
-      };
-      const tokenResult = await issueImpersonationToken(
-        { id: targetUser.id },
-        impersonatorClaim,
-        data.durationMinutes,
-      );
-      accessToken = tokenResult.accessToken;
-    }
-  }
-
   await platformRepo.logPlatformAction({
-    actorStaffId: staffId,
+    actorStaffId: actorCtx.id,
     action: 'tenant_support.started',
     targetType: 'tenant',
     targetId: tenantId,
     tenantId,
     metadata: {
       sessionId: session.id,
+      mode: data.mode,
+      scope: data.scope,
+      ticketRef: data.ticketRef,
       reason: data.reason,
-      durationMinutes: data.durationMinutes,
+      durationMinutes,
       targetUserId,
+      targetMemberId,
       expiresAt: expiresAt.toISOString(),
     },
     requestId,
@@ -544,11 +597,72 @@ export async function startSupportSession(
   return {
     sessionId: session.id,
     tenantId,
-    targetUserId: targetUserId ?? null,
-    accessToken,
-    reason: data.reason,
+    mode: session.mode,
+    scope: session.scope,
+    targetUserId: session.targetUserId ?? null,
+    targetMemberId: session.targetMemberId ?? null,
+    ticketRef: session.ticketRef,
+    reason: session.reason,
     expiresAt,
     status: session.status,
+  };
+}
+
+export async function enterSupportSession(
+  actorStaffId: string,
+  sessionId: string,
+  requestId?: string,
+) {
+  const session = await platformRepo.findSupportSessionById(sessionId);
+  if (!session) throw AppError.notFound('Support session not found');
+
+  if (session.staffId !== actorStaffId) {
+    throw AppError.forbidden('Only the initiating staff member may enter this support session');
+  }
+
+  if (session.status !== 'ACTIVE') {
+    throw AppError.forbidden(`Support session is currently ${session.status.toLowerCase()}`);
+  }
+
+  const remainingSeconds = Math.floor((new Date(session.expiresAt).getTime() - Date.now()) / 1000);
+  if (remainingSeconds <= 0) {
+    await platformRepo.terminateSupportSession(sessionId, { status: 'EXPIRED' });
+    throw AppError.badRequest('Support session has expired');
+  }
+
+  const durationMinutes = Math.min(120, Math.ceil(remainingSeconds / 60));
+  const { token, expiresInSeconds } = issueSupportToken(
+    {
+      sess: session.id,
+      staffId: session.staffId,
+      tenantId: session.tenantId,
+      mode: session.mode as 'TENANT_SCOPED' | 'AS_MEMBER',
+      scope: session.scope as 'READ_ONLY' | 'FULL',
+      targetUserId: session.targetUserId,
+    },
+    durationMinutes,
+  );
+
+  const tenant = await tenantsRepo.findTenantById(session.tenantId);
+
+  await platformRepo.logPlatformAction({
+    actorStaffId,
+    action: 'tenant_support.entered',
+    targetType: 'tenant',
+    targetId: session.tenantId,
+    tenantId: session.tenantId,
+    metadata: { sessionId, mode: session.mode, scope: session.scope },
+    requestId,
+  });
+
+  return {
+    token,
+    expiresInSeconds,
+    sessionId: session.id,
+    tenantId: session.tenantId,
+    tenantSlug: tenant?.slug,
+    mode: session.mode,
+    scope: session.scope,
   };
 }
 
@@ -567,13 +681,18 @@ export async function endSupportSession(
   if (!session) throw AppError.notFound('Support session not found');
 
   const isSuperAdmin = actorCtx.roleKey === 'SUPER_ADMIN';
-  if (session.staffId !== actorCtx.id && !isSuperAdmin) {
+  const hasEndAny = actorCtx.permissions.includes(PLATFORM_PERMISSIONS.SUPPORT_END_ANY);
+  if (session.staffId !== actorCtx.id && !isSuperAdmin && !hasEndAny) {
     throw AppError.forbidden(
       'Only the initiating staff member or Super Admin may terminate this session',
     );
   }
 
-  const terminated = await platformRepo.terminateSupportSession(sessionId);
+  const terminated = await platformRepo.terminateSupportSession(sessionId, {
+    endedByStaffId: actorCtx.id,
+    endOutcome: outcome,
+    status: 'TERMINATED',
+  });
 
   await platformRepo.logPlatformAction({
     actorStaffId: actorCtx.id,
@@ -775,7 +894,7 @@ export async function provisionTenant(
   }
 
   // 6. Assign initial subscription
-  await plansService.assignInitialSubscription(tenant.id, tenant.plan ?? 'FREE');
+  await billingService.assignInitialSubscription(tenant.id, tenant.plan ?? 'FREE');
 
   // 7. Seed default branding record
   await db

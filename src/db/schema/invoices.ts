@@ -9,9 +9,9 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
-import { plans } from './plans.js';
-import { subscriptions } from './subscriptions.js';
-import { tenants } from './tenants/tenants.js';
+import { plans } from './plans';
+import { subscriptions } from './subscriptions';
+import { tenants } from './tenants/tenants';
 
 export const invoices = pgTable(
   'Invoice',

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { AppResponse } from '@/lib/responses.js';
-import { forEachConcurrent, parseList, safeFilename } from '@/lib/utils.js';
+import { AppResponse } from '@/lib/responses';
+import { forEachConcurrent, parseList, safeFilename } from '@/lib/utils';
 
 test('safeFilename removes slashes and spaces (no path traversal in S3 keys)', () => {
   const out = safeFilename('../../etc/pass wd.png');

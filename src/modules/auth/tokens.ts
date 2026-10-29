@@ -1,15 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
 
-import { env } from '@/config/env.js';
-import { redis } from '@/config/redis.js';
-import { REDIS_PREFIXES, TOKEN_EXPIRATION } from '@/constants/index.js';
-import { AppError } from '@/lib/errors.js';
+import { env } from '@/config/env';
+import { redis } from '@/config/redis';
+import { REDIS_PREFIXES, TOKEN_EXPIRATION } from '@/constants/index';
+import { AppError } from '@/lib/errors';
 
 import {
   createHashedVerificationToken,
   verifyAndConsumeHashedToken,
-} from './verification.repository.js';
+} from './verification.repository';
 
 const refreshKey = (userId: string, jti: string): string =>
   `${REDIS_PREFIXES.REFRESH_TOKEN}${userId}:${jti}`;
@@ -22,7 +22,16 @@ export interface AccessTokenPayload extends JwtPayload {
   sub?: string;
   typ?: string;
   aud?: string | string[];
-  impersonator?: ImpersonatorClaim;
+}
+
+export interface SupportTokenPayload extends JwtPayload {
+  typ: 'SUPPORT';
+  sess: string;
+  staffId: string;
+  tenantId: string;
+  mode: 'TENANT_SCOPED' | 'AS_MEMBER';
+  scope: 'READ_ONLY' | 'FULL';
+  sub?: string;
 }
 
 export interface AuthTokens {
@@ -32,6 +41,47 @@ export interface AuthTokens {
 
 export const verifyAccessToken = (token: string): AccessTokenPayload =>
   jwt.verify(token, env.JWT_ACCESS_SECRET, { audience: 'customer-api' }) as AccessTokenPayload;
+
+export function issueSupportToken(
+  claims: {
+    sess: string;
+    staffId: string;
+    tenantId: string;
+    mode: 'TENANT_SCOPED' | 'AS_MEMBER';
+    scope: 'READ_ONLY' | 'FULL';
+    targetUserId?: string | null;
+  },
+  durationMinutes = 30,
+): { token: string; expiresInSeconds: number } {
+  const ttlSeconds = Math.max(60, Math.floor(durationMinutes * 60));
+  const token = jwt.sign(
+    {
+      typ: 'SUPPORT',
+      sess: claims.sess,
+      staffId: claims.staffId,
+      tenantId: claims.tenantId,
+      mode: claims.mode,
+      scope: claims.scope,
+    },
+    env.JWT_SUPPORT_SECRET,
+    {
+      subject: claims.targetUserId || claims.staffId,
+      audience: 'customer-api',
+      expiresIn: ttlSeconds,
+    },
+  );
+  return { token, expiresInSeconds: ttlSeconds };
+}
+
+export function verifySupportToken(token: string): SupportTokenPayload {
+  const payload = jwt.verify(token, env.JWT_SUPPORT_SECRET, {
+    audience: 'customer-api',
+  }) as SupportTokenPayload;
+  if (payload.typ !== 'SUPPORT' || !payload.sess || !payload.staffId || !payload.tenantId) {
+    throw AppError.unauthorized('Invalid support token payload');
+  }
+  return payload;
+}
 
 const signAccessToken = (user: TokenUser): string =>
   jwt.sign({ typ: 'USER' }, env.JWT_ACCESS_SECRET, {
@@ -136,82 +186,4 @@ export async function verifyAndConsumeMagicLinkToken(
 ): Promise<MagicLinkVerificationResult> {
   const record = await verifyAndConsumeHashedToken(token, 'MAGIC_LINK');
   return { userId: record.userId, target: record.target };
-}
-
-export interface ImpersonatorClaim {
-  userId: string;
-  role: string;
-  reason: string;
-  sessionId: string;
-}
-
-const impersonationSessionKey = (sessionId: string): string =>
-  `${REDIS_PREFIXES.IMPERSONATION_SESSION}${sessionId}`;
-
-/**
- * Issue a time-boxed, short-lived impersonation access token.
- * Does NOT generate a refresh token, ensuring strict session limits.
- */
-export async function issueImpersonationToken(
-  targetUser: TokenUser,
-  impersonator: ImpersonatorClaim,
-  durationMinutes = 30,
-): Promise<{ accessToken: string; sessionId: string; expiresInSeconds: number }> {
-  const ttlSeconds = durationMinutes * 60;
-  const accessToken = jwt.sign(
-    {
-      typ: 'USER',
-      impersonator,
-    },
-    env.JWT_ACCESS_SECRET,
-    {
-      subject: targetUser.id,
-      audience: 'customer-api',
-      expiresIn: ttlSeconds,
-    },
-  );
-
-  try {
-    await redis.set(
-      impersonationSessionKey(impersonator.sessionId),
-      JSON.stringify({
-        targetUserId: targetUser.id,
-        adminId: impersonator.userId,
-        reason: impersonator.reason,
-        createdAt: new Date().toISOString(),
-      }),
-      'EX',
-      ttlSeconds,
-    );
-  } catch {
-    /* ignore redis write errors if redis is disconnected */
-  }
-
-  return { accessToken, sessionId: impersonator.sessionId, expiresInSeconds: ttlSeconds };
-}
-
-/** Check if the active impersonation session key exists in Redis. Fail closed on error/disconnect. */
-export async function isImpersonationSessionActive(sessionId: string): Promise<boolean> {
-  if (redis.status !== 'ready' && redis.status !== 'connect') {
-    // Fail closed: if Redis is offline/disconnected, deny impersonated session
-    return false;
-  }
-  try {
-    const exists = await redis.exists(impersonationSessionKey(sessionId));
-    return exists === 1;
-  } catch {
-    return false;
-  }
-}
-
-/** Revoke an active impersonation session immediately. */
-export async function revokeImpersonationSession(sessionId: string): Promise<void> {
-  if (redis.status !== 'ready' && redis.status !== 'connect') {
-    return;
-  }
-  try {
-    await redis.del(impersonationSessionKey(sessionId));
-  } catch {
-    /* ignore redis delete errors */
-  }
 }

@@ -1,8 +1,8 @@
 import { desc, eq, sql } from 'drizzle-orm';
 
-import { db } from '@/config/db.js';
-import { publicUser, users, type PublicUser } from '@/db/schema/index.js';
-import type { ListUsersQueryDto, UpdateMeDto } from '@/modules/users/users.dto.js';
+import { db } from '@/config/db';
+import { publicUser, users, type PublicUser } from '@/db/schema/index';
+import type { ListUsersQueryDto, UpdateMeDto } from '@/modules/users/users.dto';
 
 export async function findById(id: string): Promise<PublicUser | null> {
   const [user] = await db.select(publicUser).from(users).where(eq(users.id, id)).limit(1);

@@ -3,13 +3,14 @@ import { createAdapter } from '@socket.io/redis-adapter';
 import { Server, type Socket } from 'socket.io';
 import { z } from 'zod';
 
-import { env } from '@/config/env.js';
-import { logger } from '@/config/logger.js';
-import { createRedis, redis } from '@/config/redis.js';
-import { ACCESS_TOKEN_COOKIE } from '@/constants/index.js';
-import { parseList } from '@/lib/utils.js';
-import { parseCookies } from '@/modules/auth/cookies.js';
-import { isImpersonationSessionActive, verifyAccessToken } from '@/modules/auth/tokens.js';
+import { env } from '@/config/env';
+import { logger } from '@/config/logger';
+import { createRedis, redis } from '@/config/redis';
+import { ACCESS_TOKEN_COOKIE } from '@/constants/index';
+import { parseList } from '@/lib/utils';
+import { parseCookies } from '@/modules/auth/cookies';
+import { verifyAccessToken, verifySupportToken } from '@/modules/auth/tokens';
+import * as platformRepo from '@/modules/platform/platform.repository';
 
 const roomSchema = z.object({ roomId: z.string().min(1).max(64) });
 const messageSchema = roomSchema.extend({ text: z.string().min(1).max(2000) });
@@ -52,19 +53,26 @@ export function initSocket(httpServer: HttpServer): SocketManager {
       let token = socket.handshake.auth?.token;
       if (!token && socket.handshake.headers.cookie) {
         const cookies = parseCookies(socket.handshake.headers.cookie);
-        token = cookies[ACCESS_TOKEN_COOKIE];
+        token = cookies['support_at'] || cookies[ACCESS_TOKEN_COOKIE];
       }
       if (!token) throw new Error('unauthorized');
 
-      const payload = verifyAccessToken(token);
-
-      if (payload?.impersonator) {
-        const imp = payload.impersonator;
-        const isActive = await isImpersonationSessionActive(imp.sessionId);
-        if (!isActive) throw new Error('unauthorized');
-        socket.data.impersonator = imp;
-        socket.data.isImpersonated = true;
+      try {
+        const supportPayload = verifySupportToken(token);
+        const session = await platformRepo.findSupportSessionById(supportPayload.sess);
+        if (!session || session.status !== 'ACTIVE' || new Date(session.expiresAt) <= new Date()) {
+          throw new Error('unauthorized');
+        }
+        socket.data.isSupportSession = true;
+        socket.data.supportSession = session;
+        socket.data.user = { id: session.targetUserId ?? session.staffId };
+        return next();
+      } catch {
+        // Continue to verify standard user token
       }
+
+      const payload = verifyAccessToken(token);
+      if (payload?.typ !== 'USER') throw new Error('unauthorized');
 
       const allowed = await consumeRateLimit(
         `connect:${payload.sub}`,
@@ -79,14 +87,18 @@ export function initSocket(httpServer: HttpServer): SocketManager {
 
   io.on('connection', (socket: Socket) => {
     const user = socket.data.user as SocketUser;
-    const userId = user.id;
-    socket.join(`user:${userId}`); // personal room: lets workers target a user from anywhere
+    const userId = user?.id;
+    if (userId) {
+      socket.join(`user:${userId}`); // personal room: lets workers target a user from anywhere
+    }
 
-    if (socket.data.isImpersonated) {
-      socket.join(`session:${socket.data.impersonator.sessionId}`);
+    if (socket.data.isSupportSession && socket.data.supportSession) {
+      const sess = socket.data.supportSession;
+      socket.join(`session:${sess.id}`);
+      socket.join(`tenant:${sess.tenantId}`);
       logger.info(
-        { userId, impersonatorId: socket.data.impersonator.userId, socketId: socket.id },
-        'impersonated socket connected',
+        { userId, staffId: sess.staffId, sessionId: sess.id, socketId: socket.id },
+        'support session socket connected',
       );
     } else {
       logger.debug({ userId, socketId: socket.id }, 'socket connected');

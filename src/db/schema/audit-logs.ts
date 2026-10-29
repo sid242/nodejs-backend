@@ -1,6 +1,7 @@
 import { index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
-import { tenants } from './tenants';
+import { actorTypeEnum } from './enums';
+import { tenants } from './tenants/index';
 import { users } from './users';
 
 export const auditLogs = pgTable(
@@ -9,6 +10,9 @@ export const auditLogs = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     tenantId: uuid('tenantId').references(() => tenants.id, { onDelete: 'set null' }),
     userId: uuid('userId').references(() => users.id, { onDelete: 'set null' }),
+    actorType: actorTypeEnum('actorType').notNull().default('USER'),
+    actorStaffId: uuid('actorStaffId'),
+    supportSessionId: uuid('supportSessionId'),
     action: text('action').notNull(),
     entityType: text('entityType'),
     entityId: text('entityId'),
@@ -24,6 +28,10 @@ export const auditLogs = pgTable(
       table.tenantId,
       table.userId,
       table.createdAt,
+    ),
+    index('AuditLog_tenantId_supportSessionId_idx').on(
+      table.tenantId,
+      table.supportSessionId,
     ),
     index('AuditLog_tenantId_entityType_entityId_idx').on(
       table.tenantId,

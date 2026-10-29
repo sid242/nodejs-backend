@@ -1,10 +1,10 @@
 import { sql } from 'drizzle-orm';
 import { Router, type Request, type Response } from 'express';
 
-import { db } from '@/config/db.js';
-import { redis } from '@/config/redis.js';
-import { state } from '@/lib/state.js';
-import { queueConnection } from '@/queues/index.js';
+import { db } from '@/config/db';
+import { redis } from '@/config/redis';
+import { state } from '@/lib/state';
+import { queueConnection } from '@/queues/index';
 
 const router = Router();
 

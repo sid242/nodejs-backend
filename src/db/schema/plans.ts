@@ -4,25 +4,36 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
+import { appModules } from './rbac';
+
+export interface PlanLimits {
+  maxMembers: number | null;
+  maxStorageBytes: number | null;
+  maxCustomRoles: number | null;
+}
+
 export const plans = pgTable(
   'Plan',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    key: text('key').notNull(), // 'FREE', 'STARTER', 'GROWTH', 'ENTERPRISE'
+    key: text('key').notNull(), // 'FREE', 'PRO', 'ENTERPRISE'
     name: text('name').notNull(),
     description: text('description'),
-    priceCents: integer('priceCents').notNull().default(0),
-    currency: text('currency').notNull().default('USD'),
-    billingInterval: text('billingInterval').notNull().default('MONTHLY'), // 'MONTHLY', 'ANNUAL', 'LIFETIME'
-    isActive: boolean('isActive').notNull().default(true),
+    priceMonthlyMinor: integer('priceMonthlyMinor').notNull().default(0),
+    priceYearlyMinor: integer('priceYearlyMinor').notNull().default(0),
+    currency: text('currency').notNull().default('INR'),
+    trialDays: integer('trialDays').notNull().default(14),
+    limits: jsonb('limits').$type<PlanLimits>().notNull(),
     isPublic: boolean('isPublic').notNull().default(true),
-    metadata: jsonb('metadata'),
+    isActive: boolean('isActive').notNull().default(true),
+    sortOrder: integer('sortOrder').notNull().default(0),
     createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updatedAt', { precision: 3, mode: 'date' })
       .notNull()
@@ -32,46 +43,45 @@ export const plans = pgTable(
   (table) => [
     uniqueIndex('Plan_key_unique').on(table.key),
     index('Plan_isActive_idx').on(table.isActive),
+    index('Plan_sortOrder_idx').on(table.sortOrder),
   ],
 );
 
-export const planEntitlements = pgTable(
-  'PlanEntitlement',
+export const planModules = pgTable(
+  'PlanModule',
   {
-    id: uuid('id').defaultRandom().primaryKey(),
     planId: uuid('planId')
       .notNull()
       .references(() => plans.id, { onDelete: 'cascade' }),
-    maxMembers: integer('maxMembers').notNull().default(5), // Seat limit
-    maxProjects: integer('maxProjects').notNull().default(10),
-    maxStorageMb: integer('maxStorageMb').notNull().default(1024), // 1 GB
-    hasCustomRoles: boolean('hasCustomRoles').notNull().default(false),
-    hasAdvancedAnalytics: boolean('hasAdvancedAnalytics').notNull().default(false),
-    hasPrioritySupport: boolean('hasPrioritySupport').notNull().default(false),
-    hasAuditRetentionDays: integer('hasAuditRetentionDays').notNull().default(7),
-    createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
-    updatedAt: timestamp('updatedAt', { precision: 3, mode: 'date' })
+    moduleId: uuid('moduleId')
       .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
+      .references(() => appModules.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex('PlanEntitlement_planId_unique').on(table.planId)],
+  (table) => [
+    primaryKey({ columns: [table.planId, table.moduleId] }),
+    index('PlanModule_planId_idx').on(table.planId),
+    index('PlanModule_moduleId_idx').on(table.moduleId),
+  ],
 );
 
 export type Plan = typeof plans.$inferSelect;
 export type NewPlan = typeof plans.$inferInsert;
-export type PlanEntitlement = typeof planEntitlements.$inferSelect;
-export type NewPlanEntitlement = typeof planEntitlements.$inferInsert;
+export type PlanModule = typeof planModules.$inferSelect;
+export type NewPlanModule = typeof planModules.$inferInsert;
 
 export const publicPlan = {
   id: plans.id,
   key: plans.key,
   name: plans.name,
   description: plans.description,
-  priceCents: plans.priceCents,
+  priceMonthlyMinor: plans.priceMonthlyMinor,
+  priceYearlyMinor: plans.priceYearlyMinor,
   currency: plans.currency,
-  billingInterval: plans.billingInterval,
-  isActive: plans.isActive,
+  trialDays: plans.trialDays,
+  limits: plans.limits,
   isPublic: plans.isPublic,
+  isActive: plans.isActive,
+  sortOrder: plans.sortOrder,
   createdAt: plans.createdAt,
 };

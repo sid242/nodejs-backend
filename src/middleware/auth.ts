@@ -1,8 +1,8 @@
 import type { NextFunction, Request, Response } from 'express';
 
-import { ACCESS_TOKEN_COOKIE, AUTH_HEADERS, AUTH_MESSAGES } from '@/constants/index.js';
-import { AppError } from '@/lib/errors.js';
-import { isImpersonationSessionActive, verifyAccessToken } from '@/modules/auth/tokens.js';
+import { ACCESS_TOKEN_COOKIE, AUTH_HEADERS } from '@/constants/index';
+import { AppError } from '@/lib/errors';
+import { verifyAccessToken } from '@/modules/auth/tokens';
 
 export async function requireAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
   let token: string | undefined;
@@ -22,16 +22,6 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
       return next(AppError.unauthorized('Invalid access token type'));
     }
     req.user = { id: payload.sub as string };
-
-    if (payload?.impersonator) {
-      const imp = payload.impersonator;
-      const isActive = await isImpersonationSessionActive(imp.sessionId);
-      if (!isActive) {
-        return next(AppError.unauthorized(AUTH_MESSAGES.IMPERSONATION_REVOKED));
-      }
-      req.impersonator = imp;
-      req.isImpersonated = true;
-    }
 
     next();
   } catch (error) {
@@ -57,15 +47,6 @@ export async function optionalAuth(
       const payload = verifyAccessToken(token);
       if (payload?.typ === 'USER') {
         req.user = { id: payload.sub as string };
-
-        if (payload?.impersonator) {
-          const imp = payload.impersonator;
-          const isActive = await isImpersonationSessionActive(imp.sessionId);
-          if (isActive) {
-            req.impersonator = imp;
-            req.isImpersonated = true;
-          }
-        }
       }
     }
   } catch {

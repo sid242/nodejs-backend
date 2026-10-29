@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, isNull, notInArray, or, sql } from 'drizzle-orm';
 
-import { db } from '@/config/db.js';
+import { db } from '@/config/db';
 import {
   appModules,
   permissions,
@@ -15,9 +15,9 @@ import {
   type NewRoleRecord,
   type Permission,
   type RoleRecord,
-} from '@/db/schema/index.js';
+} from '@/db/schema/index';
 
-import type { DomainModuleDefinition } from './modules.types.js';
+import type { DomainModuleDefinition } from './modules.types';
 
 export type { AppModule, NewAppModule, Permission, NewPermission, RoleRecord, NewRoleRecord };
 
@@ -389,6 +389,14 @@ export async function getTenantModules(tenantId: string): Promise<
     sortOrder: m.sortOrder,
     isEnabled: overrideMap.has(m.id) ? overrideMap.get(m.id)! : true,
   }));
+}
+
+export async function findDisabledTenantModules(tenantId: string): Promise<Array<{ id: string; key: string }>> {
+  return db
+    .select({ id: appModules.id, key: appModules.key })
+    .from(tenantModules)
+    .innerJoin(appModules, eq(tenantModules.moduleId, appModules.id))
+    .where(and(eq(tenantModules.tenantId, tenantId), eq(tenantModules.isEnabled, false)));
 }
 
 export const rbacRepo = {

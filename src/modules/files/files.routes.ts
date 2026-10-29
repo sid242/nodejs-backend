@@ -1,11 +1,11 @@
 import { Router } from 'express';
 
-import { requireAuth } from '@/middleware/auth.js';
-import { uploadLimiter } from '@/middleware/rate-limit.js';
-import { resolveTenantContext } from '@/middleware/tenant.js';
-import { validate } from '@/middleware/validate.js';
-import * as controller from '@/modules/files/files.controller.js';
-import { fileIdParamDto, requestUploadDto } from '@/modules/files/files.dto.js';
+import { requireAuth } from '@/middleware/auth';
+import { uploadLimiter } from '@/middleware/rate-limit';
+import { resolveTenantContext } from '@/middleware/tenant';
+import { validate } from '@/middleware/validate';
+import * as controller from '@/modules/files/files.controller';
+import { fileIdParamDto, requestUploadDto } from '@/modules/files/files.dto';
 
 const router = Router();
 router.use(requireAuth);

@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 
-import { db as defaultDb, type Database } from '@/config/db.js';
+import { db as defaultDb, type Database } from '@/config/db';
 
 /**
  * Executes a callback within a transaction where `app.tenant_id` is set locally.

@@ -4,17 +4,17 @@ import cors from 'cors';
 import express, { type Express } from 'express';
 import helmet from 'helmet';
 
-import { env } from '@/config/env.js';
-import { docsRouter } from '@/docs/index.js';
-import { parseList } from '@/lib/utils.js';
-import { basicAuth } from '@/middleware/basic-auth.js';
-import { errorHandler, notFound } from '@/middleware/error.js';
-import { httpLogger } from '@/middleware/http-logger.js';
-import { globalLimiter } from '@/middleware/rate-limit.js';
-import healthRoutes from '@/modules/health/health.routes.js';
-import { metricsMiddleware, metricsRouter } from '@/observability/metrics.js';
-import { bullBoardRouter } from '@/queues/bull-board.js';
-import apiRoutes from '@/routes.js';
+import { env } from '@/config/env';
+import { docsRouter } from '@/docs/index';
+import { parseList } from '@/lib/utils';
+import { basicAuth } from '@/middleware/basic-auth';
+import { errorHandler, notFound } from '@/middleware/error';
+import { httpLogger } from '@/middleware/http-logger';
+import { globalLimiter } from '@/middleware/rate-limit';
+import healthRoutes from '@/modules/health/health.routes';
+import { metricsMiddleware, metricsRouter } from '@/observability/metrics';
+import { bullBoardRouter } from '@/queues/bull-board';
+import apiRoutes from '@/routes';
 
 export function createApp(): Express {
   const app = express();

@@ -69,9 +69,13 @@ export const updatePlatformRoleDto = z.object({
 export type UpdatePlatformRoleDto = z.infer<typeof updatePlatformRoleDto>;
 
 export const startSupportSessionDto = z.object({
-  reason: z.string().trim().min(5).max(500),
-  durationMinutes: z.coerce.number().int().min(5).max(120).default(30),
+  mode: z.enum(['TENANT_SCOPED', 'AS_MEMBER']).default('TENANT_SCOPED'),
+  scope: z.enum(['READ_ONLY', 'FULL']).default('READ_ONLY'),
+  targetMemberId: z.string().uuid().optional(),
   targetUserId: z.string().uuid().optional(),
+  reason: z.string().trim().min(5).max(500),
+  ticketRef: z.string().trim().min(1).max(100),
+  durationMinutes: z.coerce.number().int().min(5).max(120).default(30),
 });
 export type StartSupportSessionDto = z.infer<typeof startSupportSessionDto>;
 
@@ -124,7 +128,35 @@ export const provisionTenantDto = z.object({
     .trim()
     .min(2)
     .max(50)
-    .regex(/^[a-z0-9-]+$/, 'Slug must consist of lowercase alphanumeric characters and hyphens'),
+    .regex(/^[a-z0-9-]+$/, 'Slug must consist of lowercase alphanumeric characters and hyphens')
+    .refine(
+      (s) =>
+        ![
+          'www',
+          'app',
+          'api',
+          'admin',
+          'platform',
+          'login',
+          'register',
+          'logout',
+          'accept-invite',
+          'onboarding',
+          'settings',
+          'static',
+          'assets',
+          'docs',
+          'health',
+          'metrics',
+          'support',
+          'billing',
+          'pricing',
+          'auth',
+        ].includes(s.toLowerCase()),
+      {
+        message: 'This workspace slug is reserved and cannot be used',
+      },
+    ),
   ownerEmail: z.string().trim().email(),
   plan: z.string().trim().default('FREE'),
   country: z.string().trim().max(100).optional(),
