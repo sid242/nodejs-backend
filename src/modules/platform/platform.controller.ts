@@ -308,7 +308,6 @@ export const updateTenantSubscription = asyncHandler(async (req: Request, res: R
   AppResponse.ok(result, 'Tenant subscription updated successfully').send(res);
 });
 
-
 // ==========================================
 // 6. Tenant Dedicated Database Lifecycle Handlers
 // ==========================================
