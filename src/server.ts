@@ -5,6 +5,7 @@ import { closeDb } from '@/config/db';
 import { env } from '@/config/env';
 import { logger } from '@/config/logger';
 import { closeRedisClients } from '@/config/redis';
+import { drainDedicatedPools } from '@/lib/db-manager';
 import { state } from '@/lib/state';
 import { initSentry } from '@/observability/sentry';
 import { closeQueues } from '@/queues/index';
@@ -37,6 +38,7 @@ async function shutdown(signal: string): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 5_000)); // let LB deregister this target
     await sockets.close(); // closes sockets, HTTP server, and Redis adapter clients
     await closeQueues();
+    await drainDedicatedPools();
     await closeDb();
     await closeRedisClients();
     logger.info('shutdown complete');

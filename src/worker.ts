@@ -1,6 +1,7 @@
 import { closeDb } from '@/config/db';
 import { logger } from '@/config/logger';
 import { closeRedisClients } from '@/config/redis';
+import { drainDedicatedPools } from '@/lib/db-manager';
 import { initSentry } from '@/observability/sentry';
 import { closeQueues } from '@/queues/index';
 import { registerSchedulers, startWorkers } from '@/queues/workers/index';
@@ -24,6 +25,7 @@ async function shutdown(signal: string): Promise<void> {
     await Promise.all(workers.map((w) => w.close())); // waits for active jobs to finish
     await closeSocketEmitter();
     await closeQueues();
+    await drainDedicatedPools();
     await closeDb();
     await closeRedisClients();
     process.exit(0);
