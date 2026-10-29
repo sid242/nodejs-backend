@@ -11,7 +11,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
-import { tenantMembers, tenants } from './tenants';
+import { tenantMembers, tenants } from '../tenancy/index';
 
 export const appModules = pgTable(
   'AppModule',

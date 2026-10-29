@@ -1,8 +1,8 @@
 import { index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
-import { emailTemplateCategoryEnum, emailTemplateStatusEnum } from './enums';
-import { tenants } from './tenants/index';
-import { users } from './users';
+import { emailTemplateCategoryEnum, emailTemplateStatusEnum } from '../enums';
+import { tenants } from '../tenancy/index';
+import { users } from '../identity/users';
 
 export const emailTemplates = pgTable(
   'EmailTemplate',

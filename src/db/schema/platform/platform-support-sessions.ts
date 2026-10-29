@@ -6,7 +6,7 @@ import {
   supportSessionStatusEnum,
 } from '../enums';
 import { tenantMembers, tenants } from '../tenants/index';
-import { users } from '../users';
+import { users } from '../identity/users';
 import { platformStaff } from './platform-staff';
 
 export const platformSupportSessions = pgTable(

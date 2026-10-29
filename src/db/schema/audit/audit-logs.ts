@@ -1,8 +1,8 @@
 import { index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
-import { actorTypeEnum } from './enums';
-import { tenants } from './tenants/index';
-import { users } from './users';
+import { actorTypeEnum } from '../enums';
+import { tenants } from '../tenancy/index';
+import { users } from '../identity/users';
 
 export const auditLogs = pgTable(
   'AuditLog',

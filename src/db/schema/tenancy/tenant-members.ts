@@ -1,7 +1,7 @@
 import { index, pgTable, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { membershipStatusEnum } from '../enums';
-import { users } from '../users';
+import { users } from '../identity/users';
 import { tenants } from './tenants';
 
 export const tenantMembers = pgTable(

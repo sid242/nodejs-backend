@@ -1,7 +1,7 @@
 import { isNull } from 'drizzle-orm';
 import { index, integer, json, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
-import { userStatusEnum } from './enums';
+import { userStatusEnum } from '../enums';
 
 export const users = pgTable(
   'User',

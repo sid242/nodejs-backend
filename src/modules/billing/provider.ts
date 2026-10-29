@@ -1,7 +1,7 @@
 import type { Request } from 'express';
 
-import type { Subscription } from '@/db/schema/subscriptions';
-import type { Tenant } from '@/db/schema/tenants/tenants';
+import type { Subscription } from '@/db/schema/index';
+import type { Tenant } from '@/db/schema/index';
 import { AppError } from '@/lib/errors';
 
 export interface CheckoutResult {

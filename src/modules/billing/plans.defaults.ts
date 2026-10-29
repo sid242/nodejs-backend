@@ -1,4 +1,4 @@
-import type { PlanLimits } from '@/db/schema/plans';
+import type { PlanLimits } from '@/db/schema/index';
 
 export interface DefaultPlanDefinition {
   key: string;
