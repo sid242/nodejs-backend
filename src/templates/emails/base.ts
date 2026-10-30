@@ -1,13 +1,17 @@
+export interface EmailBranding {
+  companyName?: string;
+  logoUrl?: string | null;
+  primaryColor?: string;
+  secondaryColor?: string | null;
+  accentColor?: string | null;
+  supportEmail?: string | null;
+}
+
 export interface BaseLayoutOptions {
   title: string;
   previewText?: string;
   bodyContent: string;
-  branding?: {
-    companyName?: string;
-    logoUrl?: string | null;
-    primaryColor?: string;
-    supportEmail?: string | null;
-  };
+  branding?: EmailBranding;
 }
 
 /**
@@ -20,7 +24,8 @@ export function baseLayout({
   branding,
 }: BaseLayoutOptions): string {
   const companyName = branding?.companyName ?? 'Scalable Platform';
-  const primaryColor = branding?.primaryColor ?? '#2563eb';
+  const primaryColor = branding?.primaryColor ?? '#4f46e5';
+  const secondaryColor = branding?.secondaryColor ?? '#f8fafc';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -47,33 +52,39 @@ export function baseLayout({
       margin: 0 auto;
       background: #ffffff;
       border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      border-top: 4px solid ${primaryColor};
       overflow: hidden;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
     }
     .header {
-      background: #0f172a;
-      padding: 28px 36px;
+      background: #ffffff;
+      padding: 32px 36px 20px 36px;
       text-align: center;
+      border-bottom: 1px solid #f1f5f9;
     }
     .header h1 {
       margin: 0;
-      font-size: 20px;
-      color: #ffffff;
+      font-size: 22px;
+      font-weight: 700;
+      color: ${primaryColor};
       letter-spacing: -0.5px;
     }
     .content {
-      padding: 36px;
+      padding: 32px 36px;
       line-height: 1.6;
       font-size: 15px;
       color: #334155;
     }
     .content h2 {
       margin-top: 0;
-      font-size: 18px;
+      font-size: 20px;
+      font-weight: 700;
       color: #0f172a;
+      letter-spacing: -0.3px;
     }
     .token-box {
-      background: #f8fafc;
+      background: ${secondaryColor};
       border: 1px dashed #cbd5e1;
       border-radius: 8px;
       padding: 16px;
@@ -82,21 +93,22 @@ export function baseLayout({
     }
     .token-code {
       font-family: monospace;
-      font-size: 18px;
+      font-size: 20px;
       font-weight: 700;
-      letter-spacing: 2px;
+      letter-spacing: 2.5px;
       color: ${primaryColor};
     }
     .button {
       display: inline-block;
       background-color: ${primaryColor};
       color: #ffffff !important;
-      padding: 12px 24px;
+      padding: 12px 28px;
       border-radius: 6px;
       text-decoration: none;
       font-weight: 600;
       font-size: 14px;
       margin: 16px 0;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
     .footer {
       padding: 24px 36px;
@@ -104,12 +116,14 @@ export function baseLayout({
       border-top: 1px solid #f1f5f9;
       text-align: center;
       font-size: 12px;
-      color: #94a3b8;
+      color: #64748b;
     }
     .notice {
       font-size: 13px;
       color: #64748b;
-      margin-top: 20px;
+      margin-top: 24px;
+      border-top: 1px solid #f1f5f9;
+      padding-top: 16px;
     }
   </style>
 </head>
@@ -123,7 +137,7 @@ export function baseLayout({
             <div class="header">
               ${
                 branding?.logoUrl
-                  ? `<img src="${branding.logoUrl}" alt="${companyName}" height="36" style="display:block;margin:0 auto;max-height:36px;border:0;" />`
+                  ? `<img src="${branding.logoUrl}" alt="${companyName}" height="38" style="display:block;margin:0 auto;max-height:38px;max-width:220px;object-fit:contain;border:0;" />`
                   : `<h1>${companyName}</h1>`
               }
             </div>
@@ -131,11 +145,11 @@ export function baseLayout({
               ${bodyContent}
             </div>
             <div class="footer">
-              <p>© ${new Date().getFullYear()} ${companyName}. All rights reserved.</p>
+              <p style="margin:0 0 6px 0;">© ${new Date().getFullYear()} <strong>${companyName}</strong>. All rights reserved.</p>
               ${
                 branding?.supportEmail
-                  ? `<p>Questions? Contact us at <a href="mailto:${branding.supportEmail}" style="color:${primaryColor};">${branding.supportEmail}</a></p>`
-                  : '<p>This is an automated message, please do not reply directly to this email.</p>'
+                  ? `<p style="margin:4px 0 0 0;">Questions? Contact us at <a href="mailto:${branding.supportEmail}" style="color:${primaryColor};font-weight:500;">${branding.supportEmail}</a></p>`
+                  : '<p style="margin:4px 0 0 0;">This is an automated message, please do not reply directly to this email.</p>'
               }
             </div>
           </div>

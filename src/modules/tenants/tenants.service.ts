@@ -1273,6 +1273,7 @@ export async function updateTenantBranding(
 
   // Invalidate cached branding entries
   await cache.delByPrefix('branding:resolve:');
+  await cache.del(`tenant-branding-email:${tenantId}`);
   await cache.delByPrefix(`tenant:url:${tenantId}`);
   await cache.del(`entitlements:${tenantId}`);
 

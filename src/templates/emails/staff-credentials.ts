@@ -1,4 +1,4 @@
-import { baseLayout } from './base';
+import { baseLayout, type EmailBranding } from './base';
 import type { EmailTemplateResult } from './welcome';
 
 export interface RenderStaffCredentialsEmailOptions {
@@ -7,6 +7,7 @@ export interface RenderStaffCredentialsEmailOptions {
   password?: string;
   roleName: string;
   loginUrl: string;
+  branding?: EmailBranding;
 }
 
 export function renderStaffCredentialsEmail({
@@ -15,16 +16,19 @@ export function renderStaffCredentialsEmail({
   password,
   roleName,
   loginUrl,
+  branding,
 }: RenderStaffCredentialsEmailOptions): EmailTemplateResult {
-  const subject = `Welcome to the Platform Team — Your Access Credentials`;
+  const primaryColor = branding?.primaryColor ?? '#4f46e5';
+  const companyName = branding?.companyName ?? 'Platform Team';
+  const subject = `Welcome to ${companyName} — Your Access Credentials`;
   const previewText = `Your platform operator account is ready. Access credentials and sign-in link inside.`;
 
   const bodyContent = `
-    <h2>Welcome to the Platform Team</h2>
+    <h2>Welcome to ${companyName}</h2>
     <p>Hi ${name || 'there'},</p>
-    <p>An administrator has provisioned your platform staff account with the <strong>${roleName}</strong> role.</p>
+    <p>An administrator has provisioned your account with the <strong>${roleName}</strong> role.</p>
     
-    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin: 24px 0;">
+    <div style="background-color: ${branding?.secondaryColor || '#f8fafc'}; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin: 24px 0;">
       <div style="font-size: 12px; color: #64748b; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;">Account Credentials</div>
       <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
         <tr>
@@ -47,7 +51,7 @@ export function renderStaffCredentialsEmail({
     </div>
 
     <div style="text-align: center; margin: 28px 0;">
-      <a href="${loginUrl}" class="button" style="background-color: #4f46e5; color: #ffffff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">
+      <a href="${loginUrl}" class="button" style="background-color: ${primaryColor}; color: #ffffff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">
         Log In to Platform Portal
       </a>
     </div>
@@ -60,6 +64,6 @@ export function renderStaffCredentialsEmail({
 
   return {
     subject,
-    html: baseLayout({ title: subject, previewText, bodyContent }),
+    html: baseLayout({ title: subject, previewText, bodyContent, branding }),
   };
 }

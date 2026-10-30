@@ -1,38 +1,42 @@
-import { baseLayout } from './base';
+import { baseLayout, type EmailBranding } from './base';
 import type { EmailTemplateResult } from './welcome';
 
 export interface RenderMagicLinkEmailOptions {
   name?: string;
   token: string;
   magicLinkUrl?: string;
+  branding?: EmailBranding;
 }
 
 export function renderMagicLinkEmail({
   name,
   token,
   magicLinkUrl,
+  branding,
 }: RenderMagicLinkEmailOptions): EmailTemplateResult {
-  const subject = 'Your Magic Sign-In Link';
+  const primaryColor = branding?.primaryColor ?? '#4f46e5';
+  const companyName = branding?.companyName;
+  const subject = companyName ? `Your Magic Sign-In Link for ${companyName}` : 'Your Magic Sign-In Link';
   const previewText = 'Click the link to sign in to your account without a password.';
 
   const bodyContent = `
     <h2>Sign in with Magic Link</h2>
     <p>Hi ${name || 'there'},</p>
-    <p>We received a request to sign in to your account using a passwordless magic link.</p>
+    <p>We received a request to sign in to your account using a passwordless magic link${companyName ? ` for <strong>${companyName}</strong>` : ''}.</p>
     
     ${
       magicLinkUrl
         ? `<div style="text-align: center; margin: 28px 0;">
-             <a href="${magicLinkUrl}" class="button" style="background-color: #4f46e5; color: #ffffff; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">
+             <a href="${magicLinkUrl}" class="button" style="background-color: ${primaryColor}; color: #ffffff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">
                Sign In to Your Workspace
              </a>
            </div>`
         : ''
     }
 
-    <div class="token-box" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; text-align: center; margin: 20px 0;">
+    <div class="token-box" style="background-color: ${branding?.secondaryColor || '#f8fafc'}; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 16px; text-align: center; margin: 24px 0;">
       <div style="font-size: 12px; color: #64748b; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px;">Single-Use Security Token</div>
-      <div class="token-code" style="font-family: monospace; font-size: 18px; font-weight: bold; color: #1e293b; letter-spacing: 2px;">${token}</div>
+      <div class="token-code" style="font-family: monospace; font-size: 20px; font-weight: bold; color: ${primaryColor}; letter-spacing: 2px;">${token}</div>
     </div>
 
     <div class="notice" style="font-size: 13px; color: #64748b; line-height: 1.5; margin-top: 24px;">
@@ -43,6 +47,6 @@ export function renderMagicLinkEmail({
 
   return {
     subject,
-    html: baseLayout({ title: subject, previewText, bodyContent }),
+    html: baseLayout({ title: subject, previewText, bodyContent, branding }),
   };
 }

@@ -1,4 +1,4 @@
-export { baseLayout, type BaseLayoutOptions } from './base';
+export { baseLayout, type BaseLayoutOptions, type EmailBranding } from './base';
 export {
   renderWelcomeEmail,
   type RenderWelcomeEmailOptions,
