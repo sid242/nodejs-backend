@@ -147,6 +147,24 @@ export const updateTenantBrandingDto = z.object({
   faviconUrl: z.string().trim().url().optional().or(z.literal('')).nullable(),
   primaryColor: z.string().trim().regex(hexColorRegex, 'Invalid hex color code').optional(),
   accentColor: z.string().trim().regex(hexColorRegex, 'Invalid hex color code').optional(),
+  primaryDarkColor: z
+    .string()
+    .trim()
+    .regex(hexColorRegex, 'Invalid hex color code')
+    .optional()
+    .nullable()
+    .or(z.literal('')),
+  accentDarkColor: z
+    .string()
+    .trim()
+    .regex(hexColorRegex, 'Invalid hex color code')
+    .optional()
+    .nullable()
+    .or(z.literal('')),
+  fontFamily: z
+    .enum(['Inter', 'Plus Jakarta Sans', 'Geist', 'Poppins', 'Outfit', 'Roboto'])
+    .optional(),
+  sidebarTheme: z.enum(['DARK', 'LIGHT', 'BRAND']).optional(),
   borderRadius: z.string().trim().max(20).optional().nullable(),
   customDomain: z
     .string()

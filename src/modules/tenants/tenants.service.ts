@@ -849,6 +849,10 @@ export interface PublicTenantResolution {
     faviconUrl: string | null;
     primaryColor: string;
     accentColor: string;
+    primaryDarkColor?: string | null;
+    accentDarkColor?: string | null;
+    fontFamily?: string | null;
+    sidebarTheme?: string | null;
     borderRadius: string;
     customDomain: string | null;
     supportEmail: string | null;
@@ -974,6 +978,10 @@ export async function resolvePublicTenant(options: {
             faviconUrl: branding?.faviconUrl ?? null,
             primaryColor: branding?.primaryColor ?? '#4F46E5',
             accentColor: branding?.accentColor ?? '#06B6D4',
+            primaryDarkColor: branding?.primaryDarkColor ?? null,
+            accentDarkColor: branding?.accentDarkColor ?? null,
+            fontFamily: branding?.fontFamily ?? 'Inter',
+            sidebarTheme: branding?.sidebarTheme ?? 'DARK',
             borderRadius: branding?.borderRadius ?? '0.5rem',
             customDomain: branding?.customDomain ?? null,
             supportEmail: branding?.supportEmail ?? null,
@@ -1029,6 +1037,10 @@ export async function resolvePublicTenant(options: {
             faviconUrl: branding.faviconUrl ?? null,
             primaryColor: branding.primaryColor ?? '#4F46E5',
             accentColor: branding.accentColor ?? '#06B6D4',
+            primaryDarkColor: branding.primaryDarkColor ?? null,
+            accentDarkColor: branding.accentDarkColor ?? null,
+            fontFamily: branding.fontFamily ?? 'Inter',
+            sidebarTheme: branding.sidebarTheme ?? 'DARK',
             borderRadius: branding.borderRadius ?? '0.5rem',
             customDomain: branding.customDomain ?? null,
             supportEmail: branding.supportEmail ?? null,
@@ -1108,6 +1120,10 @@ export async function getTenantBranding(tenantId: string): Promise<PublicTenantB
     faviconUrl: null,
     primaryColor: '#4F46E5',
     accentColor: '#06B6D4',
+    primaryDarkColor: null,
+    accentDarkColor: null,
+    fontFamily: 'Inter',
+    sidebarTheme: 'DARK',
     borderRadius: '0.5rem',
     customDomain: null,
     customDomainStatus: 'PENDING',
@@ -1184,6 +1200,16 @@ export async function updateTenantBranding(
     faviconUrl: data?.faviconUrl !== undefined ? data.faviconUrl : (existing?.faviconUrl ?? null),
     primaryColor: data?.primaryColor ?? existing?.primaryColor ?? '#4F46E5',
     accentColor: data?.accentColor ?? existing?.accentColor ?? '#06B6D4',
+    primaryDarkColor:
+      data?.primaryDarkColor !== undefined
+        ? (data.primaryDarkColor || null)
+        : (existing?.primaryDarkColor ?? null),
+    accentDarkColor:
+      data?.accentDarkColor !== undefined
+        ? (data.accentDarkColor || null)
+        : (existing?.accentDarkColor ?? null),
+    fontFamily: data?.fontFamily ?? existing?.fontFamily ?? 'Inter',
+    sidebarTheme: data?.sidebarTheme ?? existing?.sidebarTheme ?? 'DARK',
     borderRadius: data?.borderRadius ?? existing?.borderRadius ?? '0.5rem',
     customDomain:
       data?.customDomain !== undefined
