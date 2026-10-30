@@ -147,6 +147,13 @@ export const updateTenantBrandingDto = z.object({
   faviconUrl: z.string().trim().url().optional().or(z.literal('')).nullable(),
   primaryColor: z.string().trim().regex(hexColorRegex, 'Invalid hex color code').optional(),
   accentColor: z.string().trim().regex(hexColorRegex, 'Invalid hex color code').optional(),
+  secondaryColor: z
+    .string()
+    .trim()
+    .regex(hexColorRegex, 'Invalid hex color code')
+    .optional()
+    .nullable()
+    .or(z.literal('')),
   primaryDarkColor: z
     .string()
     .trim()
@@ -155,6 +162,13 @@ export const updateTenantBrandingDto = z.object({
     .nullable()
     .or(z.literal('')),
   accentDarkColor: z
+    .string()
+    .trim()
+    .regex(hexColorRegex, 'Invalid hex color code')
+    .optional()
+    .nullable()
+    .or(z.literal('')),
+  secondaryDarkColor: z
     .string()
     .trim()
     .regex(hexColorRegex, 'Invalid hex color code')
