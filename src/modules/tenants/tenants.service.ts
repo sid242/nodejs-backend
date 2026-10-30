@@ -856,6 +856,10 @@ export interface PublicTenantResolution {
     fontFamily?: string | null;
     sidebarTheme?: string | null;
     borderRadius: string;
+    authHeadline?: string | null;
+    authSubtitle?: string | null;
+    authCoverUrl?: string | null;
+    authLayout?: string | null;
     customDomain: string | null;
     supportEmail: string | null;
   };
@@ -980,11 +984,17 @@ export async function resolvePublicTenant(options: {
             faviconUrl: branding?.faviconUrl ?? null,
             primaryColor: branding?.primaryColor ?? '#4F46E5',
             accentColor: branding?.accentColor ?? '#06B6D4',
+            secondaryColor: branding?.secondaryColor ?? null,
             primaryDarkColor: branding?.primaryDarkColor ?? null,
             accentDarkColor: branding?.accentDarkColor ?? null,
+            secondaryDarkColor: branding?.secondaryDarkColor ?? null,
             fontFamily: branding?.fontFamily ?? 'Inter',
             sidebarTheme: branding?.sidebarTheme ?? 'DARK',
             borderRadius: branding?.borderRadius ?? '0.5rem',
+            authHeadline: branding?.authHeadline ?? null,
+            authSubtitle: branding?.authSubtitle ?? null,
+            authCoverUrl: branding?.authCoverUrl ?? null,
+            authLayout: branding?.authLayout ?? 'SPLIT',
             customDomain: branding?.customDomain ?? null,
             supportEmail: branding?.supportEmail ?? null,
           },
@@ -1046,6 +1056,10 @@ export async function resolvePublicTenant(options: {
             fontFamily: branding.fontFamily ?? 'Inter',
             sidebarTheme: branding.sidebarTheme ?? 'DARK',
             borderRadius: branding.borderRadius ?? '0.5rem',
+            authHeadline: branding.authHeadline ?? null,
+            authSubtitle: branding.authSubtitle ?? null,
+            authCoverUrl: branding.authCoverUrl ?? null,
+            authLayout: branding.authLayout ?? 'SPLIT',
             customDomain: branding.customDomain ?? null,
             supportEmail: branding.supportEmail ?? null,
           },
@@ -1092,6 +1106,10 @@ export async function resolvePublicTenant(options: {
           fontFamily: branding?.fontFamily ?? 'Inter',
           sidebarTheme: branding?.sidebarTheme ?? 'DARK',
           borderRadius: branding?.borderRadius ?? '0.5rem',
+          authHeadline: branding?.authHeadline ?? null,
+          authSubtitle: branding?.authSubtitle ?? null,
+          authCoverUrl: branding?.authCoverUrl ?? null,
+          authLayout: branding?.authLayout ?? 'SPLIT',
           customDomain: branding?.customDomain ?? null,
           supportEmail: branding?.supportEmail ?? null,
         },
@@ -1137,6 +1155,10 @@ export async function getTenantBranding(tenantId: string): Promise<PublicTenantB
     fontFamily: 'Inter',
     sidebarTheme: 'DARK',
     borderRadius: '0.5rem',
+    authHeadline: null,
+    authSubtitle: null,
+    authCoverUrl: null,
+    authLayout: 'SPLIT',
     customDomain: null,
     customDomainStatus: 'PENDING',
     customDomainVerifiedAt: null,
@@ -1231,6 +1253,14 @@ export async function updateTenantBranding(
     fontFamily: data?.fontFamily ?? existing?.fontFamily ?? 'Inter',
     sidebarTheme: data?.sidebarTheme ?? existing?.sidebarTheme ?? 'DARK',
     borderRadius: data?.borderRadius ?? existing?.borderRadius ?? '0.5rem',
+    authHeadline:
+      data?.authHeadline !== undefined ? (data.authHeadline || null) : (existing?.authHeadline ?? null),
+    authSubtitle:
+      data?.authSubtitle !== undefined ? (data.authSubtitle || null) : (existing?.authSubtitle ?? null),
+    authCoverUrl:
+      data?.authCoverUrl !== undefined ? (data.authCoverUrl || null) : (existing?.authCoverUrl ?? null),
+    authLayout:
+      data?.authLayout !== undefined ? (data.authLayout || 'SPLIT') : (existing?.authLayout ?? 'SPLIT'),
     customDomain:
       data?.customDomain !== undefined
         ? data.customDomain

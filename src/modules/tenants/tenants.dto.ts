@@ -180,6 +180,10 @@ export const updateTenantBrandingDto = z.object({
     .optional(),
   sidebarTheme: z.enum(['DARK', 'LIGHT', 'BRAND']).optional(),
   borderRadius: z.string().trim().max(20).optional().nullable(),
+  authHeadline: z.string().trim().max(150).optional().nullable().or(z.literal('')),
+  authSubtitle: z.string().trim().max(300).optional().nullable().or(z.literal('')),
+  authCoverUrl: z.string().trim().url().optional().or(z.literal('')).nullable(),
+  authLayout: z.enum(['SPLIT', 'CARD']).optional().nullable(),
   customDomain: z
     .string()
     .trim()
@@ -236,7 +240,7 @@ export const ALLOWED_BRANDING_MIME_TYPES = [
 ] as const;
 
 export const requestBrandingUploadUrlDto = z.object({
-  type: z.enum(['logo', 'logo-dark', 'favicon']),
+  type: z.enum(['logo', 'logo-dark', 'favicon', 'cover']),
   filename: z.string().trim().min(1),
   contentType: z
     .string()
