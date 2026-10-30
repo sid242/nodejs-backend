@@ -179,8 +179,7 @@ export const resolvePublicTenant = asyncHandler(async (req: Request, res: Respon
   const host =
     (req.query?.host as string) ??
     (req.query?.domain as string) ??
-    req.headers['x-forwarded-host']?.toString() ??
-    req.headers.host;
+    (!slug && !domain ? (req.headers['x-forwarded-host']?.toString() ?? req.headers.host) : undefined);
 
   const resolved = await tenantsService.resolvePublicTenant({ slug, domain, host });
   if (!resolved) {

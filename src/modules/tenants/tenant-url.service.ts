@@ -132,9 +132,9 @@ export function getEffectiveUrlMode(
 /**
  * Builds the platform URL (non-tenant marketing / login / platform staff).
  */
-export function buildPlatformUrl(path = '/'): string {
+export function buildPlatformUrl(path = ''): string {
   const protocol = env.APP_PROTOCOL || (env.PLATFORM_HOST.includes('localhost') ? 'http' : 'https');
-  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  const cleanPath = path ? (path.startsWith('/') ? path : `/${path}`) : '';
   return `${protocol}://${env.PLATFORM_HOST}${cleanPath}`;
 }
 
