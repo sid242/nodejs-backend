@@ -15,20 +15,39 @@ import {
 
 const DEMO_PASSWORD = 'Password@123456';
 
-const KEEP_TENANT_SLUGS = ['acme-realty', 'nexus-estates'];
+const KEEP_TENANT_SLUGS = [
+  'acme-realty',
+  'nexus-estates',
+  'apex-dynamics',
+  'starlight-ventures',
+];
 
 const KEEP_USER_EMAILS = [
   'sid.superadmin@yopmail.com',
+  // Acme Realty
   'owner@acme.com',
   'admin@acme.com',
   'manager@acme.com',
   'agent@acme.com',
   'viewer@acme.com',
+  // Nexus Estates
   'owner@nexus.com',
   'admin@nexus.com',
   'manager@nexus.com',
   'agent@nexus.com',
   'viewer@nexus.com',
+  // Apex Dynamics
+  'owner@apex.com',
+  'admin@apex.com',
+  'manager@apex.com',
+  'agent@apex.com',
+  'viewer@apex.com',
+  // Starlight Ventures
+  'owner@starlight.com',
+  'admin@starlight.com',
+  'manager@starlight.com',
+  'agent@starlight.com',
+  'viewer@starlight.com',
 ];
 
 const TARGET_PLATFORM_STAFF = [

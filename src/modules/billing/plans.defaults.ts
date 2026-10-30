@@ -27,6 +27,11 @@ export const DEFAULT_PLANS: DefaultPlanDefinition[] = [
       maxMembers: 5,
       maxStorageBytes: 1 * 1024 * 1024 * 1024, // 1 GiB
       maxCustomRoles: 2,
+      urlAccess: {
+        path: true,
+        subdomain: false,
+        customDomain: false,
+      },
     },
     isPublic: true,
     isActive: true,
@@ -44,6 +49,11 @@ export const DEFAULT_PLANS: DefaultPlanDefinition[] = [
       maxMembers: 25,
       maxStorageBytes: 50 * 1024 * 1024 * 1024, // 50 GiB
       maxCustomRoles: 20,
+      urlAccess: {
+        path: true,
+        subdomain: true,
+        customDomain: false,
+      },
     },
     isPublic: true,
     isActive: true,
@@ -61,6 +71,11 @@ export const DEFAULT_PLANS: DefaultPlanDefinition[] = [
       maxMembers: null, // unlimited
       maxStorageBytes: null, // unlimited
       maxCustomRoles: null, // unlimited
+      urlAccess: {
+        path: true,
+        subdomain: true,
+        customDomain: true,
+      },
     },
     isPublic: true,
     isActive: true,

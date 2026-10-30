@@ -10,6 +10,7 @@ export const tenants = pgTable(
     slug: text('slug').notNull().unique(),
     status: tenantStatusEnum('status').notNull().default('ACTIVE'),
     plan: text('plan').notNull().default('FREE'),
+    urlStyle: text('urlStyle').notNull().default('path'), // 'path' | 'subdomain' | 'customDomain'
     allowSupportAccess: boolean('allowSupportAccess').notNull().default(true),
     // Hybrid Shared / Dedicated Database Routing
     databaseMode: text('databaseMode').notNull().default('shared'), // 'shared' | 'dedicated'
@@ -42,6 +43,7 @@ export const publicTenant = {
   slug: tenants.slug,
   status: tenants.status,
   plan: tenants.plan,
+  urlStyle: tenants.urlStyle,
   databaseMode: tenants.databaseMode,
   createdAt: tenants.createdAt,
 };
@@ -52,6 +54,7 @@ export type PublicTenant = {
   slug: string;
   status: 'ACTIVE' | 'SUSPENDED' | 'TRIALING' | 'DEACTIVATED';
   plan: string;
+  urlStyle?: 'path' | 'subdomain' | 'customDomain' | string;
   databaseMode?: 'shared' | 'dedicated' | string;
   createdAt: Date;
 };

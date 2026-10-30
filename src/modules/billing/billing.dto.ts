@@ -1,10 +1,21 @@
 import { z } from 'zod';
 
+export const urlAccessDto = z.object({
+  path: z.literal(true),
+  subdomain: z.boolean(),
+  customDomain: z.boolean(),
+});
+
+export type UrlAccessDto = z.infer<typeof urlAccessDto>;
+
 export const planLimitsDto = z.object({
   maxMembers: z.number().int().min(1).nullable(),
   maxStorageBytes: z.number().int().min(0).nullable(),
   maxCustomRoles: z.number().int().min(0).nullable(),
+  urlAccess: urlAccessDto.default({ path: true, subdomain: false, customDomain: false }),
 });
+
+export type PlanLimitsDto = z.infer<typeof planLimitsDto>;
 
 export const createPlanDto = z.object({
   key: z.string().trim().min(2).max(50).toUpperCase(),

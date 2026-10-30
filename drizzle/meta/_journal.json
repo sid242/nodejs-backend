@@ -120,6 +120,13 @@
       "when": 1793265429039,
       "tag": "0016_lyrical_the_fallen",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793283235507,
+      "tag": "0017_illegal_spot",
+      "breakpoints": true
     }
   ]
 }

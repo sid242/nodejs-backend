@@ -9,6 +9,7 @@ import {
 } from '@/modules/auth/auth.dto';
 import * as rbacController from '@/modules/rbac/rbac.controller';
 import * as rbacDto from '@/modules/rbac/rbac.dto';
+import * as tenantDto from '@/modules/tenants/tenants.dto';
 import * as usersController from '@/modules/users/users.controller';
 import * as usersDto from '@/modules/users/users.dto';
 
@@ -228,6 +229,13 @@ router.patch(
   requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_MANAGE),
   validate({ body: dto.updatePlatformTenantSubscriptionDto }),
   controller.updateTenantSubscription,
+);
+
+router.post(
+  '/tenants/:id/url-settings/override',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.TENANTS_MANAGE),
+  validate({ body: tenantDto.overrideTenantCustomDomainDto }),
+  controller.overrideTenantUrlSettings,
 );
 
 // ==========================================

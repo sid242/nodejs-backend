@@ -5,6 +5,7 @@ import { AppResponse } from '@/lib/responses';
 
 import * as platform2FaService from './platform-2fa.service';
 import * as service from './platform.service';
+import * as tenantsService from '@/modules/tenants/tenants.service';
 
 // ==========================================
 // 1. Staff Authentication & Handlers
@@ -339,4 +340,13 @@ export const getTenantDatabaseHealth = asyncHandler(async (req: Request, res: Re
 export const getDatabasePoolStats = asyncHandler(async (_req: Request, res: Response) => {
   const result = service.getDatabasePoolStats();
   AppResponse.ok(result, 'Dedicated database connection pools statistics retrieved').send(res);
+});
+
+export const overrideTenantUrlSettings = asyncHandler(async (req: Request, res: Response) => {
+  const result = await tenantsService.overrideTenantUrlSettings(
+    req.params.id as string,
+    req.staff!.id,
+    req.valid?.body,
+  );
+  AppResponse.ok(result, 'Tenant URL settings overridden successfully').send(res);
 });

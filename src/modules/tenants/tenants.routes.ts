@@ -248,4 +248,30 @@ router.post(
   controller.verifyCustomDomain,
 );
 
+// Tenant URL Settings & Custom Domain Management
+router.get(
+  '/:tenantId/url-settings',
+  requireAuth,
+  requireTenant,
+  requirePermission('tenants:read'),
+  controller.getTenantUrlSettings,
+);
+
+router.put(
+  '/:tenantId/url-settings',
+  requireAuth,
+  requireTenant,
+  requirePermission('tenants:update'),
+  validate({ body: dto.updateTenantUrlSettingsDto }),
+  controller.updateTenantUrlSettings,
+);
+
+router.delete(
+  '/:tenantId/url-settings/custom-domain',
+  requireAuth,
+  requireTenant,
+  requirePermission('tenants:update'),
+  controller.deleteTenantCustomDomain,
+);
+
 export default router;

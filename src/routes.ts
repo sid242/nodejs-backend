@@ -19,6 +19,7 @@ router.use('/rbac', rbacRoutes);
 router.use('/platform', platformRoutes);
 router.use('/email-templates', emailTemplateRoutes);
 router.use('/billing', billingRoutes);
+router.use('/plans', billingRoutes);
 router.get('/public/plans', billingController.listPublicPlans);
 
 export default router;

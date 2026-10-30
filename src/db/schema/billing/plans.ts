@@ -13,10 +13,17 @@ import {
 
 import { appModules } from '../access/rbac';
 
+export interface PlanUrlAccess {
+  path: true;
+  subdomain: boolean;
+  customDomain: boolean;
+}
+
 export interface PlanLimits {
   maxMembers: number | null;
   maxStorageBytes: number | null;
   maxCustomRoles: number | null;
+  urlAccess?: PlanUrlAccess;
 }
 
 export const plans = pgTable(
@@ -59,8 +66,7 @@ export const planModules = pgTable(
     createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
-    primaryKey({ columns: [table.planId, table.moduleId] }),
-    index('PlanModule_planId_idx').on(table.planId),
+    primaryKey({ columns: [table.planId, table.moduleId], name: 'PlanModule_pkey' }),
     index('PlanModule_moduleId_idx').on(table.moduleId),
   ],
 );
@@ -83,5 +89,6 @@ export const publicPlan = {
   isPublic: plans.isPublic,
   isActive: plans.isActive,
   sortOrder: plans.sortOrder,
-  createdAt: plans.createdAt,
 };
+
+export type PublicPlan = typeof publicPlan;

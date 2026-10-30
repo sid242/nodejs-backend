@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { tenantSlugSchema } from '@/modules/tenants/tenants.dto';
+
 // ==========================================
 // Platform Staff DTOs
 // ==========================================
@@ -123,40 +125,7 @@ export type ListPlatformTenantsQueryDto = z.infer<typeof listPlatformTenantsQuer
 
 export const provisionTenantDto = z.object({
   name: z.string().trim().min(2).max(100),
-  slug: z
-    .string()
-    .trim()
-    .min(2)
-    .max(50)
-    .regex(/^[a-z0-9-]+$/, 'Slug must consist of lowercase alphanumeric characters and hyphens')
-    .refine(
-      (s) =>
-        ![
-          'www',
-          'app',
-          'api',
-          'admin',
-          'platform',
-          'login',
-          'register',
-          'logout',
-          'accept-invite',
-          'onboarding',
-          'settings',
-          'static',
-          'assets',
-          'docs',
-          'health',
-          'metrics',
-          'support',
-          'billing',
-          'pricing',
-          'auth',
-        ].includes(s.toLowerCase()),
-      {
-        message: 'This workspace slug is reserved and cannot be used',
-      },
-    ),
+  slug: tenantSlugSchema,
   ownerEmail: z.string().trim().email(),
   plan: z.string().trim().default('FREE'),
   country: z.string().trim().max(100).optional(),

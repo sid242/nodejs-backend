@@ -61,7 +61,7 @@ test('Release Checklist 1 & 2: Cross-Tenant Isolation & Header Tampering Prevent
   try {
     const req: any = {
       user: { id: user.id, status: 'ACTIVE' },
-      headers: { 'x-tenant-id': tenantB.id },
+      headers: { 'x-tenant-id': tenantB.id, 'x-bff-secret': env.BFF_SHARED_SECRET },
       params: {},
       query: {},
     };
@@ -384,7 +384,7 @@ test('Release Checklist 10: Suspended Tenants Lose Access', async () => {
   try {
     const req: any = {
       user: { id: user.id, status: 'ACTIVE' },
-      headers: { 'x-tenant-id': tenant.id },
+      headers: { 'x-tenant-id': tenant.id, 'x-bff-secret': env.BFF_SHARED_SECRET },
       params: {},
       query: {},
     };

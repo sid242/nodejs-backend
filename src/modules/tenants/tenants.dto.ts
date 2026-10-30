@@ -2,39 +2,60 @@ import { z } from 'zod';
 
 export const RESERVED_SLUGS = [
   'www',
-  'app',
   'api',
+  'app',
   'admin',
   'platform',
+  'auth',
   'login',
   'register',
   'logout',
   'accept-invite',
   'onboarding',
   'settings',
+  'w',
   'static',
   'assets',
+  'cdn',
+  'mail',
+  'smtp',
+  'imap',
+  'ftp',
+  'status',
   'docs',
-  'health',
-  'metrics',
+  'help',
   'support',
   'billing',
   'pricing',
-  'auth',
+  'dashboard',
+  'health',
+  'metrics',
 ] as const;
+
+export function isReservedSlug(slug: string): boolean {
+  return (RESERVED_SLUGS as readonly string[]).includes(slug.toLowerCase());
+}
+
+export const tenantSlugSchema = z
+  .string()
+  .trim()
+  .min(3, 'Slug must be at least 3 characters long')
+  .max(63, 'Slug cannot exceed 63 characters')
+  .regex(
+    /^[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])$/,
+    'Slug must follow DNS label rules (lowercase alphanumeric and hyphens, cannot start or end with hyphen)',
+  )
+  .refine((s) => s.slice(2, 4) !== '--', {
+    message: 'Slug cannot contain double hyphens at index 2-3 (punycode reserved)',
+  })
+  .refine((s) => !isReservedSlug(s), {
+    message: 'This workspace slug is reserved and cannot be used',
+  });
 
 export const createTenantDto = z
   .object({
     name: z.string().trim().min(2).max(100),
-    slug: z
-      .string()
-      .trim()
-      .min(2)
-      .max(50)
-      .regex(/^[a-z0-9-]+$/, 'Slug must only contain lowercase alphanumeric characters and hyphens')
-      .refine((s) => !RESERVED_SLUGS.includes(s.toLowerCase() as any), {
-        message: 'This workspace slug is reserved and cannot be used',
-      }),
+    slug: tenantSlugSchema,
   })
   .strict();
 
@@ -43,6 +64,7 @@ export type CreateTenantDto = z.infer<typeof createTenantDto>;
 export const updateTenantDto = z
   .object({
     name: z.string().trim().min(2).max(100).optional(),
+    slug: tenantSlugSchema.optional(),
   })
   .strict();
 
@@ -138,6 +160,33 @@ export const updateTenantBrandingDto = z.object({
 });
 
 export type UpdateTenantBrandingDto = z.infer<typeof updateTenantBrandingDto>;
+
+export const updateTenantUrlSettingsDto = z.object({
+  urlStyle: z.enum(['path', 'subdomain', 'customDomain']).optional(),
+  customDomain: z
+    .string()
+    .trim()
+    .max(255)
+    .regex(/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/, 'Must be a valid domain name')
+    .optional()
+    .nullable()
+    .or(z.literal('')),
+});
+
+export type UpdateTenantUrlSettingsDto = z.infer<typeof updateTenantUrlSettingsDto>;
+
+export const overrideTenantCustomDomainDto = z.object({
+  customDomain: z
+    .string()
+    .trim()
+    .max(255)
+    .regex(/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/, 'Must be a valid domain name')
+    .optional(),
+  status: z.enum(['PENDING', 'VERIFIED', 'FAILED']).default('VERIFIED'),
+  reason: z.string().trim().max(300).optional(),
+});
+
+export type OverrideTenantCustomDomainDto = z.infer<typeof overrideTenantCustomDomainDto>;
 
 export const ALLOWED_BRANDING_MIME_TYPES = [
   'image/png',

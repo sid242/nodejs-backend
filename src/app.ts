@@ -6,7 +6,7 @@ import helmet from 'helmet';
 
 import { env } from '@/config/env';
 import { docsRouter } from '@/docs/index';
-import { parseList } from '@/lib/utils';
+import { dynamicCorsOrigin } from '@/lib/cors';
 import { basicAuth } from '@/middleware/basic-auth';
 import { errorHandler, notFound } from '@/middleware/error';
 import { httpLogger } from '@/middleware/http-logger';
@@ -37,7 +37,7 @@ export function createApp(): Express {
   }
 
   app.use(helmet());
-  app.use(cors({ origin: parseList(env.CORS_ORIGINS), credentials: true }));
+  app.use(cors({ origin: dynamicCorsOrigin, credentials: true }));
   app.use(compression());
   app.use(express.json({ limit: '1mb' }));
   app.use(cookieParser());

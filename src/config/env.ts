@@ -10,6 +10,16 @@ const schema = z.object({
   TRUST_PROXY: z.coerce.number().int().default(1),
   CORS_ORIGINS: z.string().default('http://localhost:5173'),
 
+  // Tenancy & Custom Domain Configuration
+  APP_BASE_DOMAIN: z.string().default('example.com'),
+  APP_PROTOCOL: z.enum(['http', 'https']).default('https'),
+  PLATFORM_HOST: z.string().default('example.com'),
+  RESERVED_SUBDOMAINS: z.string().default('www,api,app,admin,platform,auth,static,cdn,mail,status'),
+  TENANCY_MODES: z.string().default('path,subdomain,customDomain'),
+  CUSTOM_DOMAIN_CNAME_TARGET: z.string().default('tenants.example.com'),
+  BFF_SHARED_SECRET: z.string().min(16).default('bff-dev-shared-secret-key-min-16-chars'),
+  FRONTEND_URL: z.string().optional(),
+
   DATABASE_URL: z.string().min(1),
   DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
   DB_CONNECT_TIMEOUT_SECONDS: z.coerce.number().int().min(1).max(60).default(10),
@@ -83,6 +93,11 @@ const schema = z.object({
 const parsed = schema.safeParse(process.env);
 if (!parsed.success) {
   console.error('Invalid environment variables:', parsed.error.flatten().fieldErrors);
+  process.exit(1);
+}
+
+if (parsed.data.NODE_ENV === 'production' && !process.env.APP_BASE_DOMAIN) {
+  console.error('Invalid environment variables: APP_BASE_DOMAIN is required in production.');
   process.exit(1);
 }
 

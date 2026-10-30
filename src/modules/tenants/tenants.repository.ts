@@ -225,7 +225,10 @@ export async function provisionTenantTransaction(data: {
     }
 
     // 4. Provision default tenant modules
-    const allModules = await tx.select({ id: appModules.id }).from(appModules);
+    const allModules = await tx
+      .select({ id: appModules.id })
+      .from(appModules)
+      .where(eq(appModules.isSystem, true));
     if (allModules?.length > 0) {
       await tx
         .insert(tenantModules)
@@ -281,11 +284,25 @@ export async function provisionTenantTransaction(data: {
   });
 }
 
+export async function updateTenantUrlStyle(
+  id: string,
+  urlStyle: 'path' | 'subdomain' | 'customDomain',
+  executor: DbExecutor = db,
+): Promise<Tenant | null> {
+  const [record] = await executor
+    .update(tenants)
+    .set({ urlStyle })
+    .where(eq(tenants.id, id))
+    .returning();
+  return record ?? null;
+}
+
 export const tenantsRepo = {
   createTenant,
   findTenantById,
   findTenantBySlug,
   updateTenant,
+  updateTenantUrlStyle,
   findUserTenants,
   findAllActiveTenants,
   findMembershipsByUserId,

@@ -285,6 +285,7 @@ test('Phase 1: S5 - Support session header is rejected if caller is not the sess
   const reqCustomer: any = {
     headers: {
       'x-tenant-id': tenant.id,
+      'x-bff-secret': env.BFF_SHARED_SECRET,
       'x-support-session-id': session.id,
     },
     user: { id: '44444444-4444-4444-4444-444444444444' },
@@ -302,6 +303,7 @@ test('Phase 1: S5 - Support session header is rejected if caller is not the sess
   const reqOtherStaff: any = {
     headers: {
       'x-tenant-id': tenant.id,
+      'x-bff-secret': env.BFF_SHARED_SECRET,
       'x-support-session-id': session.id,
     },
     staff: { id: '55555555-5555-5555-5555-555555555555', roleId: supportRole.id },

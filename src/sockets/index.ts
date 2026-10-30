@@ -7,7 +7,7 @@ import { env } from '@/config/env';
 import { logger } from '@/config/logger';
 import { createRedis, redis } from '@/config/redis';
 import { ACCESS_TOKEN_COOKIE } from '@/constants/index';
-import { parseList } from '@/lib/utils';
+import { dynamicCorsOrigin } from '@/lib/cors';
 import { parseCookies } from '@/modules/auth/cookies';
 import { verifyAccessToken, verifySupportToken } from '@/modules/auth/tokens';
 import * as platformRepo from '@/modules/platform/platform.repository';
@@ -37,7 +37,7 @@ export function initSocket(httpServer: HttpServer): SocketManager {
   const sub = createRedis('sio-sub', { url: env.SOCKET_REDIS_URL });
 
   const io = new Server(httpServer, {
-    cors: { origin: parseList(env.CORS_ORIGINS), credentials: true },
+    cors: { origin: dynamicCorsOrigin, credentials: true },
     // websocket-only => no sticky sessions needed behind the load balancer.
     transports: ['websocket'],
     // Redis adapter => rooms/broadcasts work across all API replicas.

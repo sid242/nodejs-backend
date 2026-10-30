@@ -70,3 +70,8 @@ test('manualBillingProvider rejects unsupported operations with AppError', async
     (err: any) => err instanceof AppError && err.status === 400,
   );
 });
+
+test('planIdParamDto rejects non-UUID identifiers like "platform"', () => {
+  const result = billingDto.planIdParamDto.safeParse({ id: 'platform' });
+  assert.equal(result.success, false);
+});

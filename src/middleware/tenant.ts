@@ -1,10 +1,25 @@
+import crypto from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 
+import { env } from '@/config/env';
 import { AppError } from '@/lib/errors';
 import * as platformRepo from '@/modules/platform/platform.repository';
 import { resolveUserPermissions, SYSTEM_ROLES } from '@/modules/rbac/rbac.service';
 import * as tenantsRepo from '@/modules/tenants/tenants.repository';
 import * as usersRepo from '@/modules/users/users.repository';
+
+export function hasValidBffSecret(req: Request): boolean {
+  const secretHeader = req.headers?.['x-bff-secret'];
+  const raw = Array.isArray(secretHeader) ? secretHeader[0] : secretHeader;
+  if (!raw || typeof raw !== 'string') return false;
+  const expected = env.BFF_SHARED_SECRET;
+  if (!expected || raw.length !== expected.length) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(raw), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}
 
 export async function resolveTenantContext(
   req: Request,
@@ -19,13 +34,26 @@ export async function resolveTenantContext(
     return next();
   }
 
-  // 1. Identify tenant from header, path params, query, cookie, or single-tenant auto-fallback
+  // 1. Identify tenant from accepted sources in strict order:
+  // (a) x-tenant-id ONLY when carrying valid x-bff-secret header
+  // (b) route param :tenantId
+  // (c) token claim / single-tenant auto-fallback
+  let tenantIdentifier: string | undefined;
+
   const rawHeader = req.headers?.['x-tenant-id'];
-  let tenantIdentifier =
-    (Array.isArray(rawHeader) ? rawHeader?.[0] : rawHeader) ||
-    (typeof req.params?.tenantId === 'string' ? req.params?.tenantId : undefined) ||
-    (typeof req.query?.tenantId === 'string' ? req.query?.tenantId : undefined) ||
-    (req.cookies?.['active_tenant_id'] as string | undefined);
+  const headerTenantId = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
+
+  if (headerTenantId && hasValidBffSecret(req)) {
+    tenantIdentifier = headerTenantId;
+  }
+
+  if (!tenantIdentifier && typeof req.params?.tenantId === 'string') {
+    tenantIdentifier = req.params.tenantId;
+  }
+
+  if (!tenantIdentifier && (req.user as any)?.tenantId) {
+    tenantIdentifier = (req.user as any).tenantId;
+  }
 
   // If omitted and user is authenticated, auto-resolve if user has exactly one active tenant
   if (!tenantIdentifier && req.user?.id) {

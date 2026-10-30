@@ -3,6 +3,7 @@ import { after, test } from 'node:test';
 import { eq, inArray } from 'drizzle-orm';
 
 import { closeDb, db } from '../src/config/db';
+import { env } from '../src/config/env';
 import { closeRedisClients } from '../src/config/redis';
 import { files, tenantMembers, tenants, users } from '../src/db/schema/index';
 import { withTenantTransaction } from '../src/db/rls';
@@ -214,7 +215,7 @@ test('Multi-Tenant Edge Case 3: User with multiple active tenants requires expli
     // 3b: Explicitly providing x-tenant-id for Tenant 2 succeeds
     const reqExplicit: any = {
       user: { id: multiTenantUser.id, role: 'USER', status: 'ACTIVE' },
-      headers: { 'x-tenant-id': tenant2.id },
+      headers: { 'x-tenant-id': tenant2.id, 'x-bff-secret': env.BFF_SHARED_SECRET },
       params: {},
       query: {},
     };
@@ -249,7 +250,7 @@ test('Multi-Tenant Edge Case 4: Nonexistent tenant ID returns 404 Not Found', as
     const fakeUuid = '00000000-0000-0000-0000-000000000000';
     const req: any = {
       user: { id: user.id, role: 'USER', status: 'ACTIVE' },
-      headers: { 'x-tenant-id': fakeUuid },
+      headers: { 'x-tenant-id': fakeUuid, 'x-bff-secret': env.BFF_SHARED_SECRET },
       params: {},
       query: {},
     };
@@ -297,7 +298,7 @@ test('Multi-Tenant Edge Case 5: Tenant slug supplied instead of UUID in x-tenant
     // Provide slug rather than UUID in x-tenant-id header
     const req: any = {
       user: { id: slugUser.id, role: 'USER', status: 'ACTIVE' },
-      headers: { 'x-tenant-id': slugName },
+      headers: { 'x-tenant-id': slugName, 'x-bff-secret': env.BFF_SHARED_SECRET },
       params: {},
       query: {},
     };
@@ -342,7 +343,7 @@ test('Multi-Tenant Edge Case 6: User attempting to access a tenant they do not b
     // User attempts to query victim tenant where they have no membership
     const req: any = {
       user: { id: intruderUser.id, role: 'USER', status: 'ACTIVE' },
-      headers: { 'x-tenant-id': victimTenant.id },
+      headers: { 'x-tenant-id': victimTenant.id, 'x-bff-secret': env.BFF_SHARED_SECRET },
       params: {},
       query: {},
     };

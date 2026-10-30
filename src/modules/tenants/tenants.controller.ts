@@ -38,6 +38,9 @@ export const getTenantMe = asyncHandler(async (req: Request, res: Response) => {
     planName: entitlements?.planName,
     subscriptionStatus: entitlements?.subscriptionStatus,
     limits: entitlements?.limits ?? null,
+    urlAccess: entitlements?.urlAccess ?? { path: true, subdomain: false, customDomain: false },
+    urlMode: entitlements?.urlMode ?? 'path',
+    effectiveUrl: entitlements?.effectiveUrl,
     support:
       req.isSupportSession && req.supportSession
         ? {
@@ -207,11 +210,31 @@ export const requestBrandingUploadUrl = asyncHandler(async (req: Request, res: R
 });
 
 export const verifyCustomDomain = asyncHandler(async (req: Request, res: Response) => {
-  const bypass = req.valid?.body?.bypassVerification ?? false;
+  const isStaff = Boolean(req.staff?.id);
+  const bypass = isStaff && Boolean(req.valid?.body?.bypassVerification);
   const branding = await tenantsService.verifyTenantCustomDomain(
     req.tenant!.id,
-    req.user!.id,
+    req.user?.id ?? req.staff?.id ?? 'system',
     bypass,
   );
   AppResponse.ok(branding, 'Custom domain DNS ownership verified successfully').send(res);
+});
+
+export const getTenantUrlSettings = asyncHandler(async (req: Request, res: Response) => {
+  const settings = await tenantsService.getTenantUrlSettings(req.tenant!.id);
+  AppResponse.ok(settings).send(res);
+});
+
+export const updateTenantUrlSettings = asyncHandler(async (req: Request, res: Response) => {
+  const settings = await tenantsService.updateTenantUrlSettings(
+    req.tenant!.id,
+    req.user!.id,
+    req.valid!.body,
+  );
+  AppResponse.ok(settings, 'Workspace URL settings updated successfully').send(res);
+});
+
+export const deleteTenantCustomDomain = asyncHandler(async (req: Request, res: Response) => {
+  const settings = await tenantsService.deleteTenantCustomDomain(req.tenant!.id, req.user!.id);
+  AppResponse.ok(settings, 'Custom domain removed successfully').send(res);
 });

@@ -1,5 +1,6 @@
 import { pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
+import { customDomainStatusEnum } from '../enums';
 import { tenants } from './tenants';
 
 export const tenantBrandings = pgTable(
@@ -17,7 +18,9 @@ export const tenantBrandings = pgTable(
     accentColor: text('accentColor').notNull().default('#06B6D4'),
     borderRadius: text('borderRadius').notNull().default('0.5rem'),
     customDomain: text('customDomain'),
-    customDomainStatus: text('customDomainStatus').notNull().default('PENDING'),
+    customDomainStatus: customDomainStatusEnum('customDomainStatus').notNull().default('PENDING'),
+    customDomainVerifiedAt: timestamp('customDomainVerifiedAt', { precision: 3, mode: 'date' }),
+    customDomainTlsStatus: text('customDomainTlsStatus'),
     supportEmail: text('supportEmail'),
     createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updatedAt', { precision: 3, mode: 'date' })
@@ -46,6 +49,8 @@ export const publicTenantBranding = {
   borderRadius: tenantBrandings.borderRadius,
   customDomain: tenantBrandings.customDomain,
   customDomainStatus: tenantBrandings.customDomainStatus,
+  customDomainVerifiedAt: tenantBrandings.customDomainVerifiedAt,
+  customDomainTlsStatus: tenantBrandings.customDomainTlsStatus,
   supportEmail: tenantBrandings.supportEmail,
   createdAt: tenantBrandings.createdAt,
   updatedAt: tenantBrandings.updatedAt,

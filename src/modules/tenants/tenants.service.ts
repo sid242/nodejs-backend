@@ -13,6 +13,7 @@ import type {
   TenantMember,
 } from '@/db/schema/index';
 import { cache } from '@/lib/cache';
+import { addCorsCustomDomain, removeCorsCustomDomain } from '@/lib/cors';
 import { decrypt, encrypt } from '@/lib/crypto';
 import { AppError } from '@/lib/errors';
 import { invalidateTenantEmailCache, verifySmtpConnection } from '@/lib/mailer';
@@ -33,15 +34,19 @@ import * as rbacService from '@/modules/rbac/rbac.service';
 import { emailQueue } from '@/queues/index';
 
 import { tenantBrandingRepo } from './tenant-branding.repository';
+import { buildPlatformUrl, buildTenantUrl, getEffectiveUrlMode } from './tenant-url.service';
 import { tenantEmailRepo } from './tenant-email.repository';
-import type {
-  CreateTenantDto,
-  RequestBrandingUploadUrlDto,
-  SearchAuditLogsDto,
-  TestTenantEmailConfigDto,
-  UpdateTenantBrandingDto,
-  UpdateTenantDto,
-  UpsertTenantEmailConfigDto,
+import {
+  isReservedSlug,
+  type CreateTenantDto,
+  type OverrideTenantCustomDomainDto,
+  type RequestBrandingUploadUrlDto,
+  type SearchAuditLogsDto,
+  type TestTenantEmailConfigDto,
+  type UpdateTenantBrandingDto,
+  type UpdateTenantDto,
+  type UpdateTenantUrlSettingsDto,
+  type UpsertTenantEmailConfigDto,
 } from './tenants.dto';
 import { tenantsRepo } from './tenants.repository';
 
@@ -204,8 +209,8 @@ export async function addMemberToTenant(
   // Generate 48-hour invitation magic link token bound to this tenant
   const inviteToken = await createMagicLinkToken(targetUser.id, 48 * 3600, tenantId);
   const tenant = await tenantsRepo.findTenantById(tenantId);
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-  const inviteUrl = `${frontendUrl}/accept-invite?token=${inviteToken}&tenant=${tenantId}`;
+
+  const inviteUrl = await buildTenantUrl(tenantId, `/accept-invite?token=${inviteToken}&tenant=${tenantId}`);
 
   await emailQueue.add(
     'tenant-invite',
@@ -819,12 +824,25 @@ export async function testTenantEmailConfig(
 }
 
 export interface PublicTenantResolution {
-  tenant: {
+  kind: 'platform' | 'tenant';
+  tenantId?: string;
+  slug?: string;
+  name?: string;
+  status?: string;
+  pathOnly?: boolean;
+  canonicalBase?: string;
+  urlMode?: 'path' | 'subdomain' | 'customDomain';
+  allowed?: {
+    path: true;
+    subdomain: boolean;
+    customDomain: boolean;
+  };
+  tenant?: {
     id: string;
     name: string;
     slug: string;
   };
-  branding: {
+  branding?: {
     companyName: string;
     logoUrl: string | null;
     logoDarkUrl: string | null;
@@ -844,70 +862,229 @@ export async function resolvePublicTenant(options: {
   slug?: string;
   domain?: string;
   host?: string;
-}): Promise<PublicTenantResolution | null> {
-  const normalizedSlug = options?.slug?.trim().toLowerCase();
-  const normalizedDomain = options?.domain?.trim().toLowerCase();
-  const rawHost = options?.host?.trim().toLowerCase();
+}): Promise<PublicTenantResolution> {
+  const rawHost = options?.host?.trim().toLowerCase() || options?.domain?.trim().toLowerCase();
+  const rawSlug = options?.slug?.trim().toLowerCase();
 
-  const cacheKey = `branding:resolve:${normalizedSlug ?? ''}:${normalizedDomain ?? ''}:${rawHost ?? ''}`;
+  if (!rawHost && !rawSlug) {
+    throw AppError.badRequest('Either host, domain, or slug must be provided for resolution');
+  }
 
-  return cache.wrap(cacheKey, 3600, async () => {
-    let targetTenant: PublicTenant | null = null;
-
-    // 1. Resolve by explicit slug (e.g., example.com/test)
-    if (normalizedSlug) {
-      targetTenant = await tenantsRepo.findTenantBySlug(normalizedSlug);
+  let host: string | undefined;
+  if (rawHost) {
+    // 1. Normalize host: lowercase, strip port, strip trailing dots
+    let stripped = rawHost.split(':')[0] ?? rawHost;
+    stripped = stripped.replace(/\.+$/, '');
+    try {
+      host = new URL(`http://${stripped}`).hostname.toLowerCase();
+    } catch {
+      throw AppError.badRequest('Invalid host format');
     }
+  }
 
-    // 2. Resolve by domain or host (e.g., test.example.com or portal.acme.com)
-    const domainToInspect = normalizedDomain ?? rawHost;
-    if (!targetTenant && domainToInspect) {
-      // Clean port if present (e.g., "test.localhost:3000" -> "test.localhost")
-      const hostname = domainToInspect.split(':')[0] ?? domainToInspect;
+  const cacheKey = host ? `branding:resolve:${host}` : `branding:resolve:slug:${rawSlug}`;
 
-      // 2a. Check custom domain match
-      const brandingByDomain = await tenantBrandingRepo.findBrandingByCustomDomain(hostname);
-      if (brandingByDomain?.tenantId) {
-        targetTenant = await tenantsRepo.findTenantById(brandingByDomain.tenantId);
-      }
-
-      // 2b. Check subdomain match (e.g., "test.example.com" -> slug: "test")
-      if (!targetTenant) {
-        const parts = hostname.split('.');
-        if (parts.length > 2 || (parts.length === 2 && parts[1] === 'localhost')) {
-          const potentialSubdomain = parts[0];
-          if (potentialSubdomain && potentialSubdomain !== 'www' && potentialSubdomain !== 'api') {
-            targetTenant = await tenantsRepo.findTenantBySlug(potentialSubdomain);
-          }
-        }
-      }
+  const cached = await cache.get<PublicTenantResolution | { notFound: true }>(cacheKey);
+  if (cached) {
+    if ('notFound' in cached && cached.notFound) {
+      throw new AppError(404, 'Workspace not found', 'TENANT_NOT_FOUND');
     }
+    return cached as PublicTenantResolution;
+  }
 
-    if (!targetTenant) {
-      return null;
-    }
+  const baseDomain = env.APP_BASE_DOMAIN.toLowerCase().split(':')[0] ?? 'localhost';
+  const platformHost = env.PLATFORM_HOST.toLowerCase().split(':')[0] ?? 'localhost';
 
-    const branding = await tenantBrandingRepo.findBrandingByTenantId(targetTenant.id);
-
-    return {
-      tenant: {
-        id: targetTenant.id,
-        name: targetTenant.name,
-        slug: targetTenant.slug,
-      },
-      branding: {
-        companyName: branding?.companyName ?? targetTenant.name,
-        logoUrl: branding?.logoUrl ?? null,
-        logoDarkUrl: branding?.logoDarkUrl ?? null,
-        faviconUrl: branding?.faviconUrl ?? null,
-        primaryColor: branding?.primaryColor ?? '#4F46E5',
-        accentColor: branding?.accentColor ?? '#06B6D4',
-        borderRadius: branding?.borderRadius ?? '0.5rem',
-        customDomain: branding?.customDomain ?? null,
-        supportEmail: branding?.supportEmail ?? null,
-      },
+  // 2. Check if platform host
+  if (host && (host === baseDomain || host === platformHost)) {
+    const result: PublicTenantResolution = {
+      kind: 'platform',
+      canonicalBase: buildPlatformUrl(),
     };
-  });
+    await cache.set(cacheKey, result, 300);
+    return result;
+  }
+
+  // 3. Check subdomain on base domain (or .localhost in dev)
+  if (host) {
+    const isSubdomainOfBase = host.endsWith(`.${baseDomain}`);
+    const isSubdomainOfLocalhost =
+      (baseDomain === 'localhost' || baseDomain.includes('localhost')) && host.endsWith('.localhost');
+
+    if (isSubdomainOfBase || isSubdomainOfLocalhost) {
+      const label = isSubdomainOfBase
+        ? host.slice(0, -(baseDomain.length + 1))
+        : (host.split('.')[0] ?? '');
+
+      if (label && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label)) {
+        if (isReservedSlug(label)) {
+          if (['www', 'app', 'platform'].includes(label)) {
+            const result: PublicTenantResolution = {
+              kind: 'platform',
+              canonicalBase: buildPlatformUrl(),
+            };
+            await cache.set(cacheKey, result, 300);
+            return result;
+          }
+          await cache.set(cacheKey, { notFound: true }, 30);
+          throw new AppError(404, 'Workspace not found', 'TENANT_NOT_FOUND');
+        }
+
+        const tenant = await tenantsRepo.findTenantBySlug(label);
+        if (!tenant) {
+          await cache.set(cacheKey, { notFound: true }, 30);
+          throw new AppError(404, 'Workspace not found', 'TENANT_NOT_FOUND');
+        }
+
+        const entitlements = await billingService.getTenantEntitlements(tenant.id);
+        const branding = await tenantBrandingRepo.findBrandingByTenantId(tenant.id);
+        const effective = getEffectiveUrlMode(tenant, branding, entitlements, env);
+
+        if (!entitlements.limits?.urlAccess?.subdomain) {
+          const result: PublicTenantResolution = {
+            kind: 'tenant',
+            tenantId: tenant.id,
+            slug: tenant.slug,
+            name: tenant.name,
+            status: tenant.status,
+            pathOnly: true,
+            canonicalBase: effective.canonicalBase,
+            urlMode: effective.mode,
+            allowed: effective.allowed,
+          };
+          await cache.set(cacheKey, result, 300);
+          return result;
+        }
+
+        const result: PublicTenantResolution = {
+          kind: 'tenant',
+          tenantId: tenant.id,
+          slug: tenant.slug,
+          name: tenant.name,
+          status: tenant.status,
+          tenant: {
+            id: tenant.id,
+            name: tenant.name,
+            slug: tenant.slug,
+          },
+          branding: {
+            companyName: branding?.companyName ?? tenant.name,
+            logoUrl: branding?.logoUrl ?? null,
+            logoDarkUrl: branding?.logoDarkUrl ?? null,
+            faviconUrl: branding?.faviconUrl ?? null,
+            primaryColor: branding?.primaryColor ?? '#4F46E5',
+            accentColor: branding?.accentColor ?? '#06B6D4',
+            borderRadius: branding?.borderRadius ?? '0.5rem',
+            customDomain: branding?.customDomain ?? null,
+            supportEmail: branding?.supportEmail ?? null,
+          },
+          urlMode: effective.mode,
+          canonicalBase: effective.canonicalBase,
+          allowed: effective.allowed,
+        };
+        await cache.set(cacheKey, result, 300);
+        return result;
+      }
+    }
+
+    // 4. Custom domain lookup (only where customDomainStatus === 'VERIFIED')
+    const branding = await tenantBrandingRepo.findBrandingByCustomDomain(host);
+    if (branding?.tenantId && branding.customDomainStatus === 'VERIFIED') {
+      const tenant = await tenantsRepo.findTenantById(branding.tenantId);
+      if (tenant) {
+        const entitlements = await billingService.getTenantEntitlements(tenant.id);
+        const effective = getEffectiveUrlMode(tenant, branding, entitlements, env);
+
+        if (!entitlements.limits?.urlAccess?.customDomain) {
+          const result: PublicTenantResolution = {
+            kind: 'tenant',
+            tenantId: tenant.id,
+            slug: tenant.slug,
+            name: tenant.name,
+            status: tenant.status,
+            pathOnly: true,
+            canonicalBase: effective.canonicalBase,
+            urlMode: effective.mode,
+            allowed: effective.allowed,
+          };
+          await cache.set(cacheKey, result, 300);
+          return result;
+        }
+
+        const result: PublicTenantResolution = {
+          kind: 'tenant',
+          tenantId: tenant.id,
+          slug: tenant.slug,
+          name: tenant.name,
+          status: tenant.status,
+          tenant: {
+            id: tenant.id,
+            name: tenant.name,
+            slug: tenant.slug,
+          },
+          branding: {
+            companyName: branding.companyName ?? tenant.name,
+            logoUrl: branding.logoUrl ?? null,
+            logoDarkUrl: branding.logoDarkUrl ?? null,
+            faviconUrl: branding.faviconUrl ?? null,
+            primaryColor: branding.primaryColor ?? '#4F46E5',
+            accentColor: branding.accentColor ?? '#06B6D4',
+            borderRadius: branding.borderRadius ?? '0.5rem',
+            customDomain: branding.customDomain ?? null,
+            supportEmail: branding.supportEmail ?? null,
+          },
+          urlMode: effective.mode,
+          canonicalBase: effective.canonicalBase,
+          allowed: effective.allowed,
+        };
+        await cache.set(cacheKey, result, 300);
+        return result;
+      }
+    }
+  }
+
+  // 5. Slug lookup
+  if (rawSlug) {
+    const tenant = await tenantsRepo.findTenantBySlug(rawSlug);
+    if (tenant) {
+      const branding = await tenantBrandingRepo.findBrandingByTenantId(tenant.id);
+      const entitlements = await billingService.getTenantEntitlements(tenant.id);
+      const effective = getEffectiveUrlMode(tenant, branding, entitlements, env);
+
+      const result: PublicTenantResolution = {
+        kind: 'tenant',
+        tenantId: tenant.id,
+        slug: tenant.slug,
+        name: tenant.name,
+        status: tenant.status,
+        tenant: {
+          id: tenant.id,
+          name: tenant.name,
+          slug: tenant.slug,
+        },
+        branding: {
+          companyName: branding?.companyName ?? tenant.name,
+          logoUrl: branding?.logoUrl ?? null,
+          logoDarkUrl: branding?.logoDarkUrl ?? null,
+          faviconUrl: branding?.faviconUrl ?? null,
+          primaryColor: branding?.primaryColor ?? '#4F46E5',
+          accentColor: branding?.accentColor ?? '#06B6D4',
+          borderRadius: branding?.borderRadius ?? '0.5rem',
+          customDomain: branding?.customDomain ?? null,
+          supportEmail: branding?.supportEmail ?? null,
+        },
+        urlMode: effective.mode,
+        canonicalBase: effective.canonicalBase,
+        allowed: effective.allowed,
+      };
+      await cache.set(cacheKey, result, 300);
+      return result;
+    }
+  }
+
+  // Negative cache for 30s
+  await cache.set(cacheKey, { notFound: true }, 30);
+  throw new AppError(404, 'Workspace not found', 'TENANT_NOT_FOUND');
 }
 
 export async function getTenantBranding(tenantId: string): Promise<PublicTenantBranding> {
@@ -934,6 +1111,8 @@ export async function getTenantBranding(tenantId: string): Promise<PublicTenantB
     borderRadius: '0.5rem',
     customDomain: null,
     customDomainStatus: 'PENDING',
+    customDomainVerifiedAt: null,
+    customDomainTlsStatus: null,
     supportEmail: null,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -951,13 +1130,50 @@ export async function updateTenantBranding(
   }
 
   if (data?.customDomain) {
-    const existingDomain = await tenantBrandingRepo.findBrandingByCustomDomain(data.customDomain);
+    const entitlements = await billingService.getTenantEntitlements(tenantId);
+    if (!entitlements.limits?.urlAccess?.customDomain) {
+      throw new AppError(
+        403,
+        'Custom domain is not available on your plan. Upgrade to Enterprise to configure custom domains.',
+        'PLAN_FEATURE_UNAVAILABLE',
+        { feature: 'urlAccess.customDomain', requiredPlan: 'ENTERPRISE' },
+      );
+    }
+
+    const cleanDomain = data.customDomain.toLowerCase().trim();
+    const baseDomain = env.APP_BASE_DOMAIN.toLowerCase().split(':')[0] ?? 'localhost';
+    if (cleanDomain === baseDomain || cleanDomain.endsWith(`.${baseDomain}`)) {
+      throw new AppError(400, 'Custom domain cannot end with base domain', 'DOMAIN_RESERVED');
+    }
+
+    const existingDomain = await tenantBrandingRepo.findBrandingByCustomDomain(cleanDomain);
     if (existingDomain && existingDomain.tenantId !== tenantId) {
-      throw AppError.conflict('This custom domain is already registered to another workspace');
+      throw new AppError(
+        409,
+        'This custom domain is already registered to another workspace',
+        'DOMAIN_ALREADY_IN_USE',
+      );
     }
   }
 
   const existing = await tenantBrandingRepo.findBrandingByTenantId(tenantId);
+
+  // If custom domain is modified or removed, sync CORS and verification status
+  if (data?.customDomain !== undefined) {
+    const nextDomain = data.customDomain ? data.customDomain.toLowerCase().trim() : null;
+    if (existing?.customDomain && existing.customDomain.toLowerCase() !== nextDomain) {
+      await removeCorsCustomDomain(existing.customDomain);
+      await tenantBrandingRepo.updateCustomDomainStatus(
+        tenantId,
+        'PENDING',
+        null,
+        nextDomain ? 'PENDING' : null,
+      );
+      if (!nextDomain && tenant.urlStyle === 'customDomain') {
+        await tenantsRepo.updateTenantUrlStyle(tenantId, 'path');
+      }
+    }
+  }
 
   const updated = await tenantBrandingRepo.upsertTenantBranding({
     tenantId,
@@ -981,6 +1197,8 @@ export async function updateTenantBranding(
 
   // Invalidate cached branding entries
   await cache.delByPrefix('branding:resolve:');
+  await cache.delByPrefix(`tenant:url:${tenantId}`);
+  await cache.del(`entitlements:${tenantId}`);
 
   await logSecurityEvent({
     tenantId,
@@ -1068,6 +1286,19 @@ export async function verifyTenantCustomDomain(
     throw AppError.notFound('Tenant not found');
   }
 
+  // Plan gate: custom domain requires Enterprise unless staff bypasses
+  if (!bypassVerification) {
+    const entitlements = await billingService.getTenantEntitlements(tenantId);
+    if (!entitlements.limits?.urlAccess?.customDomain) {
+      throw new AppError(
+        403,
+        'Custom domain feature is not available on your current plan. Upgrade to Enterprise to verify custom domains.',
+        'PLAN_FEATURE_UNAVAILABLE',
+        { feature: 'urlAccess.customDomain', requiredPlan: 'ENTERPRISE' },
+      );
+    }
+  }
+
   const branding = await tenantBrandingRepo.findBrandingByTenantId(tenantId);
   if (!branding || !branding.customDomain) {
     throw AppError.badRequest(
@@ -1088,26 +1319,41 @@ export async function verifyTenantCustomDomain(
       );
 
       if (!matched) {
-        throw AppError.badRequest(
+        await tenantBrandingRepo.updateCustomDomainStatus(tenantId, 'FAILED', null, 'FAILED');
+        throw new AppError(
+          400,
           `DNS TXT record on "${challengeHostname}" did not match expected verification token "${expectedValue}". Found: [${flatRecords.join(', ')}]`,
+          'DOMAIN_NOT_VERIFIED',
         );
       }
     } catch (err: unknown) {
+      await tenantBrandingRepo.updateCustomDomainStatus(tenantId, 'FAILED', null, 'FAILED');
       if (err instanceof AppError) throw err;
-      throw AppError.badRequest(
+      throw new AppError(
+        400,
         `Failed to resolve DNS TXT record for "${challengeHostname}". Ensure the DNS TXT record is configured with "${expectedValue}" and has propagated.`,
+        'DOMAIN_NOT_VERIFIED',
         { cause: (err as Error)?.message },
       );
     }
   }
 
-  const updated = await tenantBrandingRepo.updateCustomDomainStatus(tenantId, 'ACTIVE');
+  const updated = await tenantBrandingRepo.updateCustomDomainStatus(
+    tenantId,
+    'VERIFIED',
+    new Date(),
+    'ISSUED',
+  );
   if (!updated) {
     throw AppError.internal('Failed to update domain verification status');
   }
 
+  await addCorsCustomDomain(domain);
+
   // Invalidate branding caches
   await cache.delByPrefix('branding:resolve:');
+  await cache.delByPrefix(`tenant:url:${tenantId}`);
+  await cache.del(`entitlements:${tenantId}`);
 
   await logSecurityEvent({
     tenantId,
@@ -1117,10 +1363,210 @@ export async function verifyTenantCustomDomain(
     entityId: updated.id,
     metadata: {
       customDomain: updated.customDomain,
-      customDomainStatus: 'ACTIVE',
+      customDomainStatus: 'VERIFIED',
       challengeHostname,
+      bypassVerification,
     },
   });
 
   return updated;
+}
+
+export async function getTenantUrlSettings(tenantId: string) {
+  const tenant = await tenantsRepo.findTenantById(tenantId);
+  if (!tenant) throw AppError.notFound('Tenant not found');
+
+  const branding = await tenantBrandingRepo.findBrandingByTenantId(tenantId);
+  const entitlements = await billingService.getTenantEntitlements(tenantId);
+  const effective = getEffectiveUrlMode(tenant, branding, entitlements, env);
+
+  const baseDomain = env.APP_BASE_DOMAIN || 'localhost:3001';
+  const protocol = env.APP_PROTOCOL || (baseDomain.includes('localhost') ? 'http' : 'https');
+
+  return {
+    urlStyle: tenant.urlStyle ?? 'path',
+    effective: effective.mode,
+    allowed: effective.allowed,
+    canonicalBase: effective.canonicalBase,
+    reason: effective.reason,
+    customDomain: branding?.customDomain ?? null,
+    status: branding?.customDomainStatus ?? null,
+    verifiedAt: branding?.customDomainVerifiedAt ?? null,
+    instructions: {
+      txtRecord: branding?.customDomain
+        ? `_saas-verify.${branding.customDomain} = saas-verify=${tenant.id}`
+        : null,
+      cnameTarget: env.CUSTOM_DOMAIN_CNAME_TARGET,
+    },
+    urls: {
+      path: `${protocol}://${baseDomain}/w/${tenant.slug}`,
+      subdomain: effective.allowed.subdomain
+        ? `${protocol}://${tenant.slug}.${baseDomain}`
+        : undefined,
+      customDomain: branding?.customDomain ? `https://${branding.customDomain}` : undefined,
+    },
+  };
+}
+
+export async function updateTenantUrlSettings(
+  tenantId: string,
+  operatorUserId: string,
+  data: UpdateTenantUrlSettingsDto,
+) {
+  const tenant = await tenantsRepo.findTenantById(tenantId);
+  if (!tenant) throw AppError.notFound('Tenant not found');
+
+  const entitlements = await billingService.getTenantEntitlements(tenantId);
+  const existingBranding = await tenantBrandingRepo.findBrandingByTenantId(tenantId);
+
+  // 1. Validate customDomain if changed
+  if (data.customDomain !== undefined) {
+    if (data.customDomain && data.customDomain.trim() !== '') {
+      if (!entitlements.limits?.urlAccess?.customDomain) {
+        throw new AppError(
+          403,
+          'Custom domain feature is not available on your plan. Upgrade to Enterprise to configure custom domains.',
+          'PLAN_FEATURE_UNAVAILABLE',
+          { feature: 'urlAccess.customDomain', requiredPlan: 'ENTERPRISE' },
+        );
+      }
+
+      const cleanDomain = data.customDomain.toLowerCase().trim();
+      const baseDomain = env.APP_BASE_DOMAIN.toLowerCase().split(':')[0] ?? 'localhost';
+      if (cleanDomain === baseDomain || cleanDomain.endsWith(`.${baseDomain}`)) {
+        throw new AppError(
+          400,
+          'Custom domain cannot end with the platform base domain',
+          'DOMAIN_RESERVED',
+        );
+      }
+
+      const existingByDomain = await tenantBrandingRepo.findBrandingByCustomDomain(cleanDomain);
+      if (existingByDomain && existingByDomain.tenantId !== tenantId) {
+        throw new AppError(
+          409,
+          'This custom domain is already registered to another workspace',
+          'DOMAIN_ALREADY_IN_USE',
+        );
+      }
+
+      if (cleanDomain !== existingBranding?.customDomain?.toLowerCase()) {
+        if (existingBranding?.customDomain) {
+          await removeCorsCustomDomain(existingBranding.customDomain);
+        }
+        await tenantBrandingRepo.updateCustomDomain(tenantId, cleanDomain);
+        await tenantBrandingRepo.updateCustomDomainStatus(tenantId, 'PENDING', null, 'PENDING');
+      }
+    } else {
+      if (existingBranding?.customDomain) {
+        await removeCorsCustomDomain(existingBranding.customDomain);
+      }
+      await tenantBrandingRepo.updateCustomDomain(tenantId, null);
+      await tenantBrandingRepo.updateCustomDomainStatus(tenantId, 'PENDING', null, null);
+      if (tenant.urlStyle === 'customDomain') {
+        await tenantsRepo.updateTenantUrlStyle(tenantId, 'path');
+      }
+    }
+  }
+
+  // 2. Validate urlStyle if changed
+  if (data.urlStyle !== undefined) {
+    if (data.urlStyle === 'subdomain' && !entitlements.limits?.urlAccess?.subdomain) {
+      throw new AppError(
+        403,
+        'Subdomain URLs are not available on your current plan. Upgrade to Pro or Enterprise.',
+        'PLAN_FEATURE_UNAVAILABLE',
+        { feature: 'urlAccess.subdomain', requiredPlan: 'PRO' },
+      );
+    }
+    if (data.urlStyle === 'customDomain' && !entitlements.limits?.urlAccess?.customDomain) {
+      throw new AppError(
+        403,
+        'Custom domain URLs are not available on your current plan. Upgrade to Enterprise.',
+        'PLAN_FEATURE_UNAVAILABLE',
+        { feature: 'urlAccess.customDomain', requiredPlan: 'ENTERPRISE' },
+      );
+    }
+    await tenantsRepo.updateTenantUrlStyle(tenantId, data.urlStyle);
+  }
+
+  await cache.delByPrefix('branding:resolve:');
+  await cache.delByPrefix(`tenant:url:${tenantId}`);
+  await cache.del(`entitlements:${tenantId}`);
+
+  await logSecurityEvent({
+    tenantId,
+    userId: operatorUserId,
+    action: 'TENANT.URL_SETTINGS_UPDATED',
+    entityType: 'Tenant',
+    entityId: tenantId,
+    metadata: {
+      urlStyle: data.urlStyle,
+      customDomain: data.customDomain,
+    },
+  });
+
+  return getTenantUrlSettings(tenantId);
+}
+
+export async function deleteTenantCustomDomain(tenantId: string, operatorUserId: string) {
+  return updateTenantUrlSettings(tenantId, operatorUserId, { customDomain: null, urlStyle: 'path' });
+}
+
+export async function overrideTenantUrlSettings(
+  tenantId: string,
+  staffId: string,
+  data: OverrideTenantCustomDomainDto & { urlStyle?: 'path' | 'subdomain' | 'customDomain' },
+) {
+  const tenant = await tenantsRepo.findTenantById(tenantId);
+  if (!tenant) throw AppError.notFound('Tenant not found');
+
+  const existingBranding = await tenantBrandingRepo.findBrandingByTenantId(tenantId);
+
+  if (data.customDomain !== undefined) {
+    const cleanDomain = data.customDomain?.toLowerCase().trim() || null;
+    if (cleanDomain && cleanDomain !== existingBranding?.customDomain?.toLowerCase()) {
+      if (existingBranding?.customDomain) {
+        await removeCorsCustomDomain(existingBranding.customDomain);
+      }
+      await tenantBrandingRepo.updateCustomDomain(tenantId, cleanDomain);
+    }
+  }
+
+  const status = data.status ?? 'VERIFIED';
+  const verifiedAt = status === 'VERIFIED' ? new Date() : null;
+  const tlsStatus = status === 'VERIFIED' ? 'ISSUED' : 'PENDING';
+  await tenantBrandingRepo.updateCustomDomainStatus(tenantId, status, verifiedAt, tlsStatus);
+
+  const updatedBranding = await tenantBrandingRepo.findBrandingByTenantId(tenantId);
+  if (status === 'VERIFIED' && updatedBranding?.customDomain) {
+    await addCorsCustomDomain(updatedBranding.customDomain);
+  } else if (status !== 'VERIFIED' && updatedBranding?.customDomain) {
+    await removeCorsCustomDomain(updatedBranding.customDomain);
+  }
+
+  if (data.urlStyle) {
+    await tenantsRepo.updateTenantUrlStyle(tenantId, data.urlStyle);
+  }
+
+  await cache.delByPrefix('branding:resolve:');
+  await cache.delByPrefix(`tenant:url:${tenantId}`);
+  await cache.del(`entitlements:${tenantId}`);
+
+  await auditRepo.createAuditLog({
+    tenantId,
+    action: 'PLATFORM.TENANT_URL_SETTINGS_OVERRIDE',
+    entityType: 'Tenant',
+    entityId: tenantId,
+    actorType: 'PLATFORM_STAFF',
+    actorStaffId: staffId,
+    metadata: {
+      customDomain: updatedBranding?.customDomain,
+      status,
+      urlStyle: data.urlStyle,
+      reason: data.reason,
+    },
+  });
+
+  return getTenantUrlSettings(tenantId);
 }

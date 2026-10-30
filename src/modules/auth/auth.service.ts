@@ -30,6 +30,8 @@ import {
   createTwoFactorChallenge,
   type TwoFactorChallengeData,
 } from '@/modules/auth/two-factor.service';
+import { buildPlatformUrl, buildTenantUrl } from '@/modules/tenants/tenant-url.service';
+import * as tenantsRepo from '@/modules/tenants/tenants.repository';
 import { emailQueue } from '@/queues/index';
 
 // Compared against when the user doesn't exist, so response time doesn't reveal valid emails.
@@ -238,8 +240,13 @@ export async function requestMagicLink(email: string): Promise<MagicLinkRequestR
   }
 
   const rawToken = await createMagicLinkToken(user.id);
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-  const magicLinkUrl = `${frontendUrl}/magic-link?token=${rawToken}`;
+  const userTenants = await tenantsRepo.findUserTenants(user.id);
+  let magicLinkUrl: string;
+  if (userTenants.length === 1 && userTenants[0]?.id) {
+    magicLinkUrl = await buildTenantUrl(userTenants[0].id, `/magic-link?token=${rawToken}`);
+  } else {
+    magicLinkUrl = buildPlatformUrl(`/magic-link?token=${rawToken}`);
+  }
 
   await emailQueue.add(
     'magic-link',

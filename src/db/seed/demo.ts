@@ -176,6 +176,102 @@ export const DEMO_CREDENTIALS = {
         },
       ],
     },
+    {
+      tenantName: 'Apex Dynamics',
+      tenantSlug: 'apex-dynamics',
+      plan: 'FREE',
+      databaseMode: 'shared',
+      members: [
+        {
+          role: 'Tenant Owner',
+          tenantRole: 'OWNER',
+          email: 'owner@apex.com',
+          password: DEMO_PASSWORD,
+          name: 'David Martinez',
+          url: '/login',
+        },
+        {
+          role: 'Tenant Administrator',
+          tenantRole: 'ADMIN',
+          email: 'admin@apex.com',
+          password: DEMO_PASSWORD,
+          name: 'Sarah Connor',
+          url: '/login',
+        },
+        {
+          role: 'Operations Manager',
+          tenantRole: 'MANAGER',
+          email: 'manager@apex.com',
+          password: DEMO_PASSWORD,
+          name: 'Alex Murphy',
+          url: '/login',
+        },
+        {
+          role: 'Field Agent',
+          tenantRole: 'MEMBER',
+          email: 'agent@apex.com',
+          password: DEMO_PASSWORD,
+          name: 'Ellen Ripley',
+          url: '/login',
+        },
+        {
+          role: 'Guest / Viewer',
+          tenantRole: 'VIEWER',
+          email: 'viewer@apex.com',
+          password: DEMO_PASSWORD,
+          name: 'Thomas Anderson',
+          url: '/login',
+        },
+      ],
+    },
+    {
+      tenantName: 'Starlight Ventures',
+      tenantSlug: 'starlight-ventures',
+      plan: 'PRO',
+      databaseMode: 'shared',
+      members: [
+        {
+          role: 'Tenant Owner',
+          tenantRole: 'OWNER',
+          email: 'owner@starlight.com',
+          password: DEMO_PASSWORD,
+          name: 'Stella Nova',
+          url: '/login',
+        },
+        {
+          role: 'Tenant Administrator',
+          tenantRole: 'ADMIN',
+          email: 'admin@starlight.com',
+          password: DEMO_PASSWORD,
+          name: 'Leo Sterling',
+          url: '/login',
+        },
+        {
+          role: 'Finance Manager',
+          tenantRole: 'MANAGER',
+          email: 'manager@starlight.com',
+          password: DEMO_PASSWORD,
+          name: 'Maya Lin',
+          url: '/login',
+        },
+        {
+          role: 'Investment Associate',
+          tenantRole: 'MEMBER',
+          email: 'agent@starlight.com',
+          password: DEMO_PASSWORD,
+          name: 'Jonah Hex',
+          url: '/login',
+        },
+        {
+          role: 'External Auditor',
+          tenantRole: 'VIEWER',
+          email: 'viewer@starlight.com',
+          password: DEMO_PASSWORD,
+          name: 'Chloe Sullivan',
+          url: '/login',
+        },
+      ],
+    },
   ],
 };
 
@@ -369,7 +465,14 @@ export async function seedDemo(): Promise<void> {
       .values({
         tenantId: tenantRecord.id,
         companyName: tenantDef.tenantName,
-        primaryColor: tenantDef.tenantSlug === 'acme-realty' ? '#E11D48' : '#2563EB',
+        primaryColor:
+          tenantDef.tenantSlug === 'acme-realty'
+            ? '#E11D48'
+            : tenantDef.tenantSlug === 'nexus-estates'
+              ? '#2563EB'
+              : tenantDef.tenantSlug === 'apex-dynamics'
+                ? '#059669'
+                : '#7C3AED',
       })
       .onConflictDoNothing();
 
@@ -632,10 +735,18 @@ export async function seedDemo(): Promise<void> {
 
     // Seed default SaaS pricing plans and assign subscriptions
     await seedDefaultPlans();
-    await assignInitialSubscription(acmeTenantId, 'GROWTH');
+    await assignInitialSubscription(acmeTenantId, 'PRO');
     const nexusTenantId = tenantIdMap.get('nexus-estates');
     if (nexusTenantId) {
       await assignInitialSubscription(nexusTenantId, 'ENTERPRISE');
+    }
+    const apexTenantId = tenantIdMap.get('apex-dynamics');
+    if (apexTenantId) {
+      await assignInitialSubscription(apexTenantId, 'FREE');
+    }
+    const starlightTenantId = tenantIdMap.get('starlight-ventures');
+    if (starlightTenantId) {
+      await assignInitialSubscription(starlightTenantId, 'PRO');
     }
     logger.info('   ✔ SaaS plans, entitlements, and tenant subscriptions seeded.');
   }

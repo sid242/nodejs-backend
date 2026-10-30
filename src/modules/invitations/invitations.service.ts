@@ -11,6 +11,7 @@ import { enforceLimit } from '@/modules/billing/billing.service';
 import * as rbacRepo from '@/modules/rbac/rbac.repository';
 import * as rbacService from '@/modules/rbac/rbac.service';
 import * as tenantsRepo from '@/modules/tenants/tenants.repository';
+import { buildTenantUrl } from '@/modules/tenants/tenant-url.service';
 import { emailQueue } from '@/queues/index';
 
 import * as invitationsRepo from './invitations.repository';
@@ -122,8 +123,8 @@ export async function createTenantInvitation(
   });
 
   const tenant = await tenantsRepo.findTenantById(tenantId);
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-  const inviteUrl = `${frontendUrl}/accept-invite?token=${rawToken}`;
+
+  const inviteUrl = await buildTenantUrl(tenantId, `/accept-invite?token=${rawToken}`);
 
   // 7. Dispatch invitation email via BullMQ
   await emailQueue.add(
@@ -206,8 +207,8 @@ export async function resendTenantInvitation(tenantId: string, invitationId: str
   });
 
   const tenant = await tenantsRepo.findTenantById(tenantId);
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-  const inviteUrl = `${frontendUrl}/accept-invite?token=${rawToken}`;
+
+  const inviteUrl = await buildTenantUrl(tenantId, `/accept-invite?token=${rawToken}`);
 
   await emailQueue.add(
     'tenant-invite',

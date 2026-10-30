@@ -1,7 +1,20 @@
+import { eq } from 'drizzle-orm';
+
+import { db } from '@/config/db';
+import { env } from '@/config/env';
+import { tenants, type PlanLimits } from '@/db/schema';
 import { cache } from '@/lib/cache';
 import { AppError } from '@/lib/errors';
 import * as platformRepo from '@/modules/platform/platform.repository';
 import * as rbacRepo from '@/modules/rbac/rbac.repository';
+import { tenantBrandingRepo } from '@/modules/tenants/tenant-branding.repository';
+import {
+  getEffectiveUrlMode,
+  type EffectiveUrlModeResult,
+  type TenantUrlMode,
+} from '@/modules/tenants/tenant-url.service';
+import * as tenantsRepo from '@/modules/tenants/tenants.repository';
+import { emailQueue } from '@/queues/index';
 
 import type {
   CreateInvoiceDto,
@@ -29,11 +42,84 @@ export interface TenantEntitlements {
   subscriptionStatus: string;
   trialEndsAt: Date | null;
   effectiveModules: string[];
-  limits: {
-    maxMembers: number | null;
-    maxStorageBytes: number | null;
-    maxCustomRoles: number | null;
+  limits: PlanLimits;
+  urlAccess: {
+    path: true;
+    subdomain: boolean;
+    customDomain: boolean;
   };
+  urlMode: TenantUrlMode;
+  effectiveUrl?: EffectiveUrlModeResult;
+}
+
+export async function invalidateTenantBillingCache(tenantId: string): Promise<void> {
+  await Promise.all([
+    cache.del(CACHE_KEYS.TENANT_ENTITLEMENTS(tenantId)),
+    cache.del(`entitlements:tenant:${tenantId}`),
+    cache.del(`entitlements:${tenantId}`),
+    cache.delByPrefix(`tenant:url:${tenantId}`),
+    cache.delByPrefix('branding:resolve:'),
+  ]);
+}
+
+/**
+ * Service hook invoked whenever a tenant's plan or subscription state changes.
+ * Keeps Tenant.plan denormalized column synchronized and handles URL mode transitions.
+ */
+export async function onPlanChanged(
+  tenantId: string,
+  oldPlanKey: string,
+  newPlanKey: string,
+): Promise<void> {
+  // Sync Tenant.plan denormalized column
+  await db
+    .update(tenants)
+    .set({ plan: newPlanKey, updatedAt: new Date() })
+    .where(eq(tenants.id, tenantId));
+
+  // Invalidate all billing and resolution caches
+  await invalidateTenantBillingCache(tenantId);
+
+  const oldRank = oldPlanKey === 'ENTERPRISE' ? 3 : oldPlanKey === 'PRO' ? 2 : 1;
+  const newRank = newPlanKey === 'ENTERPRISE' ? 3 : newPlanKey === 'PRO' ? 2 : 1;
+
+  const tenant = await tenantsRepo.findTenantById(tenantId);
+  const tenantMembersList = await tenantsRepo.findTenantMembers(tenantId).catch(() => []);
+  const activeMembers = tenantMembersList.filter((m) => m.status === 'ACTIVE');
+
+  if (newRank > oldRank) {
+    // Upgrade: Notify tenant admin of new URL capabilities without force-switching preferred URL
+    for (const member of activeMembers.slice(0, 3)) {
+      await emailQueue
+        .add(
+          'welcome',
+          {
+            to: member.email,
+            name: member.name,
+            subject: 'New workspace URL options available',
+            message: `Your workspace "${tenant?.name ?? 'Workspace'}" has upgraded to ${newPlanKey}. You can now configure subdomains and custom branding in your Workspace Settings.`,
+          },
+          { jobId: `plan-upg-${tenantId}-${Date.now()}` },
+        )
+        .catch(() => {});
+    }
+  } else if (newRank < oldRank) {
+    // Downgrade: keep existing config, effective URL automatically falls back to path
+    for (const member of activeMembers.slice(0, 3)) {
+      await emailQueue
+        .add(
+          'welcome',
+          {
+            to: member.email,
+            name: member.name,
+            subject: 'Notice: Workspace URL fallback',
+            message: `Your workspace "${tenant?.name ?? 'Workspace'}" is now on the ${newPlanKey} plan. Workspace URL access has switched to the canonical path URL (${env.APP_BASE_DOMAIN}/w/${tenant?.slug}). Your custom domain configuration has been preserved.`,
+          },
+          { jobId: `plan-down-${tenantId}-${Date.now()}` },
+        )
+        .catch(() => {});
+    }
+  }
 }
 
 // ==========================================
@@ -46,10 +132,17 @@ export async function getTenantEntitlements(tenantId: string): Promise<TenantEnt
     let plan = subWithPlan?.plan;
 
     if (!plan) {
-      // Fallback to default FREE plan
-      plan = await billingRepo.findPlanByKey(DEFAULT_PLAN_KEY);
+      // Fallback to tenant.plan or default FREE plan
+      const tenant = await tenantsRepo.findTenantById(tenantId);
+      const fallbackKey = (tenant?.plan || DEFAULT_PLAN_KEY).toUpperCase();
+      plan = await billingRepo.findPlanByKey(fallbackKey);
       if (!plan) {
-        const defaultDef = DEFAULT_PLANS.find((p) => p.key === DEFAULT_PLAN_KEY)!;
+        plan = await billingRepo.findPlanByKey(DEFAULT_PLAN_KEY);
+      }
+      if (!plan) {
+        const defaultDef =
+          DEFAULT_PLANS.find((p) => p.key === fallbackKey) ??
+          DEFAULT_PLANS.find((p) => p.key === DEFAULT_PLAN_KEY)!;
         plan = await billingRepo.createPlan(
           {
             key: defaultDef.key,
@@ -74,13 +167,41 @@ export async function getTenantEntitlements(tenantId: string): Promise<TenantEnt
     const disabledKeys = new Set(disabledModules.map((m) => m.key));
     const effectiveModules = (plan.modules ?? []).filter((modKey) => !disabledKeys.has(modKey));
 
+    const rawLimits = plan.limits;
+    const urlAccess = rawLimits?.urlAccess ?? {
+      path: true as const,
+      subdomain: plan.key === 'PRO' || plan.key === 'ENTERPRISE',
+      customDomain: plan.key === 'ENTERPRISE',
+    };
+    const limitsWithUrl: PlanLimits = {
+      ...rawLimits,
+      urlAccess,
+    };
+
+    const tenant = await tenantsRepo.findTenantById(tenantId);
+    const branding = tenant ? await tenantBrandingRepo.findBrandingByTenantId(tenantId) : null;
+    const effectiveUrl = tenant
+      ? getEffectiveUrlMode(
+          tenant,
+          branding,
+          {
+            limits: limitsWithUrl,
+            subscriptionStatus: subWithPlan?.status ?? 'ACTIVE',
+          },
+          env,
+        )
+      : undefined;
+
     return {
       planKey: plan.key,
       planName: plan.name,
       subscriptionStatus: subWithPlan?.status ?? 'ACTIVE',
       trialEndsAt: subWithPlan?.trialEndsAt ?? null,
       effectiveModules,
-      limits: plan.limits,
+      limits: limitsWithUrl,
+      urlAccess,
+      urlMode: effectiveUrl?.mode ?? 'path',
+      effectiveUrl,
     };
   });
 }
@@ -99,7 +220,6 @@ export async function enforceLimit(
 
   const usage = await billingRepo.getTenantUsage(tenantId);
   let currentUsage = 0;
-
   if (limitKey === 'maxMembers') currentUsage = usage.members;
   else if (limitKey === 'maxCustomRoles') currentUsage = usage.customRoles;
   else if (limitKey === 'maxStorageBytes') currentUsage = usage.storageBytes;
@@ -115,20 +235,21 @@ export async function enforceLimit(
 }
 
 // ==========================================
-// 2. Plans Catalog (Public & Platform)
+// 2. Plans Catalog (Platform Staff & Public)
 // ==========================================
 
 export async function listPublicPlans() {
   return cache.wrap(CACHE_KEYS.PUBLIC_PLANS, 300, async () => {
-    return billingRepo.findActivePublicPlans();
+    const plans = await billingRepo.findAllPlans({ includeInactive: false });
+    return plans.filter((p) => p.isPublic);
   });
 }
 
-export async function listAllPlans(query?: ListPlansQueryDto) {
-  return billingRepo.findAllPlans({
-    includeInactive: query?.includeInactive ?? false,
-  });
+export async function listPlatformPlans(query?: ListPlansQueryDto) {
+  return billingRepo.findAllPlans(query);
 }
+
+export const listAllPlans = listPlatformPlans;
 
 export async function getPlanById(id: string) {
   return cache.wrap(CACHE_KEYS.PLAN_BY_ID(id), 300, async () => {
@@ -186,6 +307,9 @@ export async function updatePlan(
   await cache.del(CACHE_KEYS.PUBLIC_PLANS);
   await cache.del(CACHE_KEYS.PLAN_BY_ID(id));
   await cache.del(CACHE_KEYS.PLAN_BY_KEY(existing.key));
+  await cache.delByPrefix('entitlements:');
+  await cache.delByPrefix('branding:resolve:');
+  await cache.delByPrefix('tenant:url:');
 
   await platformRepo.logPlatformAction({
     actorStaffId,
@@ -257,6 +381,16 @@ export async function updatePlatformTenantSubscription(
     });
   }
 
+  const oldPlan = fromPlanId ? await billingRepo.findPlanById(fromPlanId) : null;
+  const newPlan = targetPlanId ? await billingRepo.findPlanById(targetPlanId) : null;
+
+  if (newPlan) {
+    await db
+      .update(tenants)
+      .set({ plan: newPlan.key, updatedAt: new Date() })
+      .where(eq(tenants.id, tenantId));
+  }
+
   await billingRepo.createSubscriptionEvent({
     subscriptionId: sub!.id,
     tenantId,
@@ -278,8 +412,11 @@ export async function updatePlatformTenantSubscription(
     requestId,
   });
 
-  // Invalidate Redis entitlement cache
-  await cache.del(CACHE_KEYS.TENANT_ENTITLEMENTS(tenantId));
+  if (oldPlan && newPlan && oldPlan.key !== newPlan.key) {
+    await onPlanChanged(tenantId, oldPlan.key, newPlan.key);
+  } else {
+    await invalidateTenantBillingCache(tenantId);
+  }
 
   return billingRepo.findTenantSubscriptionWithPlan(tenantId);
 }

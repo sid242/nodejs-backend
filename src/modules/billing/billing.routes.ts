@@ -1,6 +1,8 @@
 import { Router } from 'express';
 
+import { requireAuth } from '@/middleware/auth';
 import { requirePlatformAuth, requirePlatformPermission } from '@/middleware/platform';
+import { requireTenant } from '@/middleware/tenant';
 import { validate } from '@/middleware/validate';
 import { PLATFORM_PERMISSIONS } from '@/modules/platform/platform.permissions';
 
@@ -10,16 +12,10 @@ import * as dto from './billing.dto';
 const router: Router = Router();
 
 // ==========================================
-// 1. Public Pricing & Plans Catalog
-// ==========================================
-router.get('/', controller.listPublicPlans);
-router.get('/:id', validate({ params: dto.planIdParamDto }), controller.getPlanById);
-
-// ==========================================
-// 2. Platform Staff Plans Catalog
+// 1. Platform Staff Plans Catalog
 // ==========================================
 router.get(
-  '/platform/plans',
+  ['/platform', '/platform/plans'],
   requirePlatformAuth,
   requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_READ),
   validate({ query: dto.listPlansQueryDto }),
@@ -27,7 +23,7 @@ router.get(
 );
 
 router.post(
-  '/platform/plans',
+  ['/platform', '/platform/plans'],
   requirePlatformAuth,
   requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_MANAGE),
   validate({ body: dto.createPlanDto }),
@@ -35,7 +31,7 @@ router.post(
 );
 
 router.patch(
-  '/platform/plans/:id',
+  ['/platform/:id', '/platform/plans/:id'],
   requirePlatformAuth,
   requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_MANAGE),
   validate({ params: dto.planIdParamDto, body: dto.updatePlanDto }),
@@ -43,7 +39,7 @@ router.patch(
 );
 
 // ==========================================
-// 3. Platform Staff Tenant Subscriptions
+// 2. Platform Staff Tenant Subscriptions
 // ==========================================
 router.get(
   '/platform/tenants/:id/subscription',
@@ -62,7 +58,7 @@ router.put(
 );
 
 // ==========================================
-// 4. Platform Staff Invoices Management
+// 3. Platform Staff Invoices Management
 // ==========================================
 router.get(
   '/platform/invoices',
@@ -95,5 +91,29 @@ router.patch(
   validate({ params: dto.invoiceIdParamDto, body: dto.updateInvoiceStatusDto }),
   controller.updateInvoiceStatus,
 );
+
+// ==========================================
+// 4. Tenant Subscription & Billing
+// ==========================================
+router.get(
+  '/subscription',
+  requireAuth,
+  requireTenant,
+  controller.getTenantBillingOverview,
+);
+
+router.post(
+  ['/subscription/change', '/subscription/change-request'],
+  requireAuth,
+  requireTenant,
+  validate({ body: dto.subscriptionChangeRequestDto }),
+  controller.requestSubscriptionChange,
+);
+
+// ==========================================
+// 5. Public Pricing & Plans Catalog
+// ==========================================
+router.get('/', controller.listPublicPlans);
+router.get('/:id', validate({ params: dto.planIdParamDto }), controller.getPlanById);
 
 export default router;

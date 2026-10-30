@@ -114,7 +114,7 @@ test('verifyTenantCustomDomain enforces configured domain and transitions status
   const tenant = await tenantsRepo.createTenant({
     name: 'Domain Test Corp',
     slug: `domain-test-${Date.now()}`,
-    plan: 'PRO',
+    plan: 'ENTERPRISE',
   });
 
   const [existingUser] = await db.select({ id: users.id }).from(users).limit(1);
@@ -161,9 +161,9 @@ test('verifyTenantCustomDomain enforces configured domain and transitions status
 
   // Case 3: Successful verification updates customDomainStatus to ACTIVE
   const verified = await tenantsService.verifyTenantCustomDomain(tenant.id, testUserId, true);
-  assert.equal(verified.customDomainStatus, 'ACTIVE');
+  assert.equal(verified.customDomainStatus, 'VERIFIED');
 
   // Verify database record has updated to ACTIVE
   const refreshed = await tenantBrandingRepo.findBrandingByTenantId(tenant.id);
-  assert.equal(refreshed?.customDomainStatus, 'ACTIVE');
+  assert.equal(refreshed?.customDomainStatus, 'VERIFIED');
 });

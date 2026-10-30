@@ -37,6 +37,8 @@ export async function upsertTenantBranding(data: NewTenantBranding): Promise<Ten
         borderRadius: data?.borderRadius ?? '0.5rem',
         customDomain: data?.customDomain ? data.customDomain.toLowerCase() : null,
         customDomainStatus: data?.customDomainStatus ?? 'PENDING',
+        customDomainVerifiedAt: data?.customDomainVerifiedAt ?? null,
+        customDomainTlsStatus: data?.customDomainTlsStatus ?? null,
         supportEmail: data?.supportEmail ?? null,
         updatedAt: new Date(),
       },
@@ -55,11 +57,36 @@ export async function deleteTenantBranding(tenantId: string): Promise<boolean> {
 
 export async function updateCustomDomainStatus(
   tenantId: string,
-  status: string,
+  status: 'PENDING' | 'VERIFIED' | 'FAILED',
+  verifiedAt?: Date | null,
+  tlsStatus?: string | null,
 ): Promise<TenantBranding | null> {
   const [updated] = await db
     .update(tenantBrandings)
-    .set({ customDomainStatus: status, updatedAt: new Date() })
+    .set({
+      customDomainStatus: status,
+      ...(verifiedAt !== undefined ? { customDomainVerifiedAt: verifiedAt } : {}),
+      ...(tlsStatus !== undefined ? { customDomainTlsStatus: tlsStatus } : {}),
+      updatedAt: new Date(),
+    })
+    .where(eq(tenantBrandings.tenantId, tenantId))
+    .returning();
+  return updated ?? null;
+}
+
+export async function updateCustomDomain(
+  tenantId: string,
+  domain: string | null,
+): Promise<TenantBranding | null> {
+  const [updated] = await db
+    .update(tenantBrandings)
+    .set({
+      customDomain: domain ? domain.toLowerCase() : null,
+      customDomainStatus: 'PENDING',
+      customDomainVerifiedAt: null,
+      customDomainTlsStatus: null,
+      updatedAt: new Date(),
+    })
     .where(eq(tenantBrandings.tenantId, tenantId))
     .returning();
   return updated ?? null;
@@ -70,5 +97,6 @@ export const tenantBrandingRepo = {
   findBrandingByCustomDomain,
   upsertTenantBranding,
   updateCustomDomainStatus,
+  updateCustomDomain,
   deleteTenantBranding,
 };

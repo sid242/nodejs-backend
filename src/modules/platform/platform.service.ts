@@ -36,6 +36,7 @@ import * as billingService from '@/modules/billing/billing.service';
 import { rbacRepo } from '@/modules/rbac/rbac.repository';
 import * as rbacService from '@/modules/rbac/rbac.service';
 import { tenantsRepo } from '@/modules/tenants/tenants.repository';
+import { buildPlatformUrl, buildTenantUrl } from '@/modules/tenants/tenant-url.service';
 import { emailQueue } from '@/queues/index';
 
 import { createPlatformTwoFactorChallenge } from './platform-2fa.service';
@@ -207,8 +208,8 @@ export async function createStaff(
   });
 
   // Dispatch onboarding email with credentials and platform portal login link
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-  const loginUrl = `${frontendUrl}/platform/login`;
+
+  const loginUrl = buildPlatformUrl('/platform/login');
 
   try {
     await emailQueue.add(
@@ -892,7 +893,10 @@ export async function provisionTenant(
   }
 
   // 5. Provision default tenant modules
-  const allModules = await db.select({ id: appModules.id }).from(appModules);
+  const allModules = await db
+    .select({ id: appModules.id })
+    .from(appModules)
+    .where(eq(appModules.isSystem, true));
   if (allModules.length > 0) {
     await db
       .insert(tenantModules)
@@ -924,8 +928,8 @@ export async function provisionTenant(
 
   // 8. Generate 48-hour invitation token and dispatch invitation email
   const inviteToken = await createMagicLinkToken(ownerUser.id, 48 * 3600, tenant.id);
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-  const inviteUrl = `${frontendUrl}/accept-invitation?token=${inviteToken}&tenant=${tenant.id}`;
+
+  const inviteUrl = await buildTenantUrl(tenant.id, `/accept-invite?token=${inviteToken}&tenant=${tenant.id}`);
 
   await emailQueue.add(
     'tenant-invite',
