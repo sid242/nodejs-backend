@@ -899,7 +899,11 @@ export async function resolvePublicTenant(options: {
     }
   }
 
-  const cacheKey = host ? `branding:resolve:${host}` : `branding:resolve:slug:${rawSlug}`;
+  const cacheKey = rawSlug
+    ? `branding:resolve:slug:${rawSlug}`
+    : host
+      ? `branding:resolve:${host}`
+      : 'branding:resolve:unknown';
 
   const cached = await cache.get<PublicTenantResolution | { notFound: true }>(cacheKey);
   if (cached) {
@@ -912,7 +916,56 @@ export async function resolvePublicTenant(options: {
   const baseDomain = env.APP_BASE_DOMAIN.toLowerCase().split(':')[0] ?? 'localhost';
   const platformHost = env.PLATFORM_HOST.toLowerCase().split(':')[0] ?? 'localhost';
 
-  // 2. Check if platform host
+  // 2. Slug lookup (prioritized when slug is explicitly requested)
+  if (rawSlug) {
+    const tenant = await tenantsRepo.findTenantBySlug(rawSlug);
+    if (tenant) {
+      const branding = await tenantBrandingRepo.findBrandingByTenantId(tenant.id);
+      const entitlements = await billingService.getTenantEntitlements(tenant.id);
+      const effective = getEffectiveUrlMode(tenant, branding, entitlements, env);
+
+      const result: PublicTenantResolution = {
+        kind: 'tenant',
+        tenantId: tenant.id,
+        slug: tenant.slug,
+        name: tenant.name,
+        status: tenant.status,
+        tenant: {
+          id: tenant.id,
+          name: tenant.name,
+          slug: tenant.slug,
+        },
+        branding: {
+          companyName: branding?.companyName ?? tenant.name,
+          logoUrl: branding?.logoUrl ?? null,
+          logoDarkUrl: branding?.logoDarkUrl ?? null,
+          faviconUrl: branding?.faviconUrl ?? null,
+          primaryColor: branding?.primaryColor ?? '#4F46E5',
+          accentColor: branding?.accentColor ?? '#06B6D4',
+          secondaryColor: branding?.secondaryColor ?? null,
+          primaryDarkColor: branding?.primaryDarkColor ?? null,
+          accentDarkColor: branding?.accentDarkColor ?? null,
+          secondaryDarkColor: branding?.secondaryDarkColor ?? null,
+          fontFamily: branding?.fontFamily ?? 'Inter',
+          sidebarTheme: branding?.sidebarTheme ?? 'DARK',
+          borderRadius: branding?.borderRadius ?? '0.5rem',
+          authHeadline: branding?.authHeadline ?? null,
+          authSubtitle: branding?.authSubtitle ?? null,
+          authCoverUrl: branding?.authCoverUrl ?? null,
+          authLayout: branding?.authLayout ?? 'SPLIT',
+          customDomain: branding?.customDomain ?? null,
+          supportEmail: branding?.supportEmail ?? null,
+        },
+        urlMode: effective.mode,
+        canonicalBase: effective.canonicalBase,
+        allowed: effective.allowed,
+      };
+      await cache.set(cacheKey, result, 300);
+      return result;
+    }
+  }
+
+  // 3. Check if platform host
   if (host && (host === baseDomain || host === platformHost)) {
     const result: PublicTenantResolution = {
       kind: 'platform',
