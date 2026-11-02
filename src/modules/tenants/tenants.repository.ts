@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 
 import { db, type DbExecutor } from '@/config/db';
 import {
@@ -131,6 +131,7 @@ export async function findTenantMembers(tenantId: string): Promise<
     name: string;
     email: string;
     status: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
+    role: string;
     joinedAt: Date;
   }>
 > {
@@ -141,6 +142,19 @@ export async function findTenantMembers(tenantId: string): Promise<
       name: users.name,
       email: users.email,
       status: tenantMembers.status,
+      role: sql<string>`coalesce((
+        SELECT UPPER(r."name")
+        FROM "TenantMemberRole" tmr
+        JOIN "AppRole" r ON tmr."roleId" = r."id"
+        WHERE tmr."memberId" = ${tenantMembers.id}
+        ORDER BY CASE UPPER(r."name")
+          WHEN 'OWNER' THEN 1
+          WHEN 'ADMIN' THEN 2
+          WHEN 'MEMBER' THEN 3
+          ELSE 4
+        END
+        LIMIT 1
+      ), 'MEMBER')`,
       joinedAt: tenantMembers.joinedAt,
     })
     .from(tenantMembers)
