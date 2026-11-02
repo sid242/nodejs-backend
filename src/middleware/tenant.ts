@@ -212,8 +212,10 @@ export async function requireTenant(
     if (err) return next(err);
     if (!req.tenant) {
       return next(
-        AppError.badRequest(
-          'Tenant identifier missing (provide x-tenant-id header or tenantId parameter)',
+        new AppError(
+          400,
+          'Tenant identifier required (provide x-tenant-id header or tenantId parameter)',
+          'TENANT_REQUIRED',
         ),
       );
     }

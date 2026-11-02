@@ -85,4 +85,10 @@ export async function registerSchedulers(): Promise<void> {
     { pattern: '0 * * * *' }, // hourly
     { name: 'expire-trialing-subscriptions' },
   );
+
+  await maintenanceQueue.upsertJobScheduler(
+    'domain-reverify-weekly',
+    { pattern: '0 3 * * 0' }, // weekly Sunday at 03:00
+    { name: 'domain-reverify' },
+  );
 }

@@ -115,3 +115,20 @@ export const revokeSessionParamsDto = z.object({
 });
 
 export type RevokeSessionParamsDto = z.infer<typeof revokeSessionParamsDto>;
+
+// ─── Session Handoff ────────────────────────────────────────────────────────────
+
+export const createHandoffDto = z.object({
+  tenantId: z.string().uuid(),
+  targetHost: z.string().min(1).max(255),
+});
+
+export type CreateHandoffDto = z.infer<typeof createHandoffDto>;
+
+export const redeemHandoffDto = z.object({
+  code: z.string().min(16).max(128),
+  host: z.string().min(1).max(255),
+});
+
+export type RedeemHandoffDto = z.infer<typeof redeemHandoffDto>;
+

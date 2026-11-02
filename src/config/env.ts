@@ -18,6 +18,7 @@ const schema = z.object({
   TENANCY_MODES: z.string().default('path,subdomain,customDomain'),
   CUSTOM_DOMAIN_CNAME_TARGET: z.string().default('tenants.example.com'),
   BFF_SHARED_SECRET: z.string().min(16).default('bff-dev-shared-secret-key-min-16-chars'),
+  INTERNAL_API_SECRET: z.string().min(16).default('internal-dev-secret-key-min-16-chars'),
   FRONTEND_URL: z.string().optional(),
 
   DATABASE_URL: z.string().min(1),

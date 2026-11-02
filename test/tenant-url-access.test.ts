@@ -43,6 +43,15 @@ test('tenantSlugSchema strictly enforces DNS-label format and reserved slugs', (
   assert.equal(isReservedSlug('regular-org'), false);
 });
 
+test('isTenantUnavailable correctly flags unavailable tenant statuses', () => {
+  assert.equal(tenantsService.isTenantUnavailable('SUSPENDED'), true);
+  assert.equal(tenantsService.isTenantUnavailable('DEACTIVATED'), true);
+  assert.equal(tenantsService.isTenantUnavailable('ACTIVE'), false);
+  assert.equal(tenantsService.isTenantUnavailable('TRIALING'), false);
+  assert.equal(tenantsService.isTenantUnavailable(null), false);
+  assert.equal(tenantsService.isTenantUnavailable(undefined), false);
+});
+
 test('getEffectiveUrlMode computes correct canonical URLs and plan-based fallbacks', () => {
   const mockEnv = {
     APP_BASE_DOMAIN: 'example.com',

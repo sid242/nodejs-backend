@@ -5,6 +5,7 @@ import * as billingController from '@/modules/billing/billing.controller';
 import billingRoutes from '@/modules/billing/billing.routes';
 import emailTemplateRoutes from '@/modules/email-templates/email-templates.routes';
 import fileRoutes from '@/modules/files/files.routes';
+import internalRoutes from '@/modules/internal/internal.routes';
 import platformRoutes from '@/modules/platform/platform.routes';
 import rbacRoutes from '@/modules/rbac/rbac.routes';
 import tenantRoutes from '@/modules/tenants/tenants.routes';
@@ -20,6 +21,7 @@ router.use('/platform', platformRoutes);
 router.use('/email-templates', emailTemplateRoutes);
 router.use('/billing', billingRoutes);
 router.use('/plans', billingRoutes);
+router.use('/internal', internalRoutes);
 router.get('/public/plans', billingController.listPublicPlans);
 
 export default router;

@@ -12,6 +12,7 @@ import { errorHandler, notFound } from '@/middleware/error';
 import { httpLogger } from '@/middleware/http-logger';
 import { globalLimiter } from '@/middleware/rate-limit';
 import healthRoutes from '@/modules/health/health.routes';
+import internalRoutes from '@/modules/internal/internal.routes';
 import { metricsMiddleware, metricsRouter } from '@/observability/metrics';
 import { bullBoardRouter } from '@/queues/bull-board';
 import apiRoutes from '@/routes';
@@ -27,6 +28,7 @@ export function createApp(): Express {
 
   app.use('/health', healthRoutes);
   app.use('/metrics', metricsRouter);
+  app.use('/internal', internalRoutes);
 
   // Interactive Swagger UI & OpenAPI spec (mounted before helmet: UI uses inline assets)
   app.use('/docs', docsRouter());

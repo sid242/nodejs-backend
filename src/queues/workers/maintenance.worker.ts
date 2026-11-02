@@ -62,5 +62,12 @@ export async function processMaintenance(job: Job): Promise<{ removed: number; f
     return { removed: expiredTrials.length, failed: 0 };
   }
 
+  if (job.name === 'domain-reverify') {
+    const { reverifyAllVerifiedDomains } = await import('@/modules/tenants/tenants.service');
+    const result = await reverifyAllVerifiedDomains();
+    logger.info(result, 'Completed periodic custom domain re-verification');
+    return { removed: result.failed, failed: 0 };
+  }
+
   throw new Error(`Unknown maintenance job: ${job.name}`);
 }

@@ -134,3 +134,18 @@ export const getTwoFactorStatus = asyncHandler(async (req: Request, res: Respons
   const result = await twoFactorService.getTwoFactorStatus(req.user.id);
   AppResponse.ok(result).send(res);
 });
+
+// ─── Session Handoff ────────────────────────────────────────────────────────────
+
+export const createHandoff = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user?.id) throw AppError.unauthorized();
+  const result = await service.createHandoff(req.user.id, req.valid!.body);
+  AppResponse.ok(result, 'Handoff code created').send(res);
+});
+
+export const redeemHandoff = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.redeemHandoff(req.valid!.body);
+  setAuthCookies(res, result);
+  AppResponse.ok(result, 'Handoff code redeemed successfully').send(res);
+});
+

@@ -7,10 +7,12 @@ import { validate } from '@/middleware/validate';
 import * as controller from '@/modules/auth/auth.controller';
 import {
   changePasswordDto,
+  createHandoffDto,
   disableTwoFactorDto,
   enableTwoFactorDto,
   forgotPasswordDto,
   loginDto,
+  redeemHandoffDto,
   refreshTokenDto,
   registerDto,
   requestEmailVerificationDto,
@@ -92,5 +94,18 @@ router.post(
   controller.verifyTwoFactorChallenge,
 );
 router.get('/2fa/status', requireAuth, controller.getTwoFactorStatus);
+
+// --- Session Handoff ---
+router.post(
+  '/handoff',
+  requireAuth,
+  validate({ body: createHandoffDto }),
+  controller.createHandoff,
+);
+router.post(
+  '/handoff/redeem',
+  validate({ body: redeemHandoffDto }),
+  controller.redeemHandoff,
+);
 
 export default router;

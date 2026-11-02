@@ -1,16 +1,19 @@
 import { randomUUID } from 'node:crypto';
 import dns from 'node:dns/promises';
 import bcrypt from 'bcryptjs';
+import { and, eq, isNotNull } from 'drizzle-orm';
 import nodemailer from 'nodemailer';
 
+import { db } from '@/config/db';
 import { env } from '@/config/env';
-import type {
-  PublicTenant,
-  PublicTenantBranding,
-  PublicTenantEmailConfig,
-  PublicUser,
-  Tenant,
-  TenantMember,
+import {
+  tenantBrandings,
+  type PublicTenant,
+  type PublicTenantBranding,
+  type PublicTenantEmailConfig,
+  type PublicUser,
+  type Tenant,
+  type TenantMember,
 } from '@/db/schema/index';
 import { cache } from '@/lib/cache';
 import { addCorsCustomDomain, removeCorsCustomDomain } from '@/lib/cors';
@@ -823,6 +826,10 @@ export async function testTenantEmailConfig(
   };
 }
 
+export function isTenantUnavailable(status?: string | null): boolean {
+  return status === 'SUSPENDED' || status === 'DEACTIVATED';
+}
+
 export interface PublicTenantResolution {
   kind: 'platform' | 'tenant';
   tenantId?: string;
@@ -950,7 +957,7 @@ export async function resolvePublicTenant(options: {
         const branding = await tenantBrandingRepo.findBrandingByTenantId(tenant.id);
         const effective = getEffectiveUrlMode(tenant, branding, entitlements, env);
 
-        if (!entitlements.limits?.urlAccess?.subdomain) {
+        if (!effective.allowed.subdomain || effective.mode !== 'subdomain') {
           const result: PublicTenantResolution = {
             kind: 'tenant',
             tenantId: tenant.id,
@@ -1015,7 +1022,7 @@ export async function resolvePublicTenant(options: {
         const entitlements = await billingService.getTenantEntitlements(tenant.id);
         const effective = getEffectiveUrlMode(tenant, branding, entitlements, env);
 
-        if (!entitlements.limits?.urlAccess?.customDomain) {
+        if (!effective.allowed.customDomain || effective.mode !== 'customDomain') {
           const result: PublicTenantResolution = {
             kind: 'tenant',
             tenantId: tenant.id,
@@ -1353,6 +1360,12 @@ export async function generateBrandingUploadUrl(
   };
 }
 
+async function invalidateTenantBrandingAndUrlCaches(tenantId: string): Promise<void> {
+  await cache.delByPrefix('branding:resolve:');
+  await cache.delByPrefix(`tenant:url:${tenantId}`);
+  await cache.del(`entitlements:${tenantId}`);
+}
+
 export async function verifyTenantCustomDomain(
   tenantId: string,
   operatorUserId: string,
@@ -1426,11 +1439,7 @@ export async function verifyTenantCustomDomain(
   }
 
   await addCorsCustomDomain(domain);
-
-  // Invalidate branding caches
-  await cache.delByPrefix('branding:resolve:');
-  await cache.delByPrefix(`tenant:url:${tenantId}`);
-  await cache.del(`entitlements:${tenantId}`);
+  await invalidateTenantBrandingAndUrlCaches(tenantId);
 
   await logSecurityEvent({
     tenantId,
@@ -1447,6 +1456,65 @@ export async function verifyTenantCustomDomain(
   });
 
   return updated;
+}
+
+export async function reverifyAllVerifiedDomains(): Promise<{ verified: number; failed: number }> {
+  const verifiedBrandings = await db
+    .select()
+    .from(tenantBrandings)
+    .where(and(eq(tenantBrandings.customDomainStatus, 'VERIFIED'), isNotNull(tenantBrandings.customDomain)));
+
+  let verified = 0;
+  let failed = 0;
+
+  for (const branding of verifiedBrandings) {
+    if (!branding?.customDomain || !branding?.tenantId) continue;
+    const domain = branding.customDomain.toLowerCase();
+    const challengeHostname = `_saas-verify.${domain}`;
+    const expectedValue = `saas-verify=${branding.tenantId}`;
+
+    let matched = false;
+    try {
+      const records = await dns.resolveTxt(challengeHostname);
+      const flatRecords = records?.flat?.() ?? [];
+      matched = flatRecords.some(
+        (entry) => entry?.trim?.() === expectedValue || entry?.trim?.() === branding.tenantId,
+      );
+    } catch {
+      matched = false;
+    }
+
+    if (!matched) {
+      failed++;
+      await tenantBrandingRepo.updateCustomDomainStatus(branding.tenantId, 'FAILED', null, 'FAILED');
+      await removeCorsCustomDomain(domain);
+      await invalidateTenantBrandingAndUrlCaches(branding.tenantId);
+
+      try {
+        const members = await tenantsRepo.findTenantMembers(branding.tenantId);
+        const owner = members?.find?.((m) => m?.status === 'ACTIVE');
+        if (owner?.email) {
+          await emailQueue
+            .add(
+              'custom-domain-failed',
+              {
+                to: owner.email,
+                domain,
+                tenantId: branding.tenantId,
+              },
+              { jobId: `domain-failed-${branding.tenantId}-${Date.now()}` },
+            )
+            .catch(() => undefined);
+        }
+      } catch {
+        /* non-blocking */
+      }
+    } else {
+      verified++;
+    }
+  }
+
+  return { verified, failed };
 }
 
 export async function getTenantUrlSettings(tenantId: string) {

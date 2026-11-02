@@ -175,3 +175,30 @@ export async function buildTenantUrl(
   });
 }
 
+export interface UserMembershipSummary {
+  tenantId: string;
+  slug: string;
+  name: string;
+  canonicalBase: string;
+  status: string;
+}
+
+export async function getUserMembershipsWithCanonicalUrls(
+  userId: string,
+): Promise<UserMembershipSummary[]> {
+  const userTenants = await tenantsRepo.findUserTenants(userId);
+  const memberships = await Promise.all(
+    (userTenants ?? []).map(async (t) => {
+      const canonical = await buildTenantUrl(t.id, '');
+      return {
+        tenantId: t.id,
+        slug: t.slug,
+        name: t.name,
+        canonicalBase: canonical.replace(/\/+$/, ''),
+        status: t.status,
+      };
+    }),
+  );
+  return memberships;
+}
+

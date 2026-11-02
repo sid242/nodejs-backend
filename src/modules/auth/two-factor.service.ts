@@ -11,6 +11,10 @@ import { AppError } from '@/lib/errors';
 import * as authRepo from '@/modules/auth/auth.repository';
 import { issueTokens, type AuthTokens } from '@/modules/auth/tokens';
 import {
+  getUserMembershipsWithCanonicalUrls,
+  type UserMembershipSummary,
+} from '@/modules/tenants/tenant-url.service';
+import {
   createHashedVerificationToken,
   verifyAndConsumeHashedToken,
 } from '@/modules/auth/verification.repository';
@@ -204,7 +208,7 @@ export async function createTwoFactorChallenge(userId: string): Promise<TwoFacto
 export async function verifyTwoFactorChallenge(
   challengeToken: string,
   code: string,
-): Promise<{ user: PublicUser } & AuthTokens> {
+): Promise<{ user: PublicUser; memberships: UserMembershipSummary[] } & AuthTokens> {
   // Consume the challenge token
   const record = await verifyAndConsumeHashedToken(challengeToken, 'TWO_FACTOR_CHALLENGE');
   const userId = record.userId;
@@ -245,7 +249,8 @@ export async function verifyTwoFactorChallenge(
       twoFactorEnabledAt: user.twoFactorEnabledAt,
       createdAt: user.createdAt,
     };
-    return { user: publicUser, ...(await issueTokens(publicUser)) };
+    const memberships = await getUserMembershipsWithCanonicalUrls(user.id);
+    return { user: publicUser, ...(await issueTokens(publicUser)), memberships };
   }
 
   // If TOTP failed, try recovery codes
@@ -280,7 +285,8 @@ export async function verifyTwoFactorChallenge(
     twoFactorEnabledAt: user.twoFactorEnabledAt,
     createdAt: user.createdAt,
   };
-  return { user: publicUser, ...(await issueTokens(publicUser)) };
+  const memberships = await getUserMembershipsWithCanonicalUrls(user.id);
+  return { user: publicUser, ...(await issueTokens(publicUser)), memberships };
 }
 
 // ─── Status ─────────────────────────────────────────────────────────────────────

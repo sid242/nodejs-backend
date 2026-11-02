@@ -1,14 +1,20 @@
+import crypto from 'node:crypto';
+
 import bcrypt from 'bcryptjs';
 
 import { env } from '@/config/env';
+import { redis } from '@/config/redis';
 import { AUTH_MESSAGES, REDIS_PREFIXES } from '@/constants/index';
 import type { PublicUser, User } from '@/db/schema';
 import { cache } from '@/lib/cache';
 import { AppError } from '@/lib/errors';
+import { logSecurityEvent } from '@/modules/audit/audit.service';
 import type {
   ChangePasswordDto,
+  CreateHandoffDto,
   ForgotPasswordDto,
   LoginDto,
+  RedeemHandoffDto,
   RegisterDto,
   ResetPasswordDto,
   VerifyEmailDto,
@@ -30,15 +36,24 @@ import {
   createTwoFactorChallenge,
   type TwoFactorChallengeData,
 } from '@/modules/auth/two-factor.service';
-import { buildPlatformUrl, buildTenantUrl } from '@/modules/tenants/tenant-url.service';
+import {
+  buildPlatformUrl,
+  buildTenantUrl,
+  getEffectiveUrlMode,
+  getUserMembershipsWithCanonicalUrls,
+  type UserMembershipSummary,
+} from '@/modules/tenants/tenant-url.service';
 import * as tenantsRepo from '@/modules/tenants/tenants.repository';
 import { emailQueue } from '@/queues/index';
 
 // Compared against when the user doesn't exist, so response time doesn't reveal valid emails.
 const DUMMY_HASH = bcrypt.hashSync('dummy-password', 12);
 
+export { getUserMembershipsWithCanonicalUrls, type UserMembershipSummary };
+
 export interface AuthResult extends AuthTokens {
   user: PublicUser;
+  memberships: UserMembershipSummary[];
 }
 
 export async function register({ email, password, name }: RegisterDto): Promise<AuthResult> {
@@ -57,7 +72,8 @@ export async function register({ email, password, name }: RegisterDto): Promise<
     ),
   ]);
 
-  return { user, ...(await issueTokens(user)) };
+  const memberships = await getUserMembershipsWithCanonicalUrls(user.id);
+  return { user, ...(await issueTokens(user)), memberships };
 }
 
 export async function login({
@@ -96,10 +112,13 @@ export async function login({
     twoFactorEnabledAt: record.twoFactorEnabledAt,
     createdAt: record.createdAt,
   };
-  return { user, ...(await issueTokens(user)) };
+  const memberships = await getUserMembershipsWithCanonicalUrls(record.id);
+  return { user, ...(await issueTokens(user)), memberships };
 }
 
-export async function refresh(refreshToken: string): Promise<AuthTokens> {
+export async function refresh(
+  refreshToken: string,
+): Promise<AuthTokens & { memberships: UserMembershipSummary[] }> {
   const userId = await consumeRefreshToken(refreshToken);
   const user = await authRepo.findPublicUserById(userId);
   if (!user) throw AppError.unauthorized();
@@ -110,7 +129,9 @@ export async function refresh(refreshToken: string): Promise<AuthTokens> {
     });
   }
 
-  return issueTokens(user);
+  const tokens = await issueTokens(user);
+  const memberships = await getUserMembershipsWithCanonicalUrls(user.id);
+  return { ...tokens, memberships };
 }
 
 export async function forgotPassword({ email }: ForgotPasswordDto): Promise<{ message: string }> {
@@ -296,5 +317,139 @@ export async function verifyMagicLink(token: string): Promise<AuthResult> {
   }
 
   await cache.del(`${REDIS_PREFIXES.USER_CACHE}${userId}`);
-  return { user: finalUser, ...(await issueTokens(finalUser)) };
+  const memberships = await getUserMembershipsWithCanonicalUrls(finalUser.id);
+  return { user: finalUser, ...(await issueTokens(finalUser)), memberships };
 }
+
+/**
+ * Atomically retrieves and deletes a key from Redis, supporting both native GETDEL and Lua fallback.
+ */
+async function atomicGetDel(redisClient: any, key: string): Promise<string | null> {
+  if (typeof redisClient?.getdel === 'function') {
+    try {
+      return (await redisClient.getdel(key)) ?? null;
+    } catch {
+      /* fallback to Lua */
+    }
+  }
+  return (
+    (await redisClient?.eval?.(
+      "local v = redis.call('get', KEYS[1]); if v then redis.call('del', KEYS[1]); end; return v;",
+      1,
+      key,
+    )) as string | null
+  );
+}
+
+export async function createHandoff(
+  userId: string,
+  { tenantId, targetHost }: CreateHandoffDto,
+): Promise<{ handoffUrl: string; code: string }> {
+  const member = await tenantsRepo.findTenantMember(tenantId, userId);
+  if (!member || member?.status !== 'ACTIVE') {
+    throw AppError.forbidden('You are not an active member of this workspace');
+  }
+
+  const canonicalBase = await buildTenantUrl(tenantId, '');
+  const normalizedTargetHost = targetHost?.trim()?.toLowerCase()?.split(':')?.[0] ?? '';
+  let canonicalHost = '';
+  try {
+    canonicalHost = new URL(canonicalBase)?.host?.toLowerCase()?.split(':')?.[0] ?? '';
+  } catch {
+    canonicalHost = '';
+  }
+  const platformHost = env?.PLATFORM_HOST?.toLowerCase()?.split(':')?.[0] ?? '';
+
+  if (normalizedTargetHost !== canonicalHost && normalizedTargetHost !== platformHost) {
+    throw AppError.badRequest('Target host must match the tenant canonical host or platform host');
+  }
+
+  const code = crypto.randomBytes(32).toString('hex');
+  const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+  await redis?.set?.(
+    `handoff:${codeHash}`,
+    JSON.stringify({ userId, tenantId, targetHost: normalizedTargetHost }),
+    'EX',
+    60,
+  );
+
+  await logSecurityEvent({
+    userId,
+    tenantId,
+    action: 'AUTH_HANDOFF_ISSUED',
+    entityType: 'handoff',
+    entityId: codeHash,
+    metadata: { targetHost: normalizedTargetHost },
+  });
+
+  const protocol = normalizedTargetHost?.includes('localhost') ? 'http' : 'https';
+  const handoffUrl = `${protocol}://${targetHost}/api/auth/handoff?code=${code}`;
+
+  return { handoffUrl, code };
+}
+
+export async function redeemHandoff({
+  code,
+  host,
+}: RedeemHandoffDto): Promise<AuthResult & { tenantId: string }> {
+  const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+  const key = `handoff:${codeHash}`;
+
+  const raw = await atomicGetDel(redis, key);
+  if (!raw) {
+    throw AppError.unauthorized('Handoff code is invalid or has expired', { code: 'HANDOFF_EXPIRED' });
+  }
+
+  const payload = JSON.parse(raw) as { userId?: string; tenantId?: string; targetHost?: string };
+  const normalizedHost = host?.trim()?.toLowerCase()?.split(':')?.[0] ?? '';
+
+  if (!payload?.targetHost || payload.targetHost !== normalizedHost) {
+    throw AppError.unauthorized('Handoff target host mismatch', { code: 'HANDOFF_HOST_MISMATCH' });
+  }
+
+  if (!payload?.userId || !payload?.tenantId) {
+    throw AppError.unauthorized('Invalid handoff payload');
+  }
+
+  const userRecord = await authRepo.findById(payload.userId);
+  if (!userRecord || userRecord?.deletedAt) {
+    throw AppError.unauthorized('User not found');
+  }
+
+  if (userRecord?.status === 'SUSPENDED' || userRecord?.status === 'DEACTIVATED') {
+    throw AppError.forbidden(`Account is ${userRecord.status.toLowerCase()}`);
+  }
+
+  const user: PublicUser = {
+    id: userRecord.id,
+    email: userRecord.email,
+    name: userRecord.name,
+    status: userRecord.status,
+    emailVerifiedAt: userRecord.emailVerifiedAt,
+    phoneNumber: userRecord.phoneNumber,
+    phoneVerifiedAt: userRecord.phoneVerifiedAt,
+    twoFactorEnabledAt: userRecord.twoFactorEnabledAt,
+    createdAt: userRecord.createdAt,
+  };
+
+  const tokens = await issueTokens(user);
+  const memberships = await getUserMembershipsWithCanonicalUrls(user.id);
+
+  await logSecurityEvent({
+    userId: user.id,
+    tenantId: payload.tenantId,
+    action: 'AUTH_HANDOFF_REDEEMED',
+    entityType: 'handoff',
+    entityId: codeHash,
+    metadata: { host: normalizedHost },
+  });
+
+  return {
+    user,
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    memberships,
+    tenantId: payload.tenantId,
+  };
+}
+
