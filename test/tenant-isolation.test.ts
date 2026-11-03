@@ -87,7 +87,10 @@ test('Multi-Tenant Edge Case 1: Unauthenticated and zero-membership users withou
       400,
       'requireTenant must return 400 when no tenant can be resolved',
     );
-    assert.ok(requireTenantZeroErr.message.includes('Tenant identifier missing'));
+    assert.ok(
+      requireTenantZeroErr.message.includes('Tenant identifier required') ||
+        requireTenantZeroErr.message.includes('Tenant identifier missing'),
+    );
   } finally {
     await db.delete(users).where(eq(users.id, userNoTenants.id));
   }

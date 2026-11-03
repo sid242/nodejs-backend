@@ -1,7 +1,16 @@
 import { z } from 'zod';
 
 export const updateMeDto = z.object({
-  name: z.string().min(1).max(100),
+  name: z.string().min(1).max(100).optional(),
+  phoneNumber: z
+    .preprocess((val) => {
+      if (typeof val === 'string') {
+        const cleaned = val.replace(/[\s-]/g, '');
+        return cleaned === '' ? null : cleaned;
+      }
+      return val;
+    }, z.string().regex(/^\+[1-9]\d{6,14}$/, 'Must be a valid E.164 phone number (e.g. +919876543210)').nullable())
+    .optional(),
 });
 
 export type UpdateMeDto = z.infer<typeof updateMeDto>;

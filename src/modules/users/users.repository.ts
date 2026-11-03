@@ -1,15 +1,18 @@
 import { desc, eq, sql } from 'drizzle-orm';
 
 import { db } from '@/config/db';
-import { publicUser, users, type PublicUser } from '@/db/schema/index';
-import type { ListUsersQueryDto, UpdateMeDto } from '@/modules/users/users.dto';
+import { publicUser, users, type NewUser, type PublicUser } from '@/db/schema/index';
+import type { ListUsersQueryDto } from '@/modules/users/users.dto';
 
 export async function findById(id: string): Promise<PublicUser | null> {
   const [user] = await db.select(publicUser).from(users).where(eq(users.id, id)).limit(1);
   return (user as PublicUser) ?? null;
 }
 
-export async function updateById(id: string, data: UpdateMeDto): Promise<PublicUser | null> {
+export async function updateById(
+  id: string,
+  data: Partial<NewUser>,
+): Promise<PublicUser | null> {
   const [user] = await db.update(users).set(data).where(eq(users.id, id)).returning(publicUser);
   return (user as PublicUser) ?? null;
 }

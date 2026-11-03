@@ -13,7 +13,13 @@ export const getMe = (id: string): Promise<PublicUser> =>
   });
 
 export async function updateMe(id: string, data: UpdateMeDto): Promise<PublicUser> {
-  const user = await userRepo.updateById(id, data);
+  const updatePayload: Record<string, any> = {};
+  if (data?.name !== undefined) updatePayload.name = data.name;
+  if (data?.phoneNumber !== undefined) {
+    updatePayload.phoneNumber = data.phoneNumber;
+    updatePayload.phoneVerifiedAt = null;
+  }
+  const user = await userRepo.updateById(id, updatePayload);
   if (!user) throw AppError.notFound('User not found');
   await Promise.all([cache.del(`user:${id}`), cache.delByPrefix('users:list:')]);
   return user;
