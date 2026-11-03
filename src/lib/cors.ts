@@ -50,15 +50,19 @@ export async function removeCorsCustomDomain(domain: string): Promise<void> {
 export async function isOriginAllowed(origin: string | undefined): Promise<boolean> {
   if (!origin) return true;
 
-  // 1. Static allowed CORS origins
-  const staticOrigins = parseList(env.CORS_ORIGINS);
-  if (staticOrigins.includes(origin)) {
+  const cleanOrigin = origin.toLowerCase().trim().replace(/\/+$/, '');
+
+  // 1. Static allowed CORS origins (normalized without trailing slashes)
+  const staticOrigins = parseList(env.CORS_ORIGINS).map((o) =>
+    o.toLowerCase().trim().replace(/\/+$/, ''),
+  );
+  if (staticOrigins.includes(cleanOrigin)) {
     return true;
   }
 
   let parsedUrl: URL;
   try {
-    parsedUrl = new URL(origin);
+    parsedUrl = new URL(cleanOrigin);
   } catch {
     return false;
   }
@@ -70,6 +74,21 @@ export async function isOriginAllowed(origin: string | undefined): Promise<boole
   const platformHostname = env.PLATFORM_HOST.toLowerCase().split(':')[0] ?? rawBaseDomain;
   if (hostname === rawBaseDomain || hostname === platformHostname) {
     return true;
+  }
+
+  // Development convenience: permit local network testing and port forwarding tunnels
+  if (env.NODE_ENV === 'development') {
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      /^(?:192\.168\.|10\.|172\.(?:1[6-9]|2[0-9]|3[0-1])\.)\d+/.test(hostname) ||
+      hostname.endsWith('.devtunnels.ms') ||
+      hostname.endsWith('.ngrok-free.app') ||
+      hostname.endsWith('.ngrok.io') ||
+      hostname.endsWith('.loca.lt')
+    ) {
+      return true;
+    }
   }
 
   // 3. Subdomain match on APP_BASE_DOMAIN (e.g. acme.example.com or acme.localhost)
