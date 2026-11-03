@@ -9,6 +9,8 @@ import {
 } from '@/modules/auth/auth.dto';
 import * as rbacController from '@/modules/rbac/rbac.controller';
 import * as rbacDto from '@/modules/rbac/rbac.dto';
+import * as platformGroupsController from '@/modules/groups/platform-groups.controller';
+import * as groupsDto from '@/modules/groups/groups.dto';
 import * as tenantDto from '@/modules/tenants/tenants.dto';
 import * as usersController from '@/modules/users/users.controller';
 import * as usersDto from '@/modules/users/users.dto';
@@ -338,6 +340,65 @@ router.delete(
   '/rbac/permissions/:permissionId',
   requirePlatformPermission(PLATFORM_PERMISSIONS.RBAC_CATALOG_MANAGE),
   rbacController.deletePermission,
+);
+
+// ==========================================
+// Platform User Groups Management
+// ==========================================
+router.get(
+  '/groups',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.GROUPS_READ),
+  validate({ query: groupsDto.listGroupsQueryDto }),
+  platformGroupsController.listPlatformGroups,
+);
+
+router.post(
+  '/groups',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.GROUPS_CREATE),
+  validate({ body: groupsDto.createGroupDto }),
+  platformGroupsController.createPlatformGroup,
+);
+
+router.get(
+  '/groups/:groupId',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.GROUPS_READ),
+  validate({ params: groupsDto.groupIdParamDto }),
+  platformGroupsController.getPlatformGroup,
+);
+
+router.patch(
+  '/groups/:groupId',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.GROUPS_UPDATE),
+  validate({ params: groupsDto.groupIdParamDto, body: groupsDto.updateGroupDto }),
+  platformGroupsController.updatePlatformGroup,
+);
+
+router.delete(
+  '/groups/:groupId',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.GROUPS_DELETE),
+  validate({ params: groupsDto.groupIdParamDto }),
+  platformGroupsController.archivePlatformGroup,
+);
+
+router.get(
+  '/groups/:groupId/members',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.GROUPS_READ),
+  validate({ params: groupsDto.groupIdParamDto }),
+  platformGroupsController.listPlatformGroupMembers,
+);
+
+router.post(
+  '/groups/:groupId/members',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.GROUPS_MANAGE_MEMBERS),
+  validate({ params: groupsDto.groupIdParamDto, body: groupsDto.addPlatformGroupMembersDto }),
+  platformGroupsController.addPlatformGroupMembers,
+);
+
+router.delete(
+  '/groups/:groupId/members/:staffId',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.GROUPS_MANAGE_MEMBERS),
+  validate({ params: groupsDto.platformGroupMemberParamsDto }),
+  platformGroupsController.removePlatformGroupMember,
 );
 
 export default router;

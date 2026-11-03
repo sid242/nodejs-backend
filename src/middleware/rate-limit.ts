@@ -96,3 +96,9 @@ export const uploadLimiter = make({ name: 'upload', limit: 30, byUser: true });
 
 // Tenant-level rate limiter for heavy workspace operations
 export const tenantLimiter = make({ name: 'tenant', limit: 120, byTenant: true });
+
+// Geo lookups and hierarchy resolution
+export const geoLimiter = make({ name: 'geo', limit: 180, byUser: true });
+
+// Address mutations
+export const addressLimiter = make({ name: 'addresses', limit: 60, byUser: true });

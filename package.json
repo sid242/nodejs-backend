@@ -24,6 +24,7 @@
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
     "db:migrate": "tsx --env-file=.env src/db/migrate.ts",
+    "db:studio": "drizzle-kit studio",
     "db:bootstrap": "tsx --env-file=.env src/db/seed/bootstrap.ts",
     "db:seed": "tsx --env-file=.env src/db/seed/demo.ts",
     "db:seed:demo": "tsx --env-file=.env src/db/seed/demo.ts",

@@ -9,6 +9,13 @@ export const PLATFORM_PERMISSIONS = {
   STAFF_UPDATE: 'platform_staff::update',
   STAFF_DISABLE: 'platform_staff::disable',
 
+  // Platform User Groups Management
+  GROUPS_READ: 'platform_groups::read',
+  GROUPS_CREATE: 'platform_groups::create',
+  GROUPS_UPDATE: 'platform_groups::update',
+  GROUPS_DELETE: 'platform_groups::delete',
+  GROUPS_MANAGE_MEMBERS: 'platform_groups::manage_members',
+
   // Platform Roles & Permissions Catalog
   ROLES_READ: 'platform_roles::read',
   ROLES_MANAGE: 'platform_roles::manage',
@@ -83,6 +90,41 @@ export const PLATFORM_PERMISSION_CATALOGUE: PlatformPermissionDefinition[] = [
     description: 'Immediately revoke staff access and suspend active sessions',
     resource: 'platform_staff',
     action: 'disable',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.GROUPS_READ,
+    name: 'View Platform Groups',
+    description: 'Inspect platform staff user groups and member rosters',
+    resource: 'platform_groups',
+    action: 'read',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.GROUPS_CREATE,
+    name: 'Create Platform Group',
+    description: 'Create new platform staff user groups',
+    resource: 'platform_groups',
+    action: 'create',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.GROUPS_UPDATE,
+    name: 'Update Platform Group',
+    description: 'Modify platform user group details and status',
+    resource: 'platform_groups',
+    action: 'update',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.GROUPS_DELETE,
+    name: 'Archive Platform Group',
+    description: 'Archive or soft delete platform user groups',
+    resource: 'platform_groups',
+    action: 'delete',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.GROUPS_MANAGE_MEMBERS,
+    name: 'Manage Platform Group Members',
+    description: 'Add or remove platform staff members from platform user groups',
+    resource: 'platform_groups',
+    action: 'manage_members',
   },
   {
     key: PLATFORM_PERMISSIONS.ROLES_READ,

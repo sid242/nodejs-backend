@@ -1,8 +1,11 @@
 import { OpenApiGeneratorV3 } from '@asteasolutions/zod-to-openapi';
 
 import { bearerAuth, ErrorEnvelope, registry, SuccessEnvelope } from '@/docs/helpers';
+import { registerAddressesDocs } from '@/docs/routes/addresses.docs';
 import { registerAuthDocs } from '@/docs/routes/auth.docs';
 import { registerFilesDocs } from '@/docs/routes/files.docs';
+import { registerGeoDocs } from '@/docs/routes/geo.docs';
+import { registerGroupsDocs } from '@/docs/routes/groups.docs';
 import { registerHealthDocs } from '@/docs/routes/health.docs';
 import { registerRbacDocs } from '@/docs/routes/rbac.docs';
 import { registerTenantsDocs } from '@/docs/routes/tenants.docs';
@@ -16,7 +19,10 @@ registerUsersDocs(registry);
 registerAuthDocs(registry);
 registerFilesDocs(registry);
 registerTenantsDocs(registry);
+registerGroupsDocs(registry);
 registerRbacDocs(registry);
+registerGeoDocs(registry);
+registerAddressesDocs(registry);
 
 // ---------------------------------------------------------------------------
 // OpenAPI Document Builder
@@ -54,6 +60,8 @@ export function generateOpenApiDocument() {
       },
       { name: 'Files', description: 'S3 direct presigned uploads, confirmation & downloads' },
       { name: 'Health', description: 'Operational liveness & readiness health probes' },
+      { name: 'Geo', description: 'Administrative location reference data and geospatial queries' },
+      { name: 'Addresses', description: 'User, tenant, and member physical address management' },
     ],
   });
 }

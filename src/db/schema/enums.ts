@@ -88,3 +88,20 @@ export const emailTemplateStatusEnum = pgEnum('EmailTemplateStatus', [
   'PUBLISHED',
   'ARCHIVED',
 ]);
+
+export const addressOwnerTypeEnum = pgEnum('AddressOwnerType', ['USER', 'TENANT', 'MEMBER']);
+
+export const addressTypeEnum = pgEnum('AddressType', [
+  'HOME',
+  'WORK',
+  'BILLING',
+  'SHIPPING',
+  'REGISTERED',
+  'BRANCH',
+  'OTHER',
+]);
+
+export const userGroupScopeEnum = pgEnum('UserGroupScope', ['PLATFORM', 'TENANT']);
+
+export const userGroupStatusEnum = pgEnum('UserGroupStatus', ['ACTIVE', 'ARCHIVED']);
+
