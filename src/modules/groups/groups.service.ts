@@ -2,15 +2,18 @@ import { db } from '@/config/db';
 import { AppError } from '@/lib/errors';
 import { logSecurityEvent } from '@/modules/audit/audit.service';
 import { logPlatformAction } from '@/modules/platform/platform.repository';
+import { rbacRepo } from '@/modules/rbac/rbac.repository';
+import { invalidateRbacCache } from '@/modules/rbac/rbac.service';
 
 import type {
   AddPlatformGroupMembersInput,
   AddTenantGroupMembersInput,
+  BindRoleInput,
   CreateGroupInput,
   ListGroupsQuery,
   UpdateGroupInput,
 } from './groups.dto';
-import * as groupsRepo from './groups.repository';
+import { groupsRepo } from './groups.repository';
 
 export function slugify(name: string): string {
   return name
@@ -73,6 +76,7 @@ export async function listTenantGroups(tenantId: string, query: ListGroupsQuery)
     tenantId,
     search: query.search,
     status: query.status,
+    roleId: query.roleId,
     page: query.page,
     limit: query.limit,
     sortBy: query.sortBy,
@@ -234,6 +238,9 @@ export async function addTenantGroupMembers(
     },
   });
 
+  // Invalidate RBAC cache for the tenant
+  await invalidateRbacCache(tenantId);
+
   return {
     addedCount: added.length,
     skippedCount: existingGroupMemberIds.length,
@@ -268,6 +275,9 @@ export async function removeTenantGroupMember(
     },
   });
 
+  // Invalidate RBAC cache for the removed user
+  await invalidateRbacCache(tenantId, targetUserId);
+
   return { success: true };
 }
 
@@ -283,6 +293,118 @@ export async function listTenantGroupMembers(
   }
 
   return groupsRepo.listTenantGroupMembers(groupId, tenantId, page, limit);
+}
+
+// ----------------------------------------------------------------------------
+// Tenant Group Role Binding Services
+// ----------------------------------------------------------------------------
+
+export async function bindTenantGroupRole(
+  tenantId: string,
+  groupId: string,
+  actorUserId: string,
+  input: BindRoleInput,
+) {
+  const group = await groupsRepo.findGroupById(groupId, 'TENANT', tenantId);
+  if (!group) {
+    throw AppError.notFound('User group not found');
+  }
+  if (group.status === 'ARCHIVED') {
+    throw AppError.badRequest('Cannot bind roles to an archived group');
+  }
+
+  const role = await rbacRepo.findRoleById(input.roleId);
+  if (!role) {
+    throw AppError.notFound('Role not found');
+  }
+
+  // Scope enforcement: tenant group can only bind tenant roles
+  if (role.scope !== 'TENANT') {
+    throw AppError.badRequest('Cannot bind a platform role to a tenant user group');
+  }
+
+  // Cross-tenant mismatch enforcement
+  if (role.tenantId && role.tenantId !== tenantId) {
+    throw AppError.badRequest('Role does not belong to this organization');
+  }
+
+  await groupsRepo.bindRoleToGroup(groupId, input.roleId);
+
+  await logSecurityEvent({
+    tenantId,
+    userId: actorUserId,
+    action: 'group:role_bound',
+    entityType: 'UserGroup',
+    entityId: groupId,
+    metadata: {
+      roleId: input.roleId,
+      roleName: role.name,
+      reason: input.reason,
+    },
+  });
+
+  // Invalidate RBAC cache for all users in the tenant
+  await invalidateRbacCache(tenantId);
+
+  return { success: true, groupId, roleId: input.roleId, roleName: role.name };
+}
+
+export async function unbindTenantGroupRole(
+  tenantId: string,
+  groupId: string,
+  actorUserId: string,
+  roleId: string,
+) {
+  const group = await groupsRepo.findGroupById(groupId, 'TENANT', tenantId);
+  if (!group) {
+    throw AppError.notFound('User group not found');
+  }
+
+  const role = await rbacRepo.findRoleById(roleId);
+  const unbindSuccess = await groupsRepo.unbindRoleFromGroup(groupId, roleId);
+  if (!unbindSuccess) {
+    throw AppError.notFound('Role is not bound to this user group');
+  }
+
+  await logSecurityEvent({
+    tenantId,
+    userId: actorUserId,
+    action: 'group:role_unbound',
+    entityType: 'UserGroup',
+    entityId: groupId,
+    metadata: {
+      roleId,
+      roleName: role?.name,
+    },
+  });
+
+  // Invalidate RBAC cache for all users in the tenant
+  await invalidateRbacCache(tenantId);
+
+  return { success: true };
+}
+
+export async function listTenantGroupRoles(tenantId: string, groupId: string) {
+  const group = await groupsRepo.findGroupById(groupId, 'TENANT', tenantId);
+  if (!group) {
+    throw AppError.notFound('User group not found');
+  }
+
+  return groupsRepo.listGroupRoles(groupId);
+}
+
+export async function getTenantGroupPermissions(tenantId: string, groupId: string) {
+  const group = await groupsRepo.findGroupById(groupId, 'TENANT', tenantId);
+  if (!group) {
+    throw AppError.notFound('User group not found');
+  }
+
+  const permissions = await groupsRepo.getGroupContributedPermissions(groupId);
+  return {
+    groupId,
+    groupName: group.name,
+    permissions,
+  };
 }
 
 // ============================================================================

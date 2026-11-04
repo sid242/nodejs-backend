@@ -29,6 +29,12 @@ export const getTenantBillingOverview = asyncHandler(async (req: Request, res: R
   return AppResponse.ok(overview).send(res);
 });
 
+export const getTenantEntitlements = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenant!.id;
+  const entitlements = await service.getTenantEntitlements(tenantId);
+  return AppResponse.ok(entitlements).send(res);
+});
+
 export const requestSubscriptionChange = asyncHandler(async (req: Request, res: Response) => {
   const tenantId = req.tenant!.id;
   const userId = req.user!.id;
@@ -53,7 +59,7 @@ export const getTenantInvoiceById = asyncHandler(async (req: Request, res: Respo
 });
 
 // ==========================================
-// 3. Platform Plans & Subscriptions
+// 3. Platform Plans Catalog
 // ==========================================
 
 export const listPlatformPlans = asyncHandler(async (req: Request, res: Response) => {
@@ -69,8 +75,26 @@ export const createPlan = asyncHandler(async (req: Request, res: Response) => {
 
 export const updatePlan = asyncHandler(async (req: Request, res: Response) => {
   const staffId = req.staff!.id;
-  const updated = await service.updatePlan(staffId, req.params.id as string, req.body, req.id ? String(req.id) : undefined);
+  const updated = await service.updatePlan(
+    staffId,
+    req.params.id as string,
+    req.body,
+    req.id ? String(req.id) : undefined,
+  );
   return AppResponse.ok(updated, 'Plan updated successfully').send(res);
+});
+
+// ==========================================
+// 4. Platform Subscriptions Management
+// ==========================================
+
+export const listPlatformSubscriptions = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.listPlatformSubscriptions(req.query as any);
+  return AppResponse.ok(result.subscriptions, undefined, {
+    total: result.total,
+    page: result.page,
+    limit: result.limit,
+  }).send(res);
 });
 
 export const getPlatformTenantSubscription = asyncHandler(async (req: Request, res: Response) => {
@@ -79,20 +103,75 @@ export const getPlatformTenantSubscription = asyncHandler(async (req: Request, r
   return AppResponse.ok(data).send(res);
 });
 
-export const updatePlatformTenantSubscription = asyncHandler(async (req: Request, res: Response) => {
+export const assignSubscription = asyncHandler(async (req: Request, res: Response) => {
+  const staffId = req.staff!.id;
+  const result = await service.assignSubscription(
+    staffId,
+    req.body,
+    req.id ? String(req.id) : undefined,
+  );
+  return AppResponse.ok(result, 'Subscription assigned successfully').send(res);
+});
+
+export const updatePlatformTenantSubscription = asyncHandler(
+  async (req: Request, res: Response) => {
+    const staffId = req.staff!.id;
+    const tenantId = req.params.id as string;
+    const updated = await service.updatePlatformTenantSubscription(
+      staffId,
+      tenantId,
+      req.body,
+      req.id ? String(req.id) : undefined,
+    );
+    return AppResponse.ok(updated, 'Tenant subscription updated successfully').send(res);
+  },
+);
+
+// ==========================================
+// 5. Entitlement Definitions & Overrides
+// ==========================================
+
+export const listEntitlementDefinitions = asyncHandler(async (_req: Request, res: Response) => {
+  const definitions = await service.listEntitlementDefinitions();
+  return AppResponse.ok(definitions).send(res);
+});
+
+export const setTenantOverride = asyncHandler(async (req: Request, res: Response) => {
   const staffId = req.staff!.id;
   const tenantId = req.params.id as string;
-  const updated = await service.updatePlatformTenantSubscription(
+  const override = await service.setTenantOverride(
     staffId,
     tenantId,
     req.body,
     req.id ? String(req.id) : undefined,
   );
-  return AppResponse.ok(updated, 'Tenant subscription updated successfully').send(res);
+  return AppResponse.ok(override, 'Entitlement override configured').send(res);
+});
+
+export const removeTenantOverride = asyncHandler(async (req: Request, res: Response) => {
+  const staffId = req.staff!.id;
+  const tenantId = req.params.id as string;
+  const entitlementKey = req.params.key as string;
+  const result = await service.removeTenantOverride(
+    staffId,
+    tenantId,
+    entitlementKey,
+    req.id ? String(req.id) : undefined,
+  );
+  return AppResponse.ok(result, 'Entitlement override removed').send(res);
 });
 
 // ==========================================
-// 4. Platform Invoices Operations
+// 6. Webhooks
+// ==========================================
+
+export const handleBillingWebhook = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.processBillingWebhook(req.body);
+  return AppResponse.ok(result, 'Webhook processed').send(res);
+});
+
+// ==========================================
+// 7. Platform Invoices Operations
 // ==========================================
 
 export const listPlatformInvoices = asyncHandler(async (req: Request, res: Response) => {
@@ -111,7 +190,11 @@ export const getPlatformInvoiceById = asyncHandler(async (req: Request, res: Res
 
 export const createPlatformInvoice = asyncHandler(async (req: Request, res: Response) => {
   const staffId = req.staff!.id;
-  const created = await service.createPlatformInvoice(staffId, req.body, req.id ? String(req.id) : undefined);
+  const created = await service.createPlatformInvoice(
+    staffId,
+    req.body,
+    req.id ? String(req.id) : undefined,
+  );
   return AppResponse.created(created, 'Invoice generated successfully').send(res);
 });
 

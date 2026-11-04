@@ -26,6 +26,16 @@ export const tenantInvitations = pgTable(
     }),
     tokenHash: text('tokenHash').notNull().unique(),
     status: invitationStatusEnum('status').notNull().default('PENDING'),
+
+    // Invitation metadata & tenant profile preset
+    firstName: text('firstName'),
+    lastName: text('lastName'),
+    phone: text('phone'),
+    memberCode: text('memberCode'),
+    jobTitle: text('jobTitle'),
+    department: text('department'),
+    message: text('message'),
+
     expiresAt: timestamp('expiresAt', { precision: 3, mode: 'date' }).notNull(),
     acceptedAt: timestamp('acceptedAt', { precision: 3, mode: 'date' }),
     acceptedByUserId: uuid('acceptedByUserId').references(() => users.id, {

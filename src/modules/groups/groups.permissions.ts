@@ -37,6 +37,15 @@ export const groupsModuleDefinition: DomainModuleDefinition = {
       action: 'manage',
       description: 'Add or remove workspace members from user groups',
     },
+    {
+      key: 'groups:assign-roles',
+      name: 'Manage Group Role Bindings',
+      action: 'assign',
+      description: 'Bind or unbind workspace roles from user groups',
+      resource: 'groups',
+      scope: 'TENANT',
+      riskLevel: 'HIGH',
+    },
   ],
 };
 

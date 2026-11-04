@@ -8,6 +8,7 @@ import { db } from '@/config/db';
 import { env } from '@/config/env';
 import {
   tenantBrandings,
+  userGroupMembers,
   type PublicTenant,
   type PublicTenantBranding,
   type PublicTenantEmailConfig,
@@ -22,6 +23,7 @@ import { AppError } from '@/lib/errors';
 import { invalidateTenantEmailCache, verifySmtpConnection } from '@/lib/mailer';
 import { createUploadPost } from '@/lib/s3';
 import { safeFilename } from '@/lib/utils';
+import { emitToRoom } from '@/sockets/emitter';
 import * as auditRepo from '@/modules/audit/audit.repository';
 import { logSecurityEvent } from '@/modules/audit/audit.service';
 import * as authRepo from '@/modules/auth/auth.repository';
@@ -40,12 +42,17 @@ import { tenantBrandingRepo } from './tenant-branding.repository';
 import { buildPlatformUrl, buildTenantUrl, getEffectiveUrlMode } from './tenant-url.service';
 import { tenantEmailRepo } from './tenant-email.repository';
 import {
+  addMemberDto,
   isReservedSlug,
+  type AddMemberDto,
+  type BulkInviteItemDto,
   type CreateTenantDto,
+  type ListMembersQueryDto,
   type OverrideTenantCustomDomainDto,
   type RequestBrandingUploadUrlDto,
   type SearchAuditLogsDto,
   type TestTenantEmailConfigDto,
+  type UpdateMemberDto,
   type UpdateTenantBrandingDto,
   type UpdateTenantDto,
   type UpdateTenantUrlSettingsDto,
@@ -146,15 +153,54 @@ export async function updateTenantDetails(
   };
 }
 
-export async function listMembers(tenantId: string) {
+export async function listMembers(tenantId: string, filters?: ListMembersQueryDto) {
+  if (filters && Object.keys(filters).length > 0) {
+    return tenantsRepo.findTenantMembersPaginated(tenantId, filters);
+  }
   return tenantsRepo.findTenantMembers(tenantId);
+}
+
+export async function getMemberDetail(tenantId: string, memberId: string) {
+  const member = await tenantsRepo.findTenantMemberDetail(tenantId, memberId);
+  if (!member) throw AppError.notFound('Tenant member not found');
+  return member;
+}
+
+export async function updateMemberDetails(
+  tenantId: string,
+  memberId: string,
+  data: UpdateMemberDto,
+  operatorUserId?: string,
+) {
+  const member = await tenantsRepo.findTenantMemberById(memberId);
+  if (!member || member.tenantId !== tenantId) {
+    throw AppError.notFound('Member not found in this tenant');
+  }
+
+  const updated = await tenantsRepo.updateTenantMemberMetadata(memberId, {
+    ...(data.phone !== undefined ? { phone: data.phone } : {}),
+    ...(data.memberCode !== undefined ? { memberCode: data.memberCode } : {}),
+    ...(data.jobTitle !== undefined ? { jobTitle: data.jobTitle } : {}),
+    ...(data.department !== undefined ? { department: data.department } : {}),
+  });
+
+  await logSecurityEvent({
+    tenantId,
+    userId: operatorUserId,
+    action: 'MEMBER.UPDATED',
+    entityType: 'TenantMember',
+    entityId: memberId,
+    metadata: { changes: data },
+  });
+
+  return updated;
 }
 
 export async function addMemberToTenant(
   tenantId: string,
   operatorUserId: string,
-  userEmail: string,
-  roleName: string = rbacService.SYSTEM_ROLES.MEMBER,
+  payload: string | AddMemberDto,
+  explicitRoleName?: string,
 ): Promise<{
   member: TenantMember;
   role: string;
@@ -165,18 +211,29 @@ export async function addMemberToTenant(
   // 1. Enforce SaaS Plan Seat Limits
   await billingService.enforceLimit(tenantId, 'maxMembers');
 
-  const normalizedEmail = userEmail.toLowerCase().trim();
+  const dto: AddMemberDto = addMemberDto.parse(
+    typeof payload === 'string'
+      ? { email: payload, role: explicitRoleName || rbacService.SYSTEM_ROLES.MEMBER }
+      : payload,
+  );
+
+  const normalizedEmail = dto.email.toLowerCase().trim();
   let targetUser = await authRepo.findByEmail(normalizedEmail);
   let isNewUser = false;
 
   if (!targetUser) {
     // Automatically provision account in PENDING_VERIFICATION so the invitee can join seamlessly
     const dummyHash = await bcrypt.hash(randomUUID(), 12);
-    const namePart = normalizedEmail.split('@')[0] || 'Member';
-    const name = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+    const firstName = dto.firstName?.trim();
+    const lastName = dto.lastName?.trim();
+    const defaultNamePart = normalizedEmail.split('@')[0] || 'Member';
+    const computedName =
+      [firstName, lastName].filter(Boolean).join(' ') ||
+      (defaultNamePart.charAt(0).toUpperCase() + defaultNamePart.slice(1));
+
     const created = await authRepo.createUser({
       email: normalizedEmail,
-      name,
+      name: computedName,
       passwordHash: dummyHash,
     });
     targetUser = await authRepo.findById(created.id);
@@ -188,32 +245,76 @@ export async function addMemberToTenant(
   }
 
   const existing = await tenantsRepo.findTenantMember(tenantId, targetUser.id);
-  if (existing) {
-    throw AppError.conflict('User is already a member of this tenant');
+  if (existing && existing.status === 'ACTIVE') {
+    throw AppError.conflict('User is already an active member of this tenant');
   }
 
-  const member = await tenantsRepo.addTenantMember({
-    tenantId,
-    userId: targetUser.id,
-    status: 'INVITED',
-  });
+  let member: TenantMember;
+  if (existing) {
+    const updated = await tenantsRepo.updateTenantMemberMetadata(existing.id, {
+      status: 'INVITED',
+      memberCode: dto.memberCode?.trim() ?? existing.memberCode,
+      phone: dto.phone?.trim() ?? existing.phone,
+      jobTitle: dto.jobTitle?.trim() ?? existing.jobTitle,
+      department: dto.department?.trim() ?? existing.department,
+      invitedAt: new Date(),
+      deletedAt: null,
+    });
+    member = updated ?? existing;
+  } else {
+    member = await tenantsRepo.addTenantMember({
+      tenantId,
+      userId: targetUser.id,
+      status: 'INVITED',
+      memberCode: dto.memberCode?.trim() ?? null,
+      phone: dto.phone?.trim() ?? null,
+      jobTitle: dto.jobTitle?.trim() ?? null,
+      department: dto.department?.trim() ?? null,
+      invitedAt: new Date(),
+    });
+  }
 
   // Find target role (either custom tenant role or system role)
-  const availableRoles = await rbacRepo.findRolesByTenant(tenantId);
-  const matchedRole = availableRoles.find((r) => r.name.toLowerCase() === roleName.toLowerCase());
+  const roleId = dto.roleId;
+  let matchedRole;
+
+  if (roleId) {
+    matchedRole = await rbacRepo.findRoleById(roleId);
+  } else {
+    const roleName = dto.role || explicitRoleName || rbacService.SYSTEM_ROLES.MEMBER;
+    const availableRoles = await rbacRepo.findRolesByTenant(tenantId);
+    matchedRole = availableRoles.find((r) => r.name.toLowerCase() === roleName.toLowerCase());
+  }
 
   if (!matchedRole) {
-    throw AppError.badRequest(`Role "${roleName}" is not valid for this tenant`);
+    throw AppError.badRequest('Invalid workspace role specified for member');
   }
 
   await rbacRepo.assignRoleToMember(member.id, matchedRole.id);
+
+  // If user groups were provided, associate them
+  if (dto.groupIds && dto.groupIds.length > 0) {
+    for (const groupId of dto.groupIds) {
+      await db
+        .insert(userGroupMembers)
+        .values({
+          groupId,
+          userId: targetUser.id,
+        })
+        .onConflictDoNothing();
+    }
+  }
+
   await rbacService.invalidateRbacCache(tenantId, targetUser.id);
 
-  // Generate 48-hour invitation magic link token bound to this tenant
-  const inviteToken = await createMagicLinkToken(targetUser.id, 48 * 3600, tenantId);
+  const expirationHours = dto.expiresInHours ?? 48;
+  const inviteToken = await createMagicLinkToken(targetUser.id, expirationHours * 3600, tenantId);
   const tenant = await tenantsRepo.findTenantById(tenantId);
 
-  const inviteUrl = await buildTenantUrl(tenantId, `/accept-invite?token=${inviteToken}&tenant=${tenantId}`);
+  const inviteUrl = await buildTenantUrl(
+    tenantId,
+    `/accept-invite?token=${inviteToken}&tenant=${tenantId}`,
+  );
 
   await emailQueue.add(
     'tenant-invite',
@@ -225,6 +326,7 @@ export async function addMemberToTenant(
       token: inviteToken,
       inviteUrl,
       tenantId,
+      message: dto.message,
     },
     { jobId: `invite-${tenantId}-${targetUser.id}-${Date.now()}` },
   );
@@ -235,7 +337,7 @@ export async function addMemberToTenant(
     action: isNewUser ? 'MEMBER.INVITED' : 'MEMBER.ADDED',
     entityType: 'TenantMember',
     entityId: member.id,
-    metadata: { addedUserEmail: userEmail, role: matchedRole.name, isNewUser },
+    metadata: { addedUserEmail: normalizedEmail, role: matchedRole.name, isNewUser },
   });
 
   const exposeDev = Boolean(env.EXPOSE_DEV_TOKENS) && process.env.NODE_ENV !== 'production';
@@ -356,7 +458,7 @@ export async function removeMemberFromTenant(
     }
   }
 
-  await tenantsRepo.removeTenantMember(tenantId, memberId);
+  await tenantsRepo.softDeleteTenantMember(tenantId, memberId);
   await rbacService.invalidateRbacCache(tenantId, member.userId);
   await revokeAllUserTokens(member.userId);
 
@@ -491,7 +593,7 @@ export async function updateTenantMemberStatus(
 export async function bulkInviteMembers(
   tenantId: string,
   operatorUserId: string,
-  invites: Array<{ email: string; role: string }>,
+  invites: Array<BulkInviteItemDto | { email: string; role?: string }>,
 ): Promise<{
   successful: Array<{ email: string; role: string; inviteUrl?: string }>;
   failed: Array<{ email: string; reason: string }>;
@@ -513,7 +615,7 @@ export async function bulkInviteMembers(
 
   for (const inv of invites) {
     try {
-      const result = await addMemberToTenant(tenantId, operatorUserId, inv.email, inv.role);
+      const result = await addMemberToTenant(tenantId, operatorUserId, inv as AddMemberDto);
       successful.push({
         email: inv.email,
         role: result.role,
@@ -867,6 +969,7 @@ export interface PublicTenantResolution {
     authSubtitle?: string | null;
     authCoverUrl?: string | null;
     authLayout?: string | null;
+    hideWatermark?: boolean;
     customDomain: string | null;
     supportEmail: string | null;
   };
@@ -953,6 +1056,7 @@ export async function resolvePublicTenant(options: {
           authSubtitle: branding?.authSubtitle ?? null,
           authCoverUrl: branding?.authCoverUrl ?? null,
           authLayout: branding?.authLayout ?? 'SPLIT',
+          hideWatermark: branding?.hideWatermark ?? false,
           customDomain: branding?.customDomain ?? null,
           supportEmail: branding?.supportEmail ?? null,
         },
@@ -1120,6 +1224,7 @@ export async function resolvePublicTenant(options: {
             authSubtitle: branding.authSubtitle ?? null,
             authCoverUrl: branding.authCoverUrl ?? null,
             authLayout: branding.authLayout ?? 'SPLIT',
+            hideWatermark: branding.hideWatermark ?? false,
             customDomain: branding.customDomain ?? null,
             supportEmail: branding.supportEmail ?? null,
           },
@@ -1170,6 +1275,7 @@ export async function resolvePublicTenant(options: {
           authSubtitle: branding?.authSubtitle ?? null,
           authCoverUrl: branding?.authCoverUrl ?? null,
           authLayout: branding?.authLayout ?? 'SPLIT',
+          hideWatermark: branding?.hideWatermark ?? false,
           customDomain: branding?.customDomain ?? null,
           supportEmail: branding?.supportEmail ?? null,
         },
@@ -1219,6 +1325,7 @@ export async function getTenantBranding(tenantId: string): Promise<PublicTenantB
     authSubtitle: null,
     authCoverUrl: null,
     authLayout: 'SPLIT',
+    hideWatermark: false,
     customDomain: null,
     customDomainStatus: 'PENDING',
     customDomainVerifiedAt: null,
@@ -1262,6 +1369,41 @@ export async function updateTenantBranding(
         409,
         'This custom domain is already registered to another workspace',
         'DOMAIN_ALREADY_IN_USE',
+      );
+    }
+  }
+
+  if (data?.hideWatermark === true) {
+    const hasWatermarkEntitlement = await billingService
+      .assertQuota(tenantId, 'branding.remove_watermark', 1)
+      .then(() => true)
+      .catch(() => false);
+    if (!hasWatermarkEntitlement) {
+      throw new AppError(
+        403,
+        'Removing platform watermark requires an upgraded Pro or Enterprise subscription.',
+        'PLAN_FEATURE_UNAVAILABLE',
+        { feature: 'branding.remove_watermark', requiredPlan: 'PRO' },
+      );
+    }
+  }
+
+  if (
+    (data?.primaryColor && data.primaryColor !== '#4F46E5') ||
+    data?.primaryDarkColor ||
+    data?.secondaryDarkColor ||
+    data?.accentDarkColor
+  ) {
+    const hasCustomColors = await billingService
+      .assertQuota(tenantId, 'branding.custom_colors', 1)
+      .then(() => true)
+      .catch(() => false);
+    if (!hasCustomColors) {
+      throw new AppError(
+        403,
+        'Custom theme colors and dual-palette overrides require a Pro or Enterprise subscription.',
+        'PLAN_FEATURE_UNAVAILABLE',
+        { feature: 'branding.custom_colors', requiredPlan: 'PRO' },
       );
     }
   }
@@ -1321,6 +1463,10 @@ export async function updateTenantBranding(
       data?.authCoverUrl !== undefined ? (data.authCoverUrl || null) : (existing?.authCoverUrl ?? null),
     authLayout:
       data?.authLayout !== undefined ? (data.authLayout || 'SPLIT') : (existing?.authLayout ?? 'SPLIT'),
+    hideWatermark:
+      data?.hideWatermark !== undefined
+        ? Boolean(data.hideWatermark)
+        : (existing?.hideWatermark ?? false),
     customDomain:
       data?.customDomain !== undefined
         ? data.customDomain
@@ -1349,6 +1495,8 @@ export async function updateTenantBranding(
       companyName: updated.companyName,
     },
   });
+
+  emitToRoom(`tenant:${tenantId}`, 'tenant:branding:updated', updated);
 
   return updated;
 }
@@ -1507,6 +1655,8 @@ export async function verifyTenantCustomDomain(
       bypassVerification,
     },
   });
+
+  emitToRoom(`tenant:${tenantId}`, 'tenant:domain:verified', updated);
 
   return updated;
 }

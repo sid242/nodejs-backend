@@ -66,8 +66,10 @@ declare global {
       impersonator?: ImpersonatorContext;
       isImpersonated?: boolean;
       tenant?: AuthenticatedTenant;
+      tenantId?: string;
       membership?: TenantMembershipContext;
       permissions?: string[];
+      db?: import('@/config/db').Database;
       valid?: ValidatedRequestData;
       log?: import('pino').Logger;
     }

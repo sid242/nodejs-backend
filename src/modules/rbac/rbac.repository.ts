@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, notInArray, or, sql } from 'drizzle-orm';
 
 import { db } from '@/config/db';
 import {
@@ -9,6 +9,9 @@ import {
   tenantMemberRoles,
   tenantMembers,
   tenantModules,
+  userGroupMembers,
+  userGroupRoles,
+  userGroups,
   type AppModule,
   type NewAppModule,
   type NewPermission,
@@ -102,22 +105,43 @@ export async function syncSystemModules(definitions: DomainModuleDefinition[]): 
 
     // 2. Upsert permissions linked to this module
     for (const perm of def.permissions) {
+      const parts = perm.key.split(':');
+      const resource = perm.resource ?? parts[0] ?? 'general';
+      const action = perm.action ?? parts[1] ?? 'manage';
+      const code = perm.code ?? perm.key;
+      const scope = perm.scope ?? 'TENANT';
+      const riskLevel = perm.riskLevel ?? 'LOW';
+      const isSystem = perm.isSystem ?? true;
+      const isAssignable = perm.isAssignable ?? true;
+
       await db
         .insert(permissions)
         .values({
           moduleId: moduleRecord.id,
           key: perm.key,
+          code,
           name: perm.name,
           description: perm.description,
-          action: perm.action,
+          action,
+          resource,
+          scope,
+          riskLevel,
+          isSystem,
+          isAssignable,
         })
         .onConflictDoUpdate({
           target: permissions.key,
           set: {
             moduleId: moduleRecord.id,
+            code,
             name: perm.name,
             description: perm.description,
-            action: perm.action,
+            action,
+            resource,
+            scope,
+            riskLevel,
+            isSystem,
+            isAssignable,
           },
         });
     }
@@ -185,6 +209,21 @@ export async function findRoleById(id: string): Promise<RoleRecord | null> {
   return record ?? null;
 }
 
+export async function findRoleByCode(code: string, tenantId?: string | null): Promise<RoleRecord | null> {
+  const conditions = [eq(roles.code, code)];
+  if (tenantId) {
+    conditions.push(or(eq(roles.tenantId, tenantId), isNull(roles.tenantId))!);
+  } else {
+    conditions.push(isNull(roles.tenantId));
+  }
+  const [record] = await db
+    .select()
+    .from(roles)
+    .where(and(...conditions))
+    .limit(1);
+  return record ?? null;
+}
+
 export async function createRole(data: NewRoleRecord): Promise<RoleRecord> {
   const [record] = await db.insert(roles).values(data).returning();
   return record!;
@@ -192,7 +231,7 @@ export async function createRole(data: NewRoleRecord): Promise<RoleRecord> {
 
 export async function updateRole(
   id: string,
-  data: { name?: string; description?: string },
+  data: { name?: string; description?: string; isActive?: boolean },
 ): Promise<RoleRecord | null> {
   const [record] = await db
     .update(roles)
@@ -251,15 +290,18 @@ export async function getMemberRoles(memberId: string): Promise<RoleRecord[]> {
     .select({
       id: roles.id,
       tenantId: roles.tenantId,
+      code: roles.code,
       name: roles.name,
       description: roles.description,
+      scope: roles.scope,
+      isActive: roles.isActive,
       isSystem: roles.isSystem,
       createdAt: roles.createdAt,
       updatedAt: roles.updatedAt,
     })
     .from(tenantMemberRoles)
     .innerJoin(roles, eq(tenantMemberRoles.roleId, roles.id))
-    .where(eq(tenantMemberRoles.memberId, memberId));
+    .where(and(eq(tenantMemberRoles.memberId, memberId), eq(roles.isActive, true)));
 }
 
 /**
@@ -272,6 +314,190 @@ export async function countMembersAssignedToRole(roleId: string): Promise<number
     .from(tenantMemberRoles)
     .where(eq(tenantMemberRoles.roleId, roleId));
   return result?.count ?? 0;
+}
+
+/**
+ * Counts how many groups currently hold a specific role.
+ */
+export async function countGroupsAssignedToRole(roleId: string): Promise<number> {
+  const [result] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(userGroupRoles)
+    .where(eq(userGroupRoles.roleId, roleId));
+  return result?.count ?? 0;
+}
+
+export interface RoleWithCountsAndPermissions extends RoleRecord {
+  assignedUsersCount: number;
+  assignedGroupsCount: number;
+  permissions: string[];
+}
+
+export interface ListRolesResult {
+  items: RoleWithCountsAndPermissions[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export async function listRolesWithFilters(
+  tenantId: string | null,
+  filters: {
+    search?: string;
+    scope?: string;
+    status?: string;
+    isSystem?: string;
+    module?: string;
+    permission?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: 'name' | 'code' | 'createdAt' | 'updatedAt';
+    sortOrder?: 'asc' | 'desc';
+  },
+): Promise<ListRolesResult> {
+  const page = Math.max(1, filters?.page ?? 1);
+  const limit = Math.max(1, Math.min(100, filters?.limit ?? 20));
+  const offset = (page - 1) * limit;
+
+  const conditions: any[] = [];
+
+  // Tenant scoping: for tenant callers, include their tenant's roles and global system roles
+  if (tenantId) {
+    conditions.push(or(eq(roles.tenantId, tenantId), isNull(roles.tenantId)));
+  } else {
+    // Platform / global callers
+    if (filters?.scope === 'TENANT') {
+      conditions.push(isNotNull(roles.tenantId));
+    } else if (filters?.scope === 'PLATFORM') {
+      conditions.push(isNull(roles.tenantId));
+    }
+  }
+
+  if (filters?.scope && filters.scope !== 'ALL') {
+    conditions.push(eq(roles.scope, filters.scope));
+  }
+
+  if (filters?.status === 'ACTIVE') {
+    conditions.push(eq(roles.isActive, true));
+  } else if (filters?.status === 'ARCHIVED') {
+    conditions.push(eq(roles.isActive, false));
+  }
+
+  if (filters?.isSystem === 'true') {
+    conditions.push(eq(roles.isSystem, true));
+  } else if (filters?.isSystem === 'false') {
+    conditions.push(eq(roles.isSystem, false));
+  }
+
+  if (filters?.search && filters.search.trim()) {
+    const q = `%${filters.search.trim()}%`;
+    conditions.push(
+      or(
+        ilike(roles.name, q),
+        ilike(roles.code, q),
+        ilike(roles.description, q),
+      ),
+    );
+  }
+
+  if (filters?.module && filters.module.trim()) {
+    conditions.push(
+      sql`EXISTS (
+        SELECT 1 FROM "RolePermission" rp
+        INNER JOIN "Permission" p ON rp."permissionId" = p."id"
+        INNER JOIN "AppModule" m ON p."moduleId" = m."id"
+        WHERE rp."roleId" = "AppRole"."id" AND m."key" = ${filters.module.trim()}
+      )`,
+    );
+  }
+
+  if (filters?.permission && filters.permission.trim()) {
+    conditions.push(
+      sql`EXISTS (
+        SELECT 1 FROM "RolePermission" rp
+        INNER JOIN "Permission" p ON rp."permissionId" = p."id"
+        WHERE rp."roleId" = "AppRole"."id" AND (p."key" = ${filters.permission.trim()} OR p."code" = ${filters.permission.trim()})
+      )`,
+    );
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  // Total count query
+  const [countResult] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(roles)
+    .where(whereClause);
+  const total = countResult?.count ?? 0;
+
+  // Sorting
+  const sortCol =
+    filters?.sortBy === 'name'
+      ? roles.name
+      : filters?.sortBy === 'code'
+        ? roles.code
+        : filters?.sortBy === 'updatedAt'
+          ? roles.updatedAt
+          : roles.createdAt;
+  const orderFn = filters?.sortOrder === 'asc' ? asc : desc;
+
+  // Select roles with counts
+  const rolesRows = await db
+    .select({
+      id: roles.id,
+      tenantId: roles.tenantId,
+      code: roles.code,
+      name: roles.name,
+      description: roles.description,
+      scope: roles.scope,
+      isActive: roles.isActive,
+      isSystem: roles.isSystem,
+      createdAt: roles.createdAt,
+      updatedAt: roles.updatedAt,
+      assignedUsersCount: sql<number>`(SELECT count(*)::int FROM "TenantMemberRole" WHERE "TenantMemberRole"."roleId" = "AppRole"."id")`,
+      assignedGroupsCount: sql<number>`(SELECT count(*)::int FROM "UserGroupRole" WHERE "UserGroupRole"."roleId" = "AppRole"."id")`,
+    })
+    .from(roles)
+    .where(whereClause)
+    .orderBy(orderFn(sortCol))
+    .limit(limit)
+    .offset(offset);
+
+  // Fetch permissions for returned roles
+  const roleIds = rolesRows.map((r) => r.id);
+  const permsByRole = new Map<string, string[]>();
+  if (roleIds.length > 0) {
+    const rolePermRows = await db
+      .select({
+        roleId: rolePermissions.roleId,
+        permissionKey: permissions.key,
+      })
+      .from(rolePermissions)
+      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+      .where(inArray(rolePermissions.roleId, roleIds));
+
+    for (const row of rolePermRows) {
+      const list = permsByRole.get(row.roleId) ?? [];
+      list.push(row.permissionKey);
+      permsByRole.set(row.roleId, list);
+    }
+  }
+
+  const items: RoleWithCountsAndPermissions[] = rolesRows.map((r) => ({
+    ...r,
+    assignedUsersCount: Number(r.assignedUsersCount ?? 0),
+    assignedGroupsCount: Number(r.assignedGroupsCount ?? 0),
+    permissions: permsByRole.get(r.id) ?? [],
+  }));
+
+  return {
+    items,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit) || 1,
+  };
 }
 
 /**
@@ -294,13 +520,23 @@ export async function countTenantOwners(tenantId: string): Promise<number> {
   return result?.count ?? 0;
 }
 
+export interface EffectivePermissionsResult {
+  roles: string[];
+  permissions: string[];
+  provenance?: {
+    directRoles: string[];
+    groupRoles: string[];
+  };
+}
+
 /**
- * Resolves all distinct permissions for a user within a specific tenant across all their assigned roles.
+ * Resolves all distinct permissions for a user within a specific tenant across all their assigned active roles
+ * (both directly assigned roles and inherited through active user groups).
  */
 export async function getEffectivePermissions(
   tenantId: string,
   userId: string,
-): Promise<{ roles: string[]; permissions: string[] }> {
+): Promise<EffectivePermissionsResult> {
   const [member] = await db
     .select()
     .from(tenantMembers)
@@ -314,16 +550,58 @@ export async function getEffectivePermissions(
     .limit(1);
 
   if (!member) {
-    return { roles: [], permissions: [] };
+    return { roles: [], permissions: [], provenance: { directRoles: [], groupRoles: [] } };
   }
 
-  const assignedRoles = await getMemberRoles(member.id);
-  if (assignedRoles.length === 0) {
-    return { roles: [], permissions: [] };
+  // 1. Direct active member roles
+  const directRoles = await getMemberRoles(member.id);
+
+  // 2. Active roles inherited through active tenant user groups
+  const groupRoles = await db
+    .select({
+      id: roles.id,
+      tenantId: roles.tenantId,
+      code: roles.code,
+      name: roles.name,
+      description: roles.description,
+      scope: roles.scope,
+      isActive: roles.isActive,
+      isSystem: roles.isSystem,
+      createdAt: roles.createdAt,
+      updatedAt: roles.updatedAt,
+    })
+    .from(userGroupMembers)
+    .innerJoin(userGroups, eq(userGroupMembers.groupId, userGroups.id))
+    .innerJoin(userGroupRoles, eq(userGroupMembers.groupId, userGroupRoles.groupId))
+    .innerJoin(roles, eq(userGroupRoles.roleId, roles.id))
+    .where(
+      and(
+        eq(userGroupMembers.userId, userId),
+        eq(userGroupMembers.tenantId, tenantId),
+        eq(userGroups.status, 'ACTIVE'),
+        eq(roles.isActive, true),
+      ),
+    );
+
+  const directRoleNames = directRoles.map((r) => r.name);
+  const groupRoleNames = groupRoles.map((r) => r.name);
+
+  // Combine unique active roles
+  const combinedMap = new Map<string, RoleRecord>();
+  for (const r of directRoles) combinedMap.set(r.id, r);
+  for (const r of groupRoles) combinedMap.set(r.id, r);
+
+  const allAssignedRoles = Array.from(combinedMap.values());
+  if (allAssignedRoles.length === 0) {
+    return {
+      roles: [],
+      permissions: [],
+      provenance: { directRoles: directRoleNames, groupRoles: groupRoleNames },
+    };
   }
 
-  const roleIds = assignedRoles.map((r) => r.id);
-  const roleNames = assignedRoles.map((r) => r.name);
+  const roleIds = allAssignedRoles.map((r) => r.id);
+  const roleNames = Array.from(new Set(allAssignedRoles.map((r) => r.name)));
 
   // Filter out permissions belonging to modules that have been explicitly disabled for this tenant
   const disabledModules = await db
@@ -349,6 +627,10 @@ export async function getEffectivePermissions(
   return {
     roles: roleNames,
     permissions: perms.map((p) => p.key),
+    provenance: {
+      directRoles: directRoleNames,
+      groupRoles: groupRoleNames,
+    },
   };
 }
 
@@ -420,7 +702,9 @@ export const rbacRepo = {
   deletePermission,
   findAllPermissions,
   findRoleById,
+  findRoleByCode,
   findRolesByTenant,
+  listRolesWithFilters,
   createRole,
   updateRole,
   deleteRole,
@@ -430,6 +714,7 @@ export const rbacRepo = {
   removeRoleFromMember,
   getMemberRoles,
   countMembersAssignedToRole,
+  countGroupsAssignedToRole,
   countTenantOwners,
   getEffectivePermissions,
   setTenantModuleEnabled,

@@ -11,6 +11,8 @@ import * as billingDto from '@/modules/billing/billing.dto';
 import * as invitationsController from '@/modules/invitations/invitations.controller';
 import * as invitationsDto from '@/modules/invitations/invitations.dto';
 import { invitationsRouter } from '@/modules/invitations/invitations.routes';
+import { tenantAccessRouter, tenantAuditRouter } from '@/modules/audit/audit.routes';
+import { tenantScimManagementRouter, tenantSsoRouter } from '@/modules/sso/sso.routes';
 
 import * as controller from './tenants.controller';
 import * as dto from './tenants.dto';
@@ -100,7 +102,16 @@ router.get(
   requireAuth,
   requireTenant,
   requirePermission('members:read'),
+  validate({ query: dto.listMembersQueryDto }),
   controller.listMembers,
+);
+
+router.get(
+  '/:tenantId/members/:memberId',
+  requireAuth,
+  requireTenant,
+  requirePermission('members:read'),
+  controller.getMember,
 );
 
 router.post(
@@ -110,6 +121,15 @@ router.post(
   requirePermission('members:invite'),
   validate({ body: dto.addMemberDto }),
   controller.addMember,
+);
+
+router.patch(
+  '/:tenantId/members/:memberId',
+  requireAuth,
+  requireTenant,
+  requirePermission('members:update'),
+  validate({ body: dto.updateMemberDto }),
+  controller.updateMember,
 );
 
 router.delete(
@@ -173,6 +193,12 @@ router.post(
   validate({ body: dto.searchAuditLogsDto }),
   controller.searchTenantAuditTrail,
 );
+
+// Modular Enterprise Audit Trail & Retention Subrouter
+router.use('/:tenantId/audit', requireAuth, requireTenant, tenantAuditRouter);
+
+// Effective Access & Zero-Mutation Permissions Simulator Subrouter
+router.use('/:tenantId/access', requireAuth, requireTenant, tenantAccessRouter);
 
 // Tenant Custom SMTP Settings
 router.get(
@@ -273,5 +299,9 @@ router.delete(
   requirePermission('tenants:update'),
   controller.deleteTenantCustomDomain,
 );
+
+// Enterprise SSO & SCIM Directory Sync Management
+router.use('/:tenantId/sso', tenantSsoRouter);
+router.use('/:tenantId/scim', tenantScimManagementRouter);
 
 export default router;

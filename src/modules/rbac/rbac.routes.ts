@@ -53,7 +53,16 @@ router.get(
   requireAuth,
   requireTenant,
   requirePermission('roles:read'),
+  validate({ query: dto.listRolesFilterDto }),
   controller.listTenantRoles,
+);
+
+router.get(
+  '/tenants/:tenantId/roles/:roleId',
+  requireAuth,
+  requireTenant,
+  requirePermission('roles:read'),
+  controller.getTenantRole,
 );
 
 router.post(

@@ -55,5 +55,17 @@ export const rbacModuleDefinition: DomainModuleDefinition = {
       action: 'manage',
       description: 'Create, update, or remove granular permissions',
     },
+    {
+      key: 'access:read',
+      name: 'View Effective Access',
+      action: 'read',
+      description: 'Inspect user effective access, role inheritance, and permission provenance',
+    },
+    {
+      key: 'access:simulate',
+      name: 'Simulate Access Rules',
+      action: 'simulate',
+      description: 'Run zero-mutation access simulations for users and permissions',
+    },
   ],
 };

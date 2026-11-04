@@ -25,7 +25,9 @@ export const createPlanDto = z.object({
   priceYearlyMinor: z.coerce.number().int().min(0).default(0),
   currency: z.string().trim().length(3).default('INR'),
   trialDays: z.coerce.number().int().min(0).default(14),
+  billingInterval: z.enum(['MONTHLY', 'ANNUAL', 'LIFETIME']).default('MONTHLY'),
   limits: planLimitsDto,
+  entitlements: z.record(z.any()).optional(),
   moduleKeys: z.array(z.string()).optional(),
   isPublic: z.boolean().default(true),
   isActive: z.boolean().default(true),
@@ -39,10 +41,21 @@ export const planIdParamDto = z.object({
 });
 
 export const listPlansQueryDto = z.object({
+  search: z.string().trim().optional(),
+  status: z.enum(['active', 'inactive', 'all']).optional(),
+  billingInterval: z.enum(['MONTHLY', 'ANNUAL', 'LIFETIME', 'ALL']).optional(),
+  currency: z.string().trim().optional(),
+  minPriceMinor: z.coerce.number().int().min(0).optional(),
+  maxPriceMinor: z.coerce.number().int().min(0).optional(),
+  entitlement: z.string().trim().optional(),
+  createdAfter: z.coerce.date().optional(),
+  createdBefore: z.coerce.date().optional(),
   includeInactive: z
     .enum(['true', 'false'])
     .optional()
     .transform((val) => val === 'true'),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
 export const tenantSubscriptionParamDto = z.object({
@@ -51,16 +64,62 @@ export const tenantSubscriptionParamDto = z.object({
 
 export const updateSubscriptionDto = z.object({
   planKey: z.string().trim().min(1).max(50).toUpperCase().optional(),
-  status: z.enum(['TRIALING', 'ACTIVE', 'PAST_DUE', 'CANCELED', 'EXPIRED']).optional(),
+  status: z.enum(['TRIALING', 'ACTIVE', 'PAST_DUE', 'PAUSED', 'CANCELED', 'EXPIRED']).optional(),
   currentPeriodStart: z.coerce.date().optional(),
   currentPeriodEnd: z.coerce.date().optional(),
   trialEndsAt: z.coerce.date().optional(),
   cancelAtPeriodEnd: z.boolean().optional(),
+  billingEmail: z.string().email().optional(),
+  billingInterval: z.enum(['MONTHLY', 'ANNUAL', 'LIFETIME']).optional(),
+  seatCount: z.coerce.number().int().min(1).optional(),
+  internalNotes: z.string().trim().max(1000).optional(),
+});
+
+export const assignSubscriptionDto = z.object({
+  tenantId: z.string().uuid(),
+  planKey: z.string().trim().min(1).max(50).toUpperCase(),
+  startDate: z.coerce.date().optional(),
+  isTrial: z.boolean().default(false),
+  trialEndsAt: z.coerce.date().optional(),
+  billingInterval: z.enum(['MONTHLY', 'ANNUAL', 'LIFETIME']).default('MONTHLY'),
+  billingEmail: z.string().email().optional(),
+  seatCount: z.coerce.number().int().min(1).default(1),
+  prorate: z.boolean().default(false),
+  internalNotes: z.string().trim().max(1000).optional(),
+});
+
+export const listPlatformSubscriptionsQueryDto = z.object({
+  tenantId: z.string().uuid().optional(),
+  planKey: z.string().trim().optional(),
+  status: z.enum(['TRIALING', 'ACTIVE', 'PAST_DUE', 'PAUSED', 'CANCELED', 'EXPIRED', 'ALL']).optional(),
+  billingInterval: z.enum(['MONTHLY', 'ANNUAL', 'LIFETIME', 'ALL']).optional(),
+  periodEndBefore: z.coerce.date().optional(),
+  periodEndAfter: z.coerce.date().optional(),
+  trialEndBefore: z.coerce.date().optional(),
+  trialEndAfter: z.coerce.date().optional(),
+  provider: z.string().trim().optional(),
+  search: z.string().trim().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
 export const subscriptionChangeRequestDto = z.object({
   targetPlanKey: z.string().trim().min(1).max(50).toUpperCase(),
   reason: z.string().trim().max(500).optional(),
+});
+
+export const setTenantEntitlementOverrideDto = z.object({
+  entitlementKey: z.string().trim().min(1).max(100),
+  value: z.any(),
+  expiresAt: z.coerce.date().optional().nullable(),
+  reason: z.string().trim().max(500).optional(),
+});
+
+export const billingWebhookDto = z.object({
+  provider: z.string().trim().min(1).default('manual'),
+  eventId: z.string().trim().min(1),
+  eventType: z.string().trim().min(1),
+  payload: z.record(z.any()),
 });
 
 export const invoiceLineItemDto = z.object({
@@ -110,7 +169,11 @@ export type CreatePlanDto = z.infer<typeof createPlanDto>;
 export type UpdatePlanDto = z.infer<typeof updatePlanDto>;
 export type ListPlansQueryDto = z.infer<typeof listPlansQueryDto>;
 export type UpdateSubscriptionDto = z.infer<typeof updateSubscriptionDto>;
+export type AssignSubscriptionDto = z.infer<typeof assignSubscriptionDto>;
+export type ListPlatformSubscriptionsQueryDto = z.infer<typeof listPlatformSubscriptionsQueryDto>;
 export type SubscriptionChangeRequestDto = z.infer<typeof subscriptionChangeRequestDto>;
+export type SetTenantEntitlementOverrideDto = z.infer<typeof setTenantEntitlementOverrideDto>;
+export type BillingWebhookDto = z.infer<typeof billingWebhookDto>;
 export type ListInvoicesQueryDto = z.infer<typeof listInvoicesQueryDto>;
 export type ListPlatformInvoicesQueryDto = z.infer<typeof listPlatformInvoicesQueryDto>;
 export type CreateInvoiceDto = z.infer<typeof createInvoiceDto>;

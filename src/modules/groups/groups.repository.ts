@@ -1,14 +1,19 @@
-import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
 import { db, type DbExecutor } from '@/config/db';
 import {
+  permissions,
   platformStaff,
+  rolePermissions,
+  roles,
   tenantMembers,
   userGroupMembers,
+  userGroupRoles,
   userGroups,
   users,
   type NewUserGroup,
   type NewUserGroupMember,
+  type RoleRecord,
   type UserGroup,
   type UserGroupMember,
 } from '@/db/schema';
@@ -18,9 +23,10 @@ export interface GroupListFilters {
   tenantId?: string;
   search?: string;
   status?: 'ACTIVE' | 'ARCHIVED' | 'ALL';
+  roleId?: string;
   page: number;
   limit: number;
-  sortBy?: 'createdAt' | 'name';
+  sortBy?: 'createdAt' | 'name' | 'updatedAt' | 'slug';
   sortOrder?: 'asc' | 'desc';
 }
 
@@ -118,6 +124,15 @@ export async function listGroups(
     conditions.push(eq(userGroups.status, status));
   }
 
+  if (filters.roleId) {
+    conditions.push(
+      sql`EXISTS (
+        SELECT 1 FROM "UserGroupRole" ugr
+        WHERE ugr."groupId" = "UserGroup"."id" AND ugr."roleId" = ${filters.roleId}
+      )`,
+    );
+  }
+
   if (search && search.trim().length > 0) {
     const term = `%${search.trim()}%`;
     conditions.push(
@@ -142,7 +157,14 @@ export async function listGroups(
   }
 
   const offset = (page - 1) * limit;
-  const orderColumn = sortBy === 'name' ? userGroups.name : userGroups.createdAt;
+  const orderColumn =
+    sortBy === 'name'
+      ? userGroups.name
+      : sortBy === 'slug'
+        ? userGroups.slug
+        : sortBy === 'updatedAt'
+          ? userGroups.updatedAt
+          : userGroups.createdAt;
   const direction = sortOrder === 'asc' ? asc(orderColumn) : desc(orderColumn);
 
   // Group list with member count subquery
@@ -450,3 +472,119 @@ export async function validateActivePlatformStaff(
 
   return rows.map((r) => r.id);
 }
+
+export async function bindRoleToGroup(
+  groupId: string,
+  roleId: string,
+  executor: DbExecutor = db,
+): Promise<void> {
+  await executor
+    .insert(userGroupRoles)
+    .values({ groupId, roleId })
+    .onConflictDoNothing();
+}
+
+export async function unbindRoleFromGroup(
+  groupId: string,
+  roleId: string,
+  executor: DbExecutor = db,
+): Promise<boolean> {
+  const deleted = await executor
+    .delete(userGroupRoles)
+    .where(and(eq(userGroupRoles.groupId, groupId), eq(userGroupRoles.roleId, roleId)))
+    .returning();
+  return deleted.length > 0;
+}
+
+export async function listGroupRoles(
+  groupId: string,
+  executor: DbExecutor = db,
+): Promise<Array<RoleRecord & { permissions: string[] }>> {
+  const groupRoles = await executor
+    .select({
+      id: roles.id,
+      tenantId: roles.tenantId,
+      code: roles.code,
+      name: roles.name,
+      description: roles.description,
+      scope: roles.scope,
+      isActive: roles.isActive,
+      isSystem: roles.isSystem,
+      createdAt: roles.createdAt,
+      updatedAt: roles.updatedAt,
+    })
+    .from(userGroupRoles)
+    .innerJoin(roles, eq(userGroupRoles.roleId, roles.id))
+    .where(eq(userGroupRoles.groupId, groupId));
+
+  const roleIds = groupRoles.map((r) => r.id);
+  const permsByRole = new Map<string, string[]>();
+  if (roleIds.length > 0) {
+    const permRows = await executor
+      .select({
+        roleId: rolePermissions.roleId,
+        permissionKey: permissions.key,
+      })
+      .from(rolePermissions)
+      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+      .where(inArray(rolePermissions.roleId, roleIds));
+
+    for (const row of permRows) {
+      const list = permsByRole.get(row.roleId) ?? [];
+      list.push(row.permissionKey);
+      permsByRole.set(row.roleId, list);
+    }
+  }
+
+  return groupRoles.map((r) => ({
+    ...r,
+    permissions: permsByRole.get(r.id) ?? [],
+  }));
+}
+
+export async function getGroupContributedPermissions(
+  groupId: string,
+  executor: DbExecutor = db,
+): Promise<string[]> {
+  const perms = await executor
+    .selectDistinct({ key: permissions.key })
+    .from(userGroupRoles)
+    .innerJoin(roles, eq(userGroupRoles.roleId, roles.id))
+    .innerJoin(rolePermissions, eq(roles.id, rolePermissions.roleId))
+    .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+    .where(and(eq(userGroupRoles.groupId, groupId), eq(roles.isActive, true)));
+
+  return perms.map((p) => p.key);
+}
+
+export async function findGroupMemberUserIds(
+  groupId: string,
+  executor: DbExecutor = db,
+): Promise<string[]> {
+  const rows = await executor
+    .select({ userId: userGroupMembers.userId })
+    .from(userGroupMembers)
+    .where(and(eq(userGroupMembers.groupId, groupId), isNotNull(userGroupMembers.userId)));
+  return rows.map((r) => r.userId!).filter(Boolean);
+}
+
+export const groupsRepo = {
+  createGroup,
+  findGroupById,
+  findGroupBySlug,
+  listGroups,
+  updateGroup,
+  archiveGroup,
+  addGroupMembers,
+  removeGroupMember,
+  findExistingMemberIds,
+  listTenantGroupMembers,
+  listPlatformGroupMembers,
+  validateActiveTenantMembers,
+  validateActivePlatformStaff,
+  bindRoleToGroup,
+  unbindRoleFromGroup,
+  listGroupRoles,
+  getGroupContributedPermissions,
+  findGroupMemberUserIds,
+};

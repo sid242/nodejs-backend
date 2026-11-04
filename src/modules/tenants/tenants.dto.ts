@@ -70,12 +70,44 @@ export const updateTenantDto = z
 
 export type UpdateTenantDto = z.infer<typeof updateTenantDto>;
 
+export const listMembersQueryDto = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().trim().optional(),
+  q: z.string().trim().optional(),
+  status: z.enum(['ACTIVE', 'INVITED', 'SUSPENDED', 'REMOVED', 'ALL']).optional(),
+  role: z.string().trim().optional(),
+  department: z.string().trim().optional(),
+  sortBy: z
+    .enum(['name', 'email', 'joinedAt', 'invitedAt', 'lastLoginAt', 'status', 'department'])
+    .default('joinedAt'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+});
+export type ListMembersQueryDto = z.infer<typeof listMembersQueryDto>;
+
 export const addMemberDto = z.object({
   email: z.string().trim().email(),
   role: z.string().trim().min(2).max(50).default('MEMBER'),
+  roleId: z.string().uuid().optional(),
+  firstName: z.string().trim().max(50).optional(),
+  lastName: z.string().trim().max(50).optional(),
+  phone: z.string().trim().max(30).optional(),
+  memberCode: z.string().trim().max(50).optional(),
+  jobTitle: z.string().trim().max(100).optional(),
+  department: z.string().trim().max(100).optional(),
+  groupIds: z.array(z.string().uuid()).optional(),
+  expiresInHours: z.coerce.number().int().min(1).max(168).default(48),
+  message: z.string().trim().max(1000).optional(),
 });
-
 export type AddMemberDto = z.infer<typeof addMemberDto>;
+
+export const updateMemberDto = z.object({
+  phone: z.string().trim().max(30).optional().nullable(),
+  memberCode: z.string().trim().max(50).optional().nullable(),
+  jobTitle: z.string().trim().max(100).optional().nullable(),
+  department: z.string().trim().max(100).optional().nullable(),
+});
+export type UpdateMemberDto = z.infer<typeof updateMemberDto>;
 
 export const updateMemberRoleDto = z.object({
   role: z.string().trim().min(2).max(50),
@@ -89,14 +121,23 @@ export const updateMemberStatusDto = z.object({
 
 export type UpdateMemberStatusDto = z.infer<typeof updateMemberStatusDto>;
 
+export const bulkInviteItemDto = z.object({
+  email: z.string().trim().email(),
+  role: z.string().trim().min(2).max(50).default('MEMBER'),
+  roleId: z.string().uuid().optional(),
+  firstName: z.string().trim().max(50).optional(),
+  lastName: z.string().trim().max(50).optional(),
+  phone: z.string().trim().max(30).optional(),
+  memberCode: z.string().trim().max(50).optional(),
+  jobTitle: z.string().trim().max(100).optional(),
+  department: z.string().trim().max(100).optional(),
+  message: z.string().trim().max(1000).optional(),
+});
+export type BulkInviteItemDto = z.infer<typeof bulkInviteItemDto>;
+
 export const bulkInviteMembersDto = z.object({
   invites: z
-    .array(
-      z.object({
-        email: z.string().trim().email(),
-        role: z.string().trim().min(2).max(50).default('MEMBER'),
-      }),
-    )
+    .array(bulkInviteItemDto)
     .min(1, 'At least one invite is required')
     .max(50, 'Cannot invite more than 50 members in a single request'),
 });
@@ -184,6 +225,7 @@ export const updateTenantBrandingDto = z.object({
   authSubtitle: z.string().trim().max(300).optional().nullable().or(z.literal('')),
   authCoverUrl: z.string().trim().url().optional().or(z.literal('')).nullable(),
   authLayout: z.enum(['SPLIT', 'CARD']).optional().nullable(),
+  hideWatermark: z.boolean().optional().nullable(),
   customDomain: z
     .string()
     .trim()

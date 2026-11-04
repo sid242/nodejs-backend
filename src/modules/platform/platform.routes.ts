@@ -31,6 +31,11 @@ router.post(
   controller.verifyTwoFactor,
 );
 router.post('/auth/logout', controller.logout);
+router.post(
+  '/staff/invite/accept',
+  validate({ body: dto.acceptStaffInviteDto }),
+  controller.acceptStaffInvite,
+);
 
 // All subsequent platform endpoints require internal platform staff authentication
 router.use(requirePlatformAuth);
@@ -66,6 +71,25 @@ router.post(
   requirePlatformPermission(PLATFORM_PERMISSIONS.STAFF_CREATE),
   validate({ body: dto.createStaffDto }),
   controller.createStaff,
+);
+
+router.post(
+  '/staff/invite',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.STAFF_CREATE),
+  validate({ body: dto.inviteStaffDto }),
+  controller.inviteStaff,
+);
+
+router.post(
+  '/staff/:id/resend-invite',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.STAFF_CREATE),
+  controller.resendStaffInvite,
+);
+
+router.post(
+  '/staff/:id/revoke-invite',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.STAFF_DISABLE),
+  controller.revokeStaffInvite,
 );
 
 router.patch(
@@ -218,6 +242,20 @@ router.post(
   requirePlatformPermission(PLATFORM_PERMISSIONS.TENANTS_SUSPEND),
   validate({ body: dto.activateTenantDto }),
   controller.activateTenant,
+);
+
+router.post(
+  '/tenants/:id/retry-provisioning',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.TENANTS_MANAGE),
+  validate({ body: dto.retryProvisioningDto }),
+  controller.retryTenantProvisioning,
+);
+
+router.post(
+  '/tenants/:id/close',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.TENANTS_DELETE),
+  validate({ body: dto.closeTenantDto }),
+  controller.closeTenant,
 );
 
 router.get(

@@ -71,5 +71,34 @@ router.delete(
   controller.removeGroupMember,
 );
 
+// Group Role Bindings & Permissions Contribution
+router.get(
+  '/:groupId/roles',
+  requirePermission('groups:read'),
+  validate({ params: dto.groupIdParamDto }),
+  controller.listGroupRoles,
+);
+
+router.post(
+  '/:groupId/roles',
+  requirePermission('groups:assign-roles'),
+  validate({ params: dto.groupIdParamDto, body: dto.bindRoleDto }),
+  controller.bindGroupRole,
+);
+
+router.delete(
+  '/:groupId/roles/:roleId',
+  requirePermission('groups:assign-roles'),
+  validate({ params: dto.groupRoleParamsDto }),
+  controller.unbindGroupRole,
+);
+
+router.get(
+  '/:groupId/permissions',
+  requirePermission('groups:read'),
+  validate({ params: dto.groupIdParamDto }),
+  controller.getGroupPermissions,
+);
+
 export default router;
 

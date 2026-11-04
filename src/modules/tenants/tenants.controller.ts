@@ -12,16 +12,28 @@ export const createTenant = asyncHandler(async (req: Request, res: Response) => 
   AppResponse.created(result, 'Tenant organization created successfully').send(res);
 });
 
+import { rbacRepo } from '@/modules/rbac/rbac.repository';
+
 export const getMyTenants = asyncHandler(async (req: Request, res: Response) => {
   const list = await tenantsService.getUserTenants(req.user!.id);
   AppResponse.ok(list).send(res);
 });
 
 export const getTenantContext = asyncHandler(async (req: Request, res: Response) => {
+  const effective =
+    req.user?.id && req.tenant?.id
+      ? await rbacRepo.getEffectivePermissions(req.tenant.id, req.user.id)
+      : {
+          roles: req.membership?.roles ?? [],
+          permissions: req.permissions ?? [],
+          provenance: { directRoles: [], groupRoles: [] },
+        };
+
   AppResponse.ok({
     tenant: req.tenant,
     membership: req.membership,
-    permissions: req.permissions,
+    permissions: effective.permissions ?? req.permissions,
+    provenance: effective.provenance,
   }).send(res);
 });
 
@@ -71,14 +83,29 @@ export const updateTenant = asyncHandler(async (req: Request, res: Response) => 
 });
 
 export const listMembers = asyncHandler(async (req: Request, res: Response) => {
-  const members = await tenantsService.listMembers(req.tenant!.id);
+  const members = await tenantsService.listMembers(req.tenant!.id, req.valid?.query);
   AppResponse.ok(members).send(res);
 });
 
+export const getMember = asyncHandler(async (req: Request, res: Response) => {
+  const member = await tenantsService.getMemberDetail(req.tenant!.id, String(req.params.memberId));
+  AppResponse.ok(member).send(res);
+});
+
 export const addMember = asyncHandler(async (req: Request, res: Response) => {
-  const { email, role } = req.valid!.body;
-  const result = await tenantsService.addMemberToTenant(req.tenant!.id, req.user!.id, email, role);
+  const result = await tenantsService.addMemberToTenant(req.tenant!.id, req.user!.id, req.valid!.body);
   AppResponse.created(result, 'Member added successfully').send(res);
+});
+
+export const updateMember = asyncHandler(async (req: Request, res: Response) => {
+  const memberId = String(req.params.memberId);
+  const updated = await tenantsService.updateMemberDetails(
+    req.tenant!.id,
+    memberId,
+    req.valid!.body,
+    req.user!.id,
+  );
+  AppResponse.ok(updated, 'Member details updated successfully').send(res);
 });
 
 export const removeMember = asyncHandler(async (req: Request, res: Response) => {

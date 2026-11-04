@@ -10,8 +10,10 @@ import * as dto from './rbac.dto';
 import {
   rbacRepo,
   type AppModule,
+  type ListRolesResult,
   type ModuleWithPermissions,
   type Permission,
+  type RoleWithCountsAndPermissions,
 } from './rbac.repository';
 
 export const SYSTEM_PERMISSIONS = SYSTEM_MODULE_DEFINITIONS.flatMap((m) =>
@@ -47,16 +49,19 @@ export async function seedDefaultRbac(): Promise<void> {
   const systemRolesToEnsure = [
     {
       name: SYSTEM_ROLES.OWNER,
+      code: 'OWNER',
       description: 'Full control over the tenant, its members, and resources',
       permissions: allPerms.map((p) => p.key),
     },
     {
       name: SYSTEM_ROLES.ADMIN,
+      code: 'ADMIN',
       description: 'Administrative access except destructive tenant operations',
       permissions: allPerms.map((p) => p.key).filter((k) => k !== 'tenants:delete'),
     },
     {
       name: SYSTEM_ROLES.MEMBER,
+      code: 'MEMBER',
       description: 'Standard member with read/write access to files and view access to tenant',
       permissions: [
         'tenants:read',
@@ -69,6 +74,7 @@ export async function seedDefaultRbac(): Promise<void> {
     },
     {
       name: SYSTEM_ROLES.VIEWER,
+      code: 'VIEWER',
       description: 'Read-only access to tenant files and info',
       permissions: ['tenants:read', 'members:read', 'files:read', 'addresses:read'],
     },
@@ -85,11 +91,21 @@ export async function seedDefaultRbac(): Promise<void> {
     if (!roleId) {
       const created = await rbacRepo.createRole({
         name: roleDef.name,
+        code: roleDef.code,
         description: roleDef.description,
+        scope: 'TENANT',
+        isActive: true,
         isSystem: true,
         tenantId: null,
       });
       roleId = created.id;
+    } else if (existing && !existing.code) {
+      await rbacRepo.updateRole(existing.id, {
+        name: roleDef.name,
+        description: roleDef.description,
+        isActive: true,
+      });
+      await db.update(roles).set({ code: roleDef.code }).where(eq(roles.id, existing.id));
     }
 
     // Attach permissions
@@ -126,61 +142,163 @@ export async function invalidateRbacCache(tenantId: string, userId?: string): Pr
 
 export async function createCustomTenantRole(
   tenantId: string,
-  name: string,
-  description: string | undefined,
-  permissionKeys: string[],
-): Promise<{ id: string; name: string; permissions: string[] }> {
+  inputOrName: dto.CreateRoleDto | string,
+  descOrCaller?: string | string[],
+  permissionsList?: string[],
+  callerId?: string,
+): Promise<{ id: string; name: string; code: string; scope: string; isActive: boolean; permissions: string[] }> {
+  let name: string;
+  let code: string | undefined;
+  let description: string | undefined;
+  let scope: 'TENANT' | 'PLATFORM' = 'TENANT';
+  let isActive = true;
+  let permissionKeys: string[] = [];
+  let callerUserId: string | undefined;
+
+  if (typeof inputOrName === 'string') {
+    name = inputOrName;
+    description = typeof descOrCaller === 'string' ? descOrCaller : undefined;
+    permissionKeys = Array.isArray(descOrCaller) ? descOrCaller : (permissionsList ?? []);
+    callerUserId = callerId;
+  } else {
+    name = inputOrName.name;
+    code = inputOrName.code;
+    description = inputOrName.description;
+    scope = inputOrName.scope ?? 'TENANT';
+    isActive = inputOrName.isActive ?? true;
+    permissionKeys = inputOrName.permissions ?? [];
+    callerUserId = typeof descOrCaller === 'string' ? descOrCaller : callerId;
+  }
+
+  // 1. Validate permissions existence
   const allPerms = await rbacRepo.findAllPermissions();
-  const permsMap = new Map(allPerms.map((p) => [p.key, p.id]));
+  const permsMap = new Map(allPerms.map((p) => [p.key, p]));
 
   const unknownKeys = permissionKeys.filter((k) => !permsMap.has(k));
   if (unknownKeys.length > 0) {
     throw AppError.badRequest(`Unknown permission key(s): ${unknownKeys.join(', ')}`);
   }
 
+  // 2. Scope enforcement: tenant roles cannot contain platform-scoped permissions
+  const mismatched = permissionKeys
+    .map((k) => permsMap.get(k)!)
+    .filter((p) => p.scope !== scope);
+  if (mismatched.length > 0) {
+    throw AppError.badRequest(
+      `Permission scope mismatch: cannot assign ${mismatched[0]?.scope} permission (${mismatched[0]?.key}) to a ${scope} role`,
+    );
+  }
+
+  // 3. Actor grantability check (caller cannot grant permissions caller does not possess)
+  if (callerUserId) {
+    const callerPerms = await rbacRepo.getEffectivePermissions(tenantId, callerUserId);
+    const isOwner = callerPerms.roles.includes('OWNER');
+    if (!isOwner) {
+      const unauthorized = permissionKeys.filter((k) => !callerPerms.permissions.includes(k));
+      if (unauthorized.length > 0) {
+        throw AppError.forbidden(
+          `Unauthorized grant: You cannot grant permissions you do not possess (${unauthorized.join(', ')})`,
+        );
+      }
+    }
+  }
+
+  // 4. Stable code validation and conflict check
+  const stableCode = (code ?? name).trim().toUpperCase().replace(/[^A-Z0-9_-]+/g, '_');
+  const existingWithCode = await rbacRepo.findRoleByCode(stableCode, tenantId);
+  if (existingWithCode) {
+    throw AppError.conflict(`Role with code '${stableCode}' already exists in this workspace`);
+  }
+
+  // 5. Create role
   const role = await rbacRepo.createRole({
     tenantId,
     name,
+    code: stableCode,
     description,
+    scope,
+    isActive,
     isSystem: false,
   });
 
-  const permIds = permissionKeys.map((k) => permsMap.get(k)!);
+  const permIds = permissionKeys.map((k) => permsMap.get(k)!.id);
 
   await rbacRepo.setRolePermissions(role.id, permIds);
   await invalidateRbacCache(tenantId);
 
-  return { id: role.id, name: role.name, permissions: permissionKeys };
+  return {
+    id: role.id,
+    name: role.name,
+    code: stableCode,
+    scope,
+    isActive,
+    permissions: permissionKeys,
+  };
 }
 
 export async function updateCustomTenantRole(
   tenantId: string,
   roleId: string,
   data: dto.UpdateRoleDto,
-): Promise<{ id: string; name: string; permissions: string[] }> {
+  callerUserId?: string,
+): Promise<{ id: string; name: string; code: string | null; permissions: string[]; isActive: boolean }> {
   const role = await rbacRepo.findRoleById(roleId);
   if (!role) throw AppError.notFound('Role not found');
-  if (role.isSystem) throw AppError.forbidden('Cannot modify built-in system roles');
-  if (role.tenantId !== tenantId) throw AppError.forbidden('Role does not belong to this tenant');
+  if (role.isSystem) {
+    if (data.name && data.name !== role.name) {
+      throw AppError.forbidden('Cannot rename built-in system roles');
+    }
+    if (data.isActive === false) {
+      throw AppError.forbidden('Cannot deactivate built-in system roles');
+    }
+  }
+  if (role.tenantId && role.tenantId !== tenantId) {
+    throw AppError.forbidden('Role does not belong to this tenant');
+  }
 
-  if (data.name || data.description !== undefined) {
+  if (data.name !== undefined || data.description !== undefined || data.isActive !== undefined) {
     await rbacRepo.updateRole(roleId, {
       name: data.name,
       description: data.description,
+      isActive: data.isActive,
     });
   }
 
   let finalPermissions: string[];
   if (data.permissions) {
     const allPerms = await rbacRepo.findAllPermissions();
-    const permsMap = new Map(allPerms.map((p) => [p.key, p.id]));
+    const permsMap = new Map(allPerms.map((p) => [p.key, p]));
 
     const unknownKeys = data.permissions.filter((k) => !permsMap.has(k));
     if (unknownKeys.length > 0) {
       throw AppError.badRequest(`Unknown permission key(s): ${unknownKeys.join(', ')}`);
     }
 
-    const permIds = data.permissions.map((k) => permsMap.get(k)!);
+    // Scope check
+    const mismatched = data.permissions
+      .map((k) => permsMap.get(k)!)
+      .filter((p) => p.scope !== role.scope);
+    if (mismatched.length > 0) {
+      throw AppError.badRequest(
+        `Permission scope mismatch: cannot assign ${mismatched[0]?.scope} permission (${mismatched[0]?.key}) to a ${role.scope} role`,
+      );
+    }
+
+    // Actor Grantability check
+    if (callerUserId) {
+      const callerPerms = await rbacRepo.getEffectivePermissions(tenantId, callerUserId);
+      const isOwner = callerPerms.roles.includes('OWNER');
+      if (!isOwner) {
+        const unauthorized = data.permissions.filter((k) => !callerPerms.permissions.includes(k));
+        if (unauthorized.length > 0) {
+          throw AppError.forbidden(
+            `Unauthorized grant: You cannot grant permissions you do not possess (${unauthorized.join(', ')})`,
+          );
+        }
+      }
+    }
+
+    const permIds = data.permissions.map((k) => permsMap.get(k)!.id);
 
     await rbacRepo.setRolePermissions(roleId, permIds);
     finalPermissions = data.permissions;
@@ -193,6 +311,8 @@ export async function updateCustomTenantRole(
   return {
     id: role.id,
     name: data.name ?? role.name,
+    code: role.code,
+    isActive: data.isActive ?? role.isActive,
     permissions: finalPermissions,
   };
 }
@@ -201,7 +321,9 @@ export async function deleteTenantRole(tenantId: string, roleId: string): Promis
   const role = await rbacRepo.findRoleById(roleId);
   if (!role) throw AppError.notFound('Role not found');
   if (role.isSystem) throw AppError.forbidden('Cannot delete built-in system roles');
-  if (role.tenantId !== tenantId) throw AppError.forbidden('Role does not belong to this tenant');
+  if (role.tenantId && role.tenantId !== tenantId) {
+    throw AppError.forbidden('Role does not belong to this tenant');
+  }
 
   // Edge case safeguard: Cannot delete a role that still has active members assigned!
   const assignedCount = await rbacRepo.countMembersAssignedToRole(roleId);
@@ -211,8 +333,46 @@ export async function deleteTenantRole(tenantId: string, roleId: string): Promis
     );
   }
 
+  const groupsCount = await rbacRepo.countGroupsAssignedToRole(roleId);
+  if (groupsCount > 0) {
+    throw AppError.badRequest(
+      `Cannot delete role "${role.name}" because it is currently assigned to ${groupsCount} user group(s). Unbind them first.`,
+    );
+  }
+
   await rbacRepo.deleteRole(roleId);
   await invalidateRbacCache(tenantId);
+}
+
+export async function listRoles(
+  tenantId: string | null,
+  filters: dto.ListRolesFilterDto,
+): Promise<ListRolesResult> {
+  return rbacRepo.listRolesWithFilters(tenantId, filters);
+}
+
+export async function getRoleById(
+  tenantId: string,
+  roleId: string,
+): Promise<RoleWithCountsAndPermissions> {
+  const role = await rbacRepo.findRoleById(roleId);
+  if (!role) throw AppError.notFound('Role not found');
+  if (role.tenantId && role.tenantId !== tenantId) {
+    throw AppError.forbidden('Role does not belong to this tenant');
+  }
+
+  const [usersCount, groupsCount, perms] = await Promise.all([
+    rbacRepo.countMembersAssignedToRole(roleId),
+    rbacRepo.countGroupsAssignedToRole(roleId),
+    rbacRepo.getRolePermissionKeys(roleId),
+  ]);
+
+  return {
+    ...role,
+    assignedUsersCount: usersCount,
+    assignedGroupsCount: groupsCount,
+    permissions: perms,
+  };
 }
 
 export async function listModulesWithPermissions(): Promise<ModuleWithPermissions[]> {

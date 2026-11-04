@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
+  integer,
   jsonb,
   pgTable,
   text,
@@ -31,6 +32,10 @@ export const subscriptions = pgTable(
       .defaultNow(),
     currentPeriodEnd: timestamp('currentPeriodEnd', { precision: 3, mode: 'date' }),
     cancelAtPeriodEnd: boolean('cancelAtPeriodEnd').notNull().default(false),
+    billingEmail: text('billingEmail'),
+    billingInterval: text('billingInterval').notNull().default('MONTHLY'),
+    seatCount: integer('seatCount').notNull().default(1),
+    internalNotes: text('internalNotes'),
     provider: text('provider').notNull().default('manual'),
     providerCustomerId: text('providerCustomerId'),
     providerSubscriptionId: text('providerSubscriptionId'),
@@ -86,6 +91,9 @@ export const publicSubscription = {
   currentPeriodStart: subscriptions.currentPeriodStart,
   currentPeriodEnd: subscriptions.currentPeriodEnd,
   cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd,
+  billingEmail: subscriptions.billingEmail,
+  billingInterval: subscriptions.billingInterval,
+  seatCount: subscriptions.seatCount,
   provider: subscriptions.provider,
   createdAt: subscriptions.createdAt,
 };

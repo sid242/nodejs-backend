@@ -1,0 +1,1 @@
+ALTER TABLE "TenantBranding" ADD COLUMN "hideWatermark" boolean DEFAULT false NOT NULL;

@@ -9,8 +9,18 @@ import { tenantSlugSchema } from '@/modules/tenants/tenants.dto';
 export const listStaffQueryDto = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  status: z.enum(['ACTIVE', 'SUSPENDED', 'DEACTIVATED']).optional(),
+  search: z.string().trim().optional(),
+  q: z.string().trim().optional(), // alias for search
+  department: z.string().trim().optional(),
+  employeeCode: z.string().trim().optional(),
+  status: z.enum(['INVITED', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED']).optional(),
   roleId: z.string().uuid().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  sortBy: z
+    .enum(['displayName', 'email', 'employeeCode', 'department', 'status', 'lastLoginAt', 'createdAt'])
+    .default('createdAt'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 export type ListStaffQueryDto = z.infer<typeof listStaffQueryDto>;
 
@@ -19,8 +29,28 @@ export const createStaffDto = z.object({
   displayName: z.string().trim().min(2).max(100),
   password: z.string().min(8).max(100),
   roleId: z.string().uuid(),
+  employeeCode: z.string().trim().max(50).optional(),
+  department: z.string().trim().max(100).optional(),
+  jobTitle: z.string().trim().max(100).optional(),
 });
 export type CreateStaffDto = z.infer<typeof createStaffDto>;
+
+export const inviteStaffDto = z.object({
+  email: z.string().trim().email(),
+  displayName: z.string().trim().min(2).max(100),
+  roleId: z.string().uuid(),
+  employeeCode: z.string().trim().max(50).optional(),
+  department: z.string().trim().max(100).optional(),
+  jobTitle: z.string().trim().max(100).optional(),
+  invitationMessage: z.string().trim().max(500).optional(),
+});
+export type InviteStaffDto = z.infer<typeof inviteStaffDto>;
+
+export const acceptStaffInviteDto = z.object({
+  token: z.string().min(16),
+  password: z.string().min(8).max(100),
+});
+export type AcceptStaffInviteDto = z.infer<typeof acceptStaffInviteDto>;
 
 export const loginStaffDto = z.object({
   email: z.string().trim().email(),
@@ -30,7 +60,10 @@ export type LoginStaffDto = z.infer<typeof loginStaffDto>;
 
 export const updateStaffDto = z.object({
   displayName: z.string().trim().min(2).max(100).optional(),
-  status: z.enum(['ACTIVE', 'SUSPENDED', 'DEACTIVATED']).optional(),
+  employeeCode: z.string().trim().max(50).nullable().optional(),
+  department: z.string().trim().max(100).nullable().optional(),
+  jobTitle: z.string().trim().max(100).nullable().optional(),
+  status: z.enum(['INVITED', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED']).optional(),
   roleId: z.string().uuid().optional(),
 });
 export type UpdateStaffDto = z.infer<typeof updateStaffDto>;
@@ -117,19 +150,85 @@ export const listPlatformTenantsQueryDto = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().trim().optional(),
+  q: z.string().trim().optional(),
   status: z.enum(['ACTIVE', 'SUSPENDED', 'TRIALING', 'DEACTIVATED']).optional(),
+  provisioningStatus: z
+    .enum(['PENDING', 'PROVISIONING', 'ACTIVE', 'FAILED', 'SUSPENDED', 'DEACTIVATED'])
+    .optional(),
+  country: z.string().trim().optional(),
+  region: z.string().trim().optional(),
   plan: z.string().trim().optional(),
   databaseMode: z.enum(['shared', 'dedicated']).optional(),
+  sortBy: z
+    .enum([
+      'name',
+      'slug',
+      'legalName',
+      'tenantCode',
+      'status',
+      'plan',
+      'createdAt',
+      'trialEndsAt',
+    ])
+    .default('createdAt'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 export type ListPlatformTenantsQueryDto = z.infer<typeof listPlatformTenantsQueryDto>;
 
 export const provisionTenantDto = z.object({
+  // 1. Organization
   name: z.string().trim().min(2).max(100),
   slug: tenantSlugSchema,
-  ownerEmail: z.string().trim().email(),
-  plan: z.string().trim().default('FREE'),
+  legalName: z.string().trim().max(200).optional(),
+  tenantCode: z
+    .string()
+    .trim()
+    .max(50)
+    .regex(
+      /^[A-Z0-9_-]+$/,
+      'Tenant code must contain only uppercase letters, numbers, hyphens, and underscores',
+    )
+    .optional(),
   country: z.string().trim().max(100).optional(),
+  region: z.string().trim().max(100).optional(),
   timezone: z.string().trim().default('UTC'),
+  locale: z.string().trim().default('en-US'),
+  currency: z.string().trim().default('USD'),
+  supportEmail: z.string().trim().email().optional(),
+  supportPhone: z.string().trim().max(30).optional(),
+  billingEmail: z.string().trim().email().optional(),
+  internalNote: z.string().trim().max(1000).optional(),
+
+  // 2. Initial Owner
+  ownerEmail: z.string().trim().email(),
+  ownerFirstName: z.string().trim().max(50).optional(),
+  ownerLastName: z.string().trim().max(50).optional(),
+
+  // 3. Subscription
+  plan: z.string().trim().default('FREE'),
+  trialDays: z.coerce.number().int().min(0).max(365).optional(),
+  notes: z.string().trim().max(500).optional(),
+
+  // 4. Branding
+  branding: z
+    .object({
+      displayName: z.string().trim().max(100).optional(),
+      logoUrl: z.string().trim().url().optional(),
+      faviconUrl: z.string().trim().url().optional(),
+      primaryColor: z
+        .string()
+        .trim()
+        .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'Invalid hex color')
+        .optional(),
+      secondaryColor: z
+        .string()
+        .trim()
+        .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'Invalid hex color')
+        .optional(),
+    })
+    .optional(),
+
+  // 5. Platform-only Infrastructure
   databaseMode: z.enum(['shared', 'dedicated']).default('shared'),
   databaseConfig: z
     .object({
@@ -139,17 +238,47 @@ export const provisionTenantDto = z.object({
       connectionUrl: z.string().trim().url().or(z.literal('')).optional(),
     })
     .optional(),
-  notes: z.string().trim().max(500).optional(),
 });
 export type ProvisionTenantDto = z.infer<typeof provisionTenantDto>;
+export type ProvisionTenantInput = z.input<typeof provisionTenantDto>;
 
 export const updatePlatformTenantDto = z.object({
   name: z.string().trim().min(2).max(100).optional(),
+  legalName: z.string().trim().max(200).optional(),
+  tenantCode: z
+    .string()
+    .trim()
+    .max(50)
+    .regex(
+      /^[A-Z0-9_-]+$/,
+      'Tenant code must contain only uppercase letters, numbers, hyphens, and underscores',
+    )
+    .optional(),
+  country: z.string().trim().max(100).optional(),
+  region: z.string().trim().max(100).optional(),
+  timezone: z.string().trim().optional(),
+  locale: z.string().trim().optional(),
+  currency: z.string().trim().optional(),
+  supportEmail: z.string().trim().email().optional(),
+  supportPhone: z.string().trim().max(30).optional(),
+  billingEmail: z.string().trim().email().optional(),
+  internalNote: z.string().trim().max(1000).optional(),
   plan: z.string().trim().optional(),
   databaseMode: z.enum(['shared', 'dedicated']).optional(),
+  trialEndsAt: z.string().datetime().optional().nullable(),
   notes: z.string().trim().max(500).optional(),
 });
 export type UpdatePlatformTenantDto = z.infer<typeof updatePlatformTenantDto>;
+
+export const retryProvisioningDto = z.object({
+  reason: z.string().trim().max(500).optional(),
+});
+export type RetryProvisioningDto = z.infer<typeof retryProvisioningDto>;
+
+export const closeTenantDto = z.object({
+  reason: z.string().trim().min(3).max(500),
+});
+export type CloseTenantDto = z.infer<typeof closeTenantDto>;
 
 export const suspendTenantDto = z.object({
   reason: z.string().trim().min(3).max(500),

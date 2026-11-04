@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { customDomainStatusEnum } from '../enums';
 import { tenants } from './tenants';
@@ -27,6 +27,7 @@ export const tenantBrandings = pgTable(
     authSubtitle: text('authSubtitle'),
     authCoverUrl: text('authCoverUrl'),
     authLayout: text('authLayout').notNull().default('SPLIT'),
+    hideWatermark: boolean('hideWatermark').notNull().default(false),
     customDomain: text('customDomain'),
     customDomainStatus: customDomainStatusEnum('customDomainStatus').notNull().default('PENDING'),
     customDomainVerifiedAt: timestamp('customDomainVerifiedAt', { precision: 3, mode: 'date' }),
@@ -67,6 +68,7 @@ export const publicTenantBranding = {
   authSubtitle: tenantBrandings.authSubtitle,
   authCoverUrl: tenantBrandings.authCoverUrl,
   authLayout: tenantBrandings.authLayout,
+  hideWatermark: tenantBrandings.hideWatermark,
   customDomain: tenantBrandings.customDomain,
   customDomainStatus: tenantBrandings.customDomainStatus,
   customDomainVerifiedAt: tenantBrandings.customDomainVerifiedAt,

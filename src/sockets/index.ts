@@ -11,6 +11,7 @@ import { dynamicCorsOrigin } from '@/lib/cors';
 import { parseCookies } from '@/modules/auth/cookies';
 import { verifyAccessToken, verifySupportToken } from '@/modules/auth/tokens';
 import * as platformRepo from '@/modules/platform/platform.repository';
+import * as tenantsRepo from '@/modules/tenants/tenants.repository';
 
 const roomSchema = z.object({ roomId: z.string().min(1).max(64) });
 const messageSchema = roomSchema.extend({ text: z.string().min(1).max(2000) });
@@ -128,11 +129,41 @@ export function initSocket(httpServer: HttpServer): SocketManager {
     /**
      * Room authorization guard:
      * - Private user rooms ('user:*') require matching user ID.
+     * - Tenant rooms ('tenant:*') require verified active membership or audited support session.
+     * - Session rooms ('session:*') require active matching support session.
      * - Public rooms ('public:*' or generic IDs) can be joined by authenticated users.
      */
     async function authorizeRoomAccess(u: SocketUser, roomId: string): Promise<boolean> {
       if (roomId.startsWith('user:') && roomId !== `user:${u.id}`) {
         return false;
+      }
+      if (roomId.startsWith('session:')) {
+        const sessId = roomId.slice('session:'.length);
+        if (socket.data.isSupportSession && socket.data.supportSession?.id === sessId) {
+          return true;
+        }
+        return false;
+      }
+      if (roomId.startsWith('tenant:')) {
+        const parts = roomId.split(':');
+        const tenantId = parts[1];
+        if (!tenantId) return false;
+
+        // Audited support session staff granted troubleshooting access to tenant channel
+        if (socket.data.isSupportSession && socket.data.supportSession?.tenantId === tenantId) {
+          return true;
+        }
+
+        // Standard user must be an active member of this tenant
+        try {
+          const member = await tenantsRepo.findTenantMember(tenantId, u.id);
+          if (!member || member.status !== 'ACTIVE') {
+            return false;
+          }
+          return true;
+        } catch {
+          return false;
+        }
       }
       return true;
     }

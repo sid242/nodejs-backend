@@ -1,23 +1,28 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
 import { db, type DbExecutor } from '@/config/db';
 import {
   appModules,
   plans,
+  roles,
   subscriptionEvents,
   subscriptions,
   tenantMemberRoles,
   tenantMembers,
   tenantModules,
   tenants,
+  userGroupMembers,
+  userGroups,
   users,
   type NewTenant,
+  type NewTenantMember,
   type PublicTenant,
   type Tenant,
   type TenantMember,
 } from '@/db/schema';
 import * as rbacRepo from '@/modules/rbac/rbac.repository';
 import * as rbacService from '@/modules/rbac/rbac.service';
+import type { ListMembersQueryDto } from './tenants.dto';
 
 export async function createTenant(data: NewTenant, executor: DbExecutor = db): Promise<Tenant> {
   const [record] = await executor.insert(tenants).values(data).returning();
@@ -89,6 +94,11 @@ export async function addTenantMember(
     tenantId: string;
     userId: string;
     status?: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
+    memberCode?: string | null;
+    phone?: string | null;
+    jobTitle?: string | null;
+    department?: string | null;
+    invitedAt?: Date | null;
   },
   executor: DbExecutor = db,
 ): Promise<TenantMember> {
@@ -98,6 +108,11 @@ export async function addTenantMember(
       tenantId: data.tenantId,
       userId: data.userId,
       status: data.status ?? 'ACTIVE',
+      memberCode: data.memberCode ?? null,
+      phone: data.phone ?? null,
+      jobTitle: data.jobTitle ?? null,
+      department: data.department ?? null,
+      invitedAt: data.invitedAt ?? null,
     })
     .returning();
   return record!;
@@ -122,6 +137,231 @@ export async function findTenantMemberById(memberId: string): Promise<TenantMemb
     .where(eq(tenantMembers.id, memberId))
     .limit(1);
   return record ?? null;
+}
+
+export async function findTenantMembersPaginated(
+  tenantId: string,
+  filters: ListMembersQueryDto,
+) {
+  const conditions = [eq(tenantMembers.tenantId, tenantId)];
+
+  if (filters?.status === 'REMOVED') {
+    conditions.push(isNotNull(tenantMembers.deletedAt));
+  } else if (filters?.status === 'ALL') {
+    // No status or deletedAt filter applied
+  } else {
+    conditions.push(isNull(tenantMembers.deletedAt));
+    if (filters?.status) {
+      conditions.push(eq(tenantMembers.status, filters.status));
+    }
+  }
+
+  if (filters?.department) {
+    conditions.push(eq(tenantMembers.department, filters.department));
+  }
+
+  const searchKeyword = (filters?.search || filters?.q)?.trim();
+  if (searchKeyword) {
+    const searchPattern = `%${searchKeyword.toLowerCase()}%`;
+    conditions.push(
+      or(
+        ilike(users.name, searchPattern),
+        ilike(users.email, searchPattern),
+        ilike(tenantMembers.phone, searchPattern),
+        ilike(tenantMembers.memberCode, searchPattern),
+      )!,
+    );
+  }
+
+  const whereClause = and(...conditions);
+
+  // Sorting
+  const sortOrder = filters?.sortOrder === 'asc' ? asc : desc;
+  let orderColumn;
+  switch (filters?.sortBy) {
+    case 'name':
+      orderColumn = sortOrder(users.name);
+      break;
+    case 'email':
+      orderColumn = sortOrder(users.email);
+      break;
+    case 'invitedAt':
+      orderColumn = sortOrder(tenantMembers.invitedAt);
+      break;
+    case 'lastLoginAt':
+      orderColumn = sortOrder(tenantMembers.lastLoginAt);
+      break;
+    case 'status':
+      orderColumn = sortOrder(tenantMembers.status);
+      break;
+    case 'department':
+      orderColumn = sortOrder(tenantMembers.department);
+      break;
+    case 'joinedAt':
+    default:
+      orderColumn = sortOrder(tenantMembers.joinedAt);
+      break;
+  }
+
+  const [items, totalResult] = await Promise.all([
+    db
+      .select({
+        id: tenantMembers.id,
+        userId: users.id,
+        name: users.name,
+        email: users.email,
+        status: tenantMembers.status,
+        memberCode: tenantMembers.memberCode,
+        phone: tenantMembers.phone,
+        jobTitle: tenantMembers.jobTitle,
+        department: tenantMembers.department,
+        role: sql<string>`coalesce((
+          SELECT UPPER(r."name")
+          FROM "TenantMemberRole" tmr
+          JOIN "AppRole" r ON tmr."roleId" = r."id"
+          WHERE tmr."memberId" = ${tenantMembers.id}
+          ORDER BY CASE UPPER(r."name")
+            WHEN 'OWNER' THEN 1
+            WHEN 'ADMIN' THEN 2
+            WHEN 'MEMBER' THEN 3
+            ELSE 4
+          END
+          LIMIT 1
+        ), 'MEMBER')`,
+        roleId: sql<string | null>`(
+          SELECT tmr."roleId"::text
+          FROM "TenantMemberRole" tmr
+          JOIN "AppRole" r ON tmr."roleId" = r."id"
+          WHERE tmr."memberId" = ${tenantMembers.id}
+          ORDER BY CASE UPPER(r."name")
+            WHEN 'OWNER' THEN 1
+            WHEN 'ADMIN' THEN 2
+            WHEN 'MEMBER' THEN 3
+            ELSE 4
+          END
+          LIMIT 1
+        )`,
+        joinedAt: tenantMembers.joinedAt,
+        invitedAt: tenantMembers.invitedAt,
+        lastLoginAt: tenantMembers.lastLoginAt,
+        deletedAt: tenantMembers.deletedAt,
+      })
+      .from(tenantMembers)
+      .innerJoin(users, eq(tenantMembers.userId, users.id))
+      .where(whereClause)
+      .orderBy(orderColumn)
+      .offset((filters.page - 1) * filters.limit)
+      .limit(filters.limit),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(tenantMembers)
+      .innerJoin(users, eq(tenantMembers.userId, users.id))
+      .where(whereClause),
+  ]);
+
+  return {
+    items,
+    total: totalResult[0]?.count ?? 0,
+    page: filters.page,
+    limit: filters.limit,
+  };
+}
+
+export async function findTenantMemberDetail(tenantId: string, memberId: string) {
+  const [member] = await db
+    .select({
+      id: tenantMembers.id,
+      tenantId: tenantMembers.tenantId,
+      userId: tenantMembers.userId,
+      status: tenantMembers.status,
+      memberCode: tenantMembers.memberCode,
+      phone: tenantMembers.phone,
+      jobTitle: tenantMembers.jobTitle,
+      department: tenantMembers.department,
+      invitedAt: tenantMembers.invitedAt,
+      joinedAt: tenantMembers.joinedAt,
+      lastLoginAt: tenantMembers.lastLoginAt,
+      deletedAt: tenantMembers.deletedAt,
+      createdAt: tenantMembers.createdAt,
+      user: {
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        phoneNumber: users.phoneNumber,
+        status: users.status,
+      },
+    })
+    .from(tenantMembers)
+    .innerJoin(users, eq(tenantMembers.userId, users.id))
+    .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.id, memberId)))
+    .limit(1);
+
+  if (!member) return null;
+
+  // Direct roles
+  const assignedRoles = await db
+    .select({
+      id: roles.id,
+      name: roles.name,
+      description: roles.description,
+    })
+    .from(tenantMemberRoles)
+    .innerJoin(roles, eq(tenantMemberRoles.roleId, roles.id))
+    .where(eq(tenantMemberRoles.memberId, member.id));
+
+  // Tenant user groups
+  const groups = await db
+    .select({
+      id: userGroups.id,
+      name: userGroups.name,
+      slug: userGroups.slug,
+    })
+    .from(userGroupMembers)
+    .innerJoin(userGroups, eq(userGroupMembers.groupId, userGroups.id))
+    .where(
+      and(
+        eq(userGroupMembers.userId, member.userId),
+        eq(userGroups.tenantId, tenantId),
+        isNull(userGroups.archivedAt),
+      ),
+    );
+
+  return {
+    ...member,
+    roles: assignedRoles,
+    groups,
+  };
+}
+
+export async function updateTenantMemberMetadata(
+  memberId: string,
+  data: Partial<NewTenantMember>,
+): Promise<TenantMember | null> {
+  const [updated] = await db
+    .update(tenantMembers)
+    .set({
+      ...data,
+      updatedAt: new Date(),
+    })
+    .where(eq(tenantMembers.id, memberId))
+    .returning();
+  return updated ?? null;
+}
+
+export async function softDeleteTenantMember(
+  tenantId: string,
+  memberId: string,
+): Promise<boolean> {
+  const [updated] = await db
+    .update(tenantMembers)
+    .set({
+      status: 'SUSPENDED',
+      deletedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.id, memberId)))
+    .returning();
+  return !!updated;
 }
 
 export async function findTenantMembers(tenantId: string): Promise<
@@ -324,6 +564,10 @@ export const tenantsRepo = {
   findTenantMember,
   findTenantMemberById,
   findTenantMembers,
+  findTenantMembersPaginated,
+  findTenantMemberDetail,
+  updateTenantMemberMetadata,
+  softDeleteTenantMember,
   removeTenantMember,
   updateTenantMemberStatus,
   provisionTenantTransaction,

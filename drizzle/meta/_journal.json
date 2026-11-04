@@ -162,6 +162,69 @@
       "when": 1793630923269,
       "tag": "0022_remarkable_stingray",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793773689299,
+      "tag": "0023_panoramic_surge",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793774602426,
+      "tag": "0024_steep_marten_broadcloak",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793775725559,
+      "tag": "0025_chemical_next_avengers",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793776475437,
+      "tag": "0026_ancient_grandmaster",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1793784211696,
+      "tag": "0027_little_luckman",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1793789834132,
+      "tag": "0028_long_hulk",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1793793589302,
+      "tag": "0029_tearful_sabretooth",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1793796258230,
+      "tag": "0030_swift_mockingbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1793800064845,
+      "tag": "0031_perfect_serpent_society",
+      "breakpoints": true
     }
   ]
 }

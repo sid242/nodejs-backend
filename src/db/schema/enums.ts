@@ -105,3 +105,5 @@ export const userGroupScopeEnum = pgEnum('UserGroupScope', ['PLATFORM', 'TENANT'
 
 export const userGroupStatusEnum = pgEnum('UserGroupStatus', ['ACTIVE', 'ARCHIVED']);
 
+export const outboxStatusEnum = pgEnum('OutboxStatus', ['PENDING', 'PROCESSING', 'PUBLISHED', 'FAILED']);
+

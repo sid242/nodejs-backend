@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, ilike, inArray, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 
 import { db } from '@/config/db';
 import {
@@ -50,12 +50,18 @@ export async function findStaffById(id: string) {
   const [staff] = await db
     .select({
       id: platformStaff.id,
+      userId: platformStaff.userId,
       email: platformStaff.email,
       displayName: platformStaff.displayName,
+      employeeCode: platformStaff.employeeCode,
+      department: platformStaff.department,
+      jobTitle: platformStaff.jobTitle,
       status: platformStaff.status,
       roleId: platformStaff.roleId,
       roleKey: platformRoles.key,
       roleName: platformRoles.name,
+      invitedAt: platformStaff.invitedAt,
+      invitationMessage: platformStaff.invitationMessage,
       twoFactorEnabledAt: platformStaff.twoFactorEnabledAt,
       lastLoginAt: platformStaff.lastLoginAt,
       createdAt: platformStaff.createdAt,
@@ -64,6 +70,24 @@ export async function findStaffById(id: string) {
     .from(platformStaff)
     .leftJoin(platformRoles, eq(platformStaff.roleId, platformRoles.id))
     .where(eq(platformStaff.id, id))
+    .limit(1);
+  return staff ?? null;
+}
+
+export async function findStaffByInviteTokenHash(tokenHash: string): Promise<PlatformStaff | null> {
+  const [staff] = await db
+    .select()
+    .from(platformStaff)
+    .where(eq(platformStaff.inviteTokenHash, tokenHash))
+    .limit(1);
+  return staff ?? null;
+}
+
+export async function findStaffByEmployeeCode(employeeCode: string): Promise<PlatformStaff | null> {
+  const [staff] = await db
+    .select()
+    .from(platformStaff)
+    .where(eq(platformStaff.employeeCode, employeeCode))
     .limit(1);
   return staff ?? null;
 }
@@ -116,28 +140,78 @@ export async function updatePlatformRecoveryCodes(staffId: string, recoveryCodes
 
 export async function findStaffPaginated(filters: ListStaffQueryDto) {
   const conditions = [];
-  if (filters?.status) conditions.push(eq(platformStaff.status, filters.status));
-  if (filters?.roleId) conditions.push(eq(platformStaff.roleId, filters.roleId));
+
+  const searchTerm = filters?.search || filters?.q;
+  if (searchTerm) {
+    const pattern = `%${searchTerm.toLowerCase()}%`;
+    conditions.push(
+      or(
+        ilike(platformStaff.displayName, pattern),
+        ilike(platformStaff.email, pattern),
+        ilike(platformStaff.employeeCode, pattern),
+      ),
+    );
+  }
+  if (filters?.department) {
+    conditions.push(ilike(platformStaff.department, `%${filters.department}%`));
+  }
+  if (filters?.employeeCode) {
+    conditions.push(eq(platformStaff.employeeCode, filters.employeeCode));
+  }
+  if (filters?.status) {
+    conditions.push(eq(platformStaff.status, filters.status));
+  }
+  if (filters?.roleId) {
+    conditions.push(eq(platformStaff.roleId, filters.roleId));
+  }
+  if (filters?.startDate) {
+    conditions.push(gte(platformStaff.createdAt, new Date(filters.startDate)));
+  }
+  if (filters?.endDate) {
+    conditions.push(lte(platformStaff.createdAt, new Date(filters.endDate)));
+  }
 
   const whereClause = conditions.length ? and(...conditions) : undefined;
+
+  const sortCol =
+    filters?.sortBy === 'displayName'
+      ? platformStaff.displayName
+      : filters?.sortBy === 'email'
+        ? platformStaff.email
+        : filters?.sortBy === 'employeeCode'
+          ? platformStaff.employeeCode
+          : filters?.sortBy === 'department'
+            ? platformStaff.department
+            : filters?.sortBy === 'status'
+              ? platformStaff.status
+              : filters?.sortBy === 'lastLoginAt'
+                ? platformStaff.lastLoginAt
+                : platformStaff.createdAt;
+
+  const orderExpr = filters?.sortOrder === 'asc' ? asc(sortCol) : desc(sortCol);
 
   const [items, totalResult] = await Promise.all([
     db
       .select({
         id: platformStaff.id,
+        userId: platformStaff.userId,
         email: platformStaff.email,
         displayName: platformStaff.displayName,
+        employeeCode: platformStaff.employeeCode,
+        department: platformStaff.department,
+        jobTitle: platformStaff.jobTitle,
         status: platformStaff.status,
         roleId: platformStaff.roleId,
         roleKey: platformRoles.key,
         roleName: platformRoles.name,
+        invitedAt: platformStaff.invitedAt,
         lastLoginAt: platformStaff.lastLoginAt,
         createdAt: platformStaff.createdAt,
       })
       .from(platformStaff)
       .leftJoin(platformRoles, eq(platformStaff.roleId, platformRoles.id))
       .where(whereClause)
-      .orderBy(desc(platformStaff.createdAt))
+      .orderBy(orderExpr)
       .offset((filters.page - 1) * filters.limit)
       .limit(filters.limit),
     db
@@ -160,14 +234,28 @@ export async function createStaff(data: NewPlatformStaff) {
   return created;
 }
 
-export async function updateStaff(id: string, data: UpdateStaffDto & { passwordHash?: string }) {
+export async function updateStaff(
+  id: string,
+  data: UpdateStaffDto & {
+    passwordHash?: string;
+    userId?: string | null;
+    inviteTokenHash?: string | null;
+    inviteExpiresAt?: Date | null;
+  },
+) {
   const [updated] = await db
     .update(platformStaff)
     .set({
-      ...(data.displayName ? { displayName: data.displayName } : {}),
-      ...(data.status ? { status: data.status } : {}),
-      ...(data.roleId ? { roleId: data.roleId } : {}),
-      ...(data.passwordHash ? { passwordHash: data.passwordHash } : {}),
+      ...(data.displayName !== undefined ? { displayName: data.displayName } : {}),
+      ...(data.employeeCode !== undefined ? { employeeCode: data.employeeCode } : {}),
+      ...(data.department !== undefined ? { department: data.department } : {}),
+      ...(data.jobTitle !== undefined ? { jobTitle: data.jobTitle } : {}),
+      ...(data.status !== undefined ? { status: data.status } : {}),
+      ...(data.roleId !== undefined ? { roleId: data.roleId } : {}),
+      ...(data.passwordHash !== undefined ? { passwordHash: data.passwordHash } : {}),
+      ...(data.userId !== undefined ? { userId: data.userId } : {}),
+      ...(data.inviteTokenHash !== undefined ? { inviteTokenHash: data.inviteTokenHash } : {}),
+      ...(data.inviteExpiresAt !== undefined ? { inviteExpiresAt: data.inviteExpiresAt } : {}),
     })
     .where(eq(platformStaff.id, id))
     .returning(publicPlatformStaff);
@@ -461,18 +549,67 @@ export async function findTenantsPaginated(filters: ListPlatformTenantsQueryDto)
   if (filters?.status) {
     conditions.push(eq(tenants.status, filters.status));
   }
+  if (filters?.provisioningStatus) {
+    conditions.push(eq(tenants.provisioningStatus, filters.provisioningStatus));
+  }
+  if (filters?.country) {
+    conditions.push(eq(tenants.country, filters.country));
+  }
+  if (filters?.region) {
+    conditions.push(eq(tenants.region, filters.region));
+  }
   if (filters?.plan) {
     conditions.push(eq(tenants.plan, filters.plan));
   }
   if (filters?.databaseMode) {
     conditions.push(eq(tenants.databaseMode, filters.databaseMode));
   }
-  if (filters?.search) {
-    const searchPattern = `%${filters.search.toLowerCase()}%`;
-    conditions.push(or(ilike(tenants.name, searchPattern), ilike(tenants.slug, searchPattern))!);
+
+  const searchKeyword = (filters?.search || filters?.q)?.trim();
+  if (searchKeyword) {
+    const searchPattern = `%${searchKeyword.toLowerCase()}%`;
+    conditions.push(
+      or(
+        ilike(tenants.name, searchPattern),
+        ilike(tenants.slug, searchPattern),
+        ilike(tenants.legalName, searchPattern),
+        ilike(tenants.tenantCode, searchPattern),
+      )!,
+    );
   }
 
   const whereClause = and(...conditions);
+
+  // Sorting
+  const sortOrder = filters?.sortOrder === 'asc' ? asc : desc;
+  let orderColumn;
+  switch (filters?.sortBy) {
+    case 'name':
+      orderColumn = sortOrder(tenants.name);
+      break;
+    case 'slug':
+      orderColumn = sortOrder(tenants.slug);
+      break;
+    case 'legalName':
+      orderColumn = sortOrder(tenants.legalName);
+      break;
+    case 'tenantCode':
+      orderColumn = sortOrder(tenants.tenantCode);
+      break;
+    case 'status':
+      orderColumn = sortOrder(tenants.status);
+      break;
+    case 'plan':
+      orderColumn = sortOrder(tenants.plan);
+      break;
+    case 'trialEndsAt':
+      orderColumn = sortOrder(tenants.trialEndsAt);
+      break;
+    case 'createdAt':
+    default:
+      orderColumn = sortOrder(tenants.createdAt);
+      break;
+  }
 
   const [items, totalResult] = await Promise.all([
     db
@@ -480,7 +617,17 @@ export async function findTenantsPaginated(filters: ListPlatformTenantsQueryDto)
         id: tenants.id,
         name: tenants.name,
         slug: tenants.slug,
+        legalName: tenants.legalName,
+        tenantCode: tenants.tenantCode,
+        country: tenants.country,
+        region: tenants.region,
+        timezone: tenants.timezone,
+        locale: tenants.locale,
+        currency: tenants.currency,
         status: tenants.status,
+        provisioningStatus: tenants.provisioningStatus,
+        provisioningStep: tenants.provisioningStep,
+        trialEndsAt: tenants.trialEndsAt,
         plan: tenants.plan,
         databaseMode: tenants.databaseMode,
         createdAt: tenants.createdAt,
@@ -501,12 +648,11 @@ export async function findTenantsPaginated(filters: ListPlatformTenantsQueryDto)
         ),
         subscriptionId: subscriptions.id,
         subscriptionStatus: subscriptions.status,
-        trialEndsAt: subscriptions.trialEndsAt,
       })
       .from(tenants)
       .leftJoin(subscriptions, eq(tenants.id, subscriptions.tenantId))
       .where(whereClause)
-      .orderBy(desc(tenants.createdAt))
+      .orderBy(orderColumn)
       .offset((filters.page - 1) * filters.limit)
       .limit(filters.limit),
     db
@@ -529,9 +675,25 @@ export async function findTenantDetailById(id: string) {
       id: tenants.id,
       name: tenants.name,
       slug: tenants.slug,
+      legalName: tenants.legalName,
+      tenantCode: tenants.tenantCode,
+      country: tenants.country,
+      region: tenants.region,
+      timezone: tenants.timezone,
+      locale: tenants.locale,
+      currency: tenants.currency,
+      supportEmail: tenants.supportEmail,
+      supportPhone: tenants.supportPhone,
+      billingEmail: tenants.billingEmail,
+      internalNote: tenants.internalNote,
       status: tenants.status,
+      provisioningStatus: tenants.provisioningStatus,
+      provisioningStep: tenants.provisioningStep,
+      provisioningError: tenants.provisioningError,
+      trialEndsAt: tenants.trialEndsAt,
       plan: tenants.plan,
       databaseMode: tenants.databaseMode,
+      databaseKey: tenants.databaseKey,
       schemaVersion: tenants.schemaVersion,
       metadata: tenants.metadata,
       createdAt: tenants.createdAt,
@@ -579,7 +741,9 @@ export async function findTenantDetailById(id: string) {
       .select({
         companyName: tenantBrandings.companyName,
         logoUrl: tenantBrandings.logoUrl,
+        faviconUrl: tenantBrandings.faviconUrl,
         primaryColor: tenantBrandings.primaryColor,
+        secondaryColor: tenantBrandings.secondaryColor,
         accentColor: tenantBrandings.accentColor,
         customDomain: tenantBrandings.customDomain,
         customDomainStatus: tenantBrandings.customDomainStatus,

@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 
 import { env } from '@/config/env';
 import { AppError } from '@/lib/errors';
+import { getTenantDb } from '@/db/tenancy/tenant-db';
 import * as platformRepo from '@/modules/platform/platform.repository';
 import { resolveUserPermissions, SYSTEM_ROLES } from '@/modules/rbac/rbac.service';
 import * as tenantsRepo from '@/modules/tenants/tenants.repository';
@@ -180,6 +181,14 @@ export async function resolveTenantContext(
       databaseMode: (tenant as any).databaseMode ?? 'shared',
     };
 
+    req.db = await getTenantDb({
+      id: tenant.id,
+      databaseMode: (tenant as any).databaseMode ?? 'shared',
+      databaseKey: (tenant as any).databaseKey,
+      databaseSecretRef: (tenant as any).databaseSecretRef,
+      metadata: (tenant as any).metadata,
+    });
+
     if (member) {
       req.membership = {
         id: member.id,
@@ -201,6 +210,12 @@ export async function requireTenant(
   next: NextFunction,
 ): Promise<void> {
   if (req.isSupportSession && req.tenant) {
+    if (!req.db) {
+      req.db = await getTenantDb({
+        id: req.tenant.id,
+        databaseMode: req.tenant.databaseMode ?? 'shared',
+      });
+    }
     return next();
   }
 

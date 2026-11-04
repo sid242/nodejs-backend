@@ -82,3 +82,38 @@ export const removeGroupMember = asyncHandler(async (req: Request, res: Response
   );
   AppResponse.ok({ success: true }, 'Member removed from user group successfully').send(res);
 });
+
+export const listGroupRoles = asyncHandler(async (req: Request, res: Response) => {
+  const groupId = (req.params.groupId ?? req.valid?.params?.groupId) as string;
+  const result = await groupsService.listTenantGroupRoles(req.tenant!.id, groupId);
+  AppResponse.ok(result, 'Group roles retrieved successfully').send(res);
+});
+
+export const bindGroupRole = asyncHandler(async (req: Request, res: Response) => {
+  const groupId = (req.params.groupId ?? req.valid?.params?.groupId) as string;
+  const result = await groupsService.bindTenantGroupRole(
+    req.tenant!.id,
+    groupId,
+    req.user!.id,
+    req.valid!.body,
+  );
+  AppResponse.ok(result, 'Role bound to user group successfully').send(res);
+});
+
+export const unbindGroupRole = asyncHandler(async (req: Request, res: Response) => {
+  const groupId = (req.params.groupId ?? req.valid?.params?.groupId) as string;
+  const roleId = (req.params.roleId ?? req.valid?.params?.roleId) as string;
+  await groupsService.unbindTenantGroupRole(
+    req.tenant!.id,
+    groupId,
+    req.user!.id,
+    roleId,
+  );
+  AppResponse.ok({ success: true }, 'Role unbound from user group successfully').send(res);
+});
+
+export const getGroupPermissions = asyncHandler(async (req: Request, res: Response) => {
+  const groupId = (req.params.groupId ?? req.valid?.params?.groupId) as string;
+  const result = await groupsService.getTenantGroupPermissions(req.tenant!.id, groupId);
+  AppResponse.ok(result, 'Group contributed permissions retrieved successfully').send(res);
+});

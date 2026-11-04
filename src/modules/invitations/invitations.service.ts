@@ -24,6 +24,14 @@ export interface CreateInvitationDto {
   email: string;
   roleId?: string;
   role?: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  memberCode?: string;
+  jobTitle?: string;
+  department?: string;
+  message?: string;
+  expiresInHours?: number;
 }
 
 export interface AcceptInvitationDto {
@@ -109,7 +117,8 @@ export async function createTenantInvitation(
   // 6. Generate random single-use token and hash
   const rawToken = crypto.randomBytes(32).toString('hex');
   const tokenHash = hashInvitationToken(rawToken);
-  const expiresAt = new Date(Date.now() + 48 * 3600 * 1000); // 48 hours
+  const expirationHours = dto.expiresInHours ?? 48;
+  const expiresAt = new Date(Date.now() + expirationHours * 3600 * 1000);
 
   const invitation = await invitationsRepo.createInvitation({
     tenantId,
@@ -119,6 +128,13 @@ export async function createTenantInvitation(
     invitedByStaffId: actor.staffId ?? null,
     tokenHash,
     status: 'PENDING',
+    firstName: dto.firstName?.trim() ?? null,
+    lastName: dto.lastName?.trim() ?? null,
+    phone: dto.phone?.trim() ?? null,
+    memberCode: dto.memberCode?.trim() ?? null,
+    jobTitle: dto.jobTitle?.trim() ?? null,
+    department: dto.department?.trim() ?? null,
+    message: dto.message?.trim() ?? null,
     expiresAt,
   });
 
@@ -348,6 +364,12 @@ export async function acceptTenantInvitation(
     userId: targetUserId,
     roleId: invitation.roleId,
     invitationId: invitation.id,
+    memberMetadata: {
+      memberCode: invitation.memberCode,
+      phone: invitation.phone,
+      jobTitle: invitation.jobTitle,
+      department: invitation.department,
+    },
   });
 
   // Invalidate RBAC cache

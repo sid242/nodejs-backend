@@ -112,6 +112,41 @@ export const createStaff = asyncHandler(async (req: Request, res: Response) => {
   AppResponse.created(result, 'Platform staff member created successfully').send(res);
 });
 
+export const inviteStaff = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.inviteStaff(
+    req.staff!,
+    req.valid?.body,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.created(result, 'Platform staff invitation sent successfully').send(res);
+});
+
+export const acceptStaffInvite = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.acceptStaffInvite(
+    req.valid?.body,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.ok(result, 'Staff invitation accepted and account activated successfully').send(res);
+});
+
+export const resendStaffInvite = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.resendStaffInvite(
+    req.staff!,
+    req.params.id as string,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.ok(result, 'Platform staff invitation resent successfully').send(res);
+});
+
+export const revokeStaffInvite = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.revokeStaffInvite(
+    req.staff!,
+    req.params.id as string,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.ok(result, 'Platform staff invitation revoked successfully').send(res);
+});
+
 export const updateStaff = asyncHandler(async (req: Request, res: Response) => {
   const result = await service.updateStaff(
     req.staff!,
@@ -292,6 +327,26 @@ export const activateTenant = asyncHandler(async (req: Request, res: Response) =
     req.id ? String(req.id) : undefined,
   );
   AppResponse.ok(result, 'Tenant workspace reactivated').send(res);
+});
+
+export const retryTenantProvisioning = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.retryTenantProvisioning(
+    req.staff!.id,
+    req.params.id as string,
+    req.valid?.body?.reason,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.ok(result, 'Tenant provisioning workflow retried successfully').send(res);
+});
+
+export const closeTenant = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.closeTenant(
+    req.staff!.id,
+    req.params.id as string,
+    req.valid?.body?.reason,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.ok(result, 'Tenant workspace closed successfully').send(res);
 });
 
 export const getTenantSubscription = asyncHandler(async (req: Request, res: Response) => {

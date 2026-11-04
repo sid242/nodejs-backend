@@ -2,6 +2,7 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
 import { ACCESS_TOKEN_COOKIE, AUTH_HEADERS } from '@/constants/index';
 import { AppError } from '@/lib/errors';
+import { getTenantDb } from '@/db/tenancy/tenant-db';
 import { logSecurityEvent } from '@/modules/audit/audit.service';
 import { verifyAccessToken, verifySupportToken } from '@/modules/auth/tokens';
 import * as platformRepo from '@/modules/platform/platform.repository';
@@ -102,6 +103,14 @@ export async function requireSupportOrUser(
       plan: tenant.plan,
       databaseMode: (tenant as any).databaseMode ?? 'shared',
     };
+
+    req.db = await getTenantDb({
+      id: tenant.id,
+      databaseMode: (tenant as any).databaseMode ?? 'shared',
+      databaseKey: (tenant as any).databaseKey,
+      databaseSecretRef: (tenant as any).databaseSecretRef,
+      metadata: (tenant as any).metadata,
+    });
 
     // If session is READ_ONLY, enforce that mutating HTTP methods are immediately blocked
     if (session.scope === 'READ_ONLY' && req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') {

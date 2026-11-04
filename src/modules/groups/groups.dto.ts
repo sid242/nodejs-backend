@@ -36,11 +36,27 @@ export const listGroupsQueryDto = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().trim().optional(),
   status: z.enum(['ACTIVE', 'ARCHIVED', 'ALL']).default('ACTIVE'),
-  sortBy: z.enum(['createdAt', 'name']).default('createdAt'),
+  roleId: z.string().trim().uuid('Invalid role ID').optional(),
+  sortBy: z.enum(['createdAt', 'name', 'updatedAt', 'slug']).default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 
 export type ListGroupsQuery = z.infer<typeof listGroupsQueryDto>;
+
+export const bindRoleDto = z.object({
+  roleId: z.string().trim().uuid('Invalid role ID format'),
+  expiresAt: z.string().datetime().optional().nullable(),
+  reason: z.string().trim().max(255).optional(),
+});
+
+export type BindRoleInput = z.infer<typeof bindRoleDto>;
+
+export const groupRoleParamsDto = z.object({
+  groupId: z.string().trim().uuid('Invalid group ID format'),
+  roleId: z.string().trim().uuid('Invalid role ID format'),
+});
+
+export type GroupRoleParams = z.infer<typeof groupRoleParamsDto>;
 
 export const groupIdParamDto = z.object({
   groupId: z.string().trim().uuid('Invalid group ID format'),

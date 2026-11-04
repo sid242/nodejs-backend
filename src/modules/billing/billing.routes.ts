@@ -12,7 +12,16 @@ import * as dto from './billing.dto';
 const router: Router = Router();
 
 // ==========================================
-// 1. Platform Staff Plans Catalog
+// 1. Webhooks (External Provider Ingress)
+// ==========================================
+router.post(
+  '/webhooks',
+  validate({ body: dto.billingWebhookDto }),
+  controller.handleBillingWebhook,
+);
+
+// ==========================================
+// 2. Platform Staff Plans Catalog
 // ==========================================
 router.get(
   ['/platform', '/platform/plans'],
@@ -39,8 +48,24 @@ router.patch(
 );
 
 // ==========================================
-// 2. Platform Staff Tenant Subscriptions
+// 3. Platform Staff Subscriptions & Overrides
 // ==========================================
+router.get(
+  '/platform/subscriptions',
+  requirePlatformAuth,
+  requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_READ),
+  validate({ query: dto.listPlatformSubscriptionsQueryDto }),
+  controller.listPlatformSubscriptions,
+);
+
+router.post(
+  '/platform/subscriptions/assign',
+  requirePlatformAuth,
+  requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_MANAGE),
+  validate({ body: dto.assignSubscriptionDto }),
+  controller.assignSubscription,
+);
+
 router.get(
   '/platform/tenants/:id/subscription',
   requirePlatformAuth,
@@ -57,8 +82,31 @@ router.put(
   controller.updatePlatformTenantSubscription,
 );
 
+router.get(
+  '/platform/entitlements',
+  requirePlatformAuth,
+  requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_READ),
+  controller.listEntitlementDefinitions,
+);
+
+router.post(
+  '/platform/tenants/:id/entitlements/override',
+  requirePlatformAuth,
+  requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_MANAGE),
+  validate({ params: dto.tenantSubscriptionParamDto, body: dto.setTenantEntitlementOverrideDto }),
+  controller.setTenantOverride,
+);
+
+router.delete(
+  '/platform/tenants/:id/entitlements/override/:key',
+  requirePlatformAuth,
+  requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_MANAGE),
+  validate({ params: dto.tenantSubscriptionParamDto }),
+  controller.removeTenantOverride,
+);
+
 // ==========================================
-// 3. Platform Staff Invoices Management
+// 4. Platform Staff Invoices Management
 // ==========================================
 router.get(
   '/platform/invoices',
@@ -93,13 +141,20 @@ router.patch(
 );
 
 // ==========================================
-// 4. Tenant Subscription & Billing
+// 5. Tenant Subscription & Billing
 // ==========================================
 router.get(
   '/subscription',
   requireAuth,
   requireTenant,
   controller.getTenantBillingOverview,
+);
+
+router.get(
+  '/entitlements',
+  requireAuth,
+  requireTenant,
+  controller.getTenantEntitlements,
 );
 
 router.post(
@@ -110,8 +165,23 @@ router.post(
   controller.requestSubscriptionChange,
 );
 
+router.get(
+  '/invoices',
+  requireAuth,
+  requireTenant,
+  validate({ query: dto.listInvoicesQueryDto }),
+  controller.getTenantInvoices,
+);
+
+router.get(
+  '/invoices/:invoiceId',
+  requireAuth,
+  requireTenant,
+  controller.getTenantInvoiceById,
+);
+
 // ==========================================
-// 5. Public Pricing & Plans Catalog
+// 6. Public Pricing & Plans Catalog
 // ==========================================
 router.get('/', controller.listPublicPlans);
 router.get('/:id', validate({ params: dto.planIdParamDto }), controller.getPlanById);

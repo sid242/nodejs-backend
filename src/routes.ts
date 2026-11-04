@@ -11,11 +11,15 @@ import groupRoutes from '@/modules/groups/groups.routes';
 import internalRoutes from '@/modules/internal/internal.routes';
 import platformRoutes from '@/modules/platform/platform.routes';
 import rbacRoutes from '@/modules/rbac/rbac.routes';
+import { scimRouter } from '@/modules/scim/scim.routes';
+import { ssoAuthRouter } from '@/modules/sso/sso.routes';
 import tenantRoutes from '@/modules/tenants/tenants.routes';
 import userRoutes from '@/modules/users/users.routes';
 
 const router: Router = Router();
+router.use('/auth/sso', ssoAuthRouter);
 router.use('/auth', authRoutes);
+router.use('/scim/v2', scimRouter);
 router.use('/users', userRoutes);
 router.use('/files', fileRoutes);
 router.use('/tenants', tenantRoutes);

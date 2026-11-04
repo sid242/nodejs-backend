@@ -45,6 +45,7 @@ export async function upsertTenantBranding(data: NewTenantBranding): Promise<Ten
         authSubtitle: data?.authSubtitle ?? null,
         authCoverUrl: data?.authCoverUrl ?? null,
         authLayout: data?.authLayout ?? 'SPLIT',
+        hideWatermark: data?.hideWatermark ?? false,
         customDomain: data?.customDomain ? data.customDomain.toLowerCase() : null,
         customDomainStatus: data?.customDomainStatus ?? 'PENDING',
         customDomainVerifiedAt: data?.customDomainVerifiedAt ?? null,
@@ -71,35 +72,52 @@ export async function updateCustomDomainStatus(
   verifiedAt?: Date | null,
   tlsStatus?: string | null,
 ): Promise<TenantBranding | null> {
-  const [updated] = await db
-    .update(tenantBrandings)
-    .set({
+  const [record] = await db
+    .insert(tenantBrandings)
+    .values({
+      tenantId,
       customDomainStatus: status,
-      ...(verifiedAt !== undefined ? { customDomainVerifiedAt: verifiedAt } : {}),
-      ...(tlsStatus !== undefined ? { customDomainTlsStatus: tlsStatus } : {}),
-      updatedAt: new Date(),
+      customDomainVerifiedAt: verifiedAt ?? null,
+      customDomainTlsStatus: tlsStatus ?? null,
     })
-    .where(eq(tenantBrandings.tenantId, tenantId))
+    .onConflictDoUpdate({
+      target: tenantBrandings.tenantId,
+      set: {
+        customDomainStatus: status,
+        ...(verifiedAt !== undefined ? { customDomainVerifiedAt: verifiedAt } : {}),
+        ...(tlsStatus !== undefined ? { customDomainTlsStatus: tlsStatus } : {}),
+        updatedAt: new Date(),
+      },
+    })
     .returning();
-  return updated ?? null;
+  return record ?? null;
 }
 
 export async function updateCustomDomain(
   tenantId: string,
   domain: string | null,
 ): Promise<TenantBranding | null> {
-  const [updated] = await db
-    .update(tenantBrandings)
-    .set({
+  const [record] = await db
+    .insert(tenantBrandings)
+    .values({
+      tenantId,
       customDomain: domain ? domain.toLowerCase() : null,
       customDomainStatus: 'PENDING',
       customDomainVerifiedAt: null,
       customDomainTlsStatus: null,
-      updatedAt: new Date(),
     })
-    .where(eq(tenantBrandings.tenantId, tenantId))
+    .onConflictDoUpdate({
+      target: tenantBrandings.tenantId,
+      set: {
+        customDomain: domain ? domain.toLowerCase() : null,
+        customDomainStatus: 'PENDING',
+        customDomainVerifiedAt: null,
+        customDomainTlsStatus: null,
+        updatedAt: new Date(),
+      },
+    })
     .returning();
-  return updated ?? null;
+  return record ?? null;
 }
 
 export const tenantBrandingRepo = {

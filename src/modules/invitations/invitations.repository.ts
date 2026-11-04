@@ -185,6 +185,12 @@ export async function executeAcceptanceTransaction(data: {
   userId: string;
   roleId: string;
   invitationId: string;
+  memberMetadata?: {
+    memberCode?: string | null;
+    phone?: string | null;
+    jobTitle?: string | null;
+    department?: string | null;
+  };
 }): Promise<{ memberId: string }> {
   return db.transaction(async (tx) => {
     // 1. Check if membership exists
@@ -199,7 +205,14 @@ export async function executeAcceptanceTransaction(data: {
     if (existingMember) {
       await tx
         .update(tenantMembers)
-        .set({ status: 'ACTIVE' })
+        .set({
+          status: 'ACTIVE',
+          deletedAt: null,
+          ...(data.memberMetadata?.memberCode ? { memberCode: data.memberMetadata.memberCode } : {}),
+          ...(data.memberMetadata?.phone ? { phone: data.memberMetadata.phone } : {}),
+          ...(data.memberMetadata?.jobTitle ? { jobTitle: data.memberMetadata.jobTitle } : {}),
+          ...(data.memberMetadata?.department ? { department: data.memberMetadata.department } : {}),
+        })
         .where(eq(tenantMembers.id, existingMember.id));
       memberId = existingMember.id;
     } else {
@@ -209,6 +222,10 @@ export async function executeAcceptanceTransaction(data: {
           tenantId: data.tenantId,
           userId: data.userId,
           status: 'ACTIVE',
+          memberCode: data.memberMetadata?.memberCode ?? null,
+          phone: data.memberMetadata?.phone ?? null,
+          jobTitle: data.memberMetadata?.jobTitle ?? null,
+          department: data.memberMetadata?.department ?? null,
         })
         .returning();
       memberId = newMember!.id;

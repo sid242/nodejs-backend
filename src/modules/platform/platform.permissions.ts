@@ -34,6 +34,7 @@ export const PLATFORM_PERMISSIONS = {
   TENANTS_CREATE: 'tenants::create',
   TENANTS_MANAGE: 'tenants::manage',
   TENANTS_SUSPEND: 'tenants::suspend',
+  TENANTS_DELETE: 'tenants::delete',
 
   // Audited Customer Support Delegation
   SUPPORT_START: 'tenant_support::start',
@@ -168,6 +169,13 @@ export const PLATFORM_PERMISSION_CATALOGUE: PlatformPermissionDefinition[] = [
     description: 'Change tenant operational status between active and suspended',
     resource: 'tenants',
     action: 'suspend',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.TENANTS_DELETE,
+    name: 'Close / Delete Tenants',
+    description: 'Permanently close and deactivate tenant workspaces',
+    resource: 'tenants',
+    action: 'delete',
   },
   {
     key: PLATFORM_PERMISSIONS.SUPPORT_START,

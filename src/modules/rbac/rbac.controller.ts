@@ -71,30 +71,39 @@ export const deleteModule = asyncHandler(async (req: Request, res: Response) => 
 });
 
 export const listTenantRoles = asyncHandler(async (req: Request, res: Response) => {
-  const rolesList = await rbacRepo.findRolesByTenant(req.tenant?.id ?? null);
-  const enriched = await Promise.all(
-    rolesList.map(async (role) => {
-      const perms = await rbacRepo.getRolePermissionKeys(role.id);
-      return { ...role, permissions: perms };
-    }),
-  );
-  AppResponse.ok(enriched).send(res);
+  const filters = req.valid?.query ?? {};
+  const result = await rbacService.listRoles(req.tenant?.id ?? null, filters);
+  AppResponse.ok(result.items, undefined, {
+    total: result.total,
+    page: result.page,
+    limit: result.limit,
+    totalPages: result.totalPages,
+  }).send(res);
+});
+
+export const getTenantRole = asyncHandler(async (req: Request, res: Response) => {
+  const roleId = String(req.params.roleId);
+  const result = await rbacService.getRoleById(req.tenant!.id, roleId);
+  AppResponse.ok(result).send(res);
 });
 
 export const createTenantRole = asyncHandler(async (req: Request, res: Response) => {
-  const { name, description, permissions } = req.valid!.body;
   const result = await rbacService.createCustomTenantRole(
     req.tenant!.id,
-    name,
-    description,
-    permissions,
+    req.valid!.body,
+    req.user?.id,
   );
   AppResponse.created(result, 'Role created successfully').send(res);
 });
 
 export const updateTenantRole = asyncHandler(async (req: Request, res: Response) => {
   const roleId = String(req.params.roleId);
-  const result = await rbacService.updateCustomTenantRole(req.tenant!.id, roleId, req.valid!.body);
+  const result = await rbacService.updateCustomTenantRole(
+    req.tenant!.id,
+    roleId,
+    req.valid!.body,
+    req.user?.id,
+  );
   AppResponse.ok(result, 'Role updated successfully').send(res);
 });
 
