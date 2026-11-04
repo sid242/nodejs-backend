@@ -132,6 +132,7 @@ export async function getTenantDetails(tenantId: string): Promise<PublicTenant> 
     slug: tenant.slug,
     status: tenant.status,
     plan: tenant.plan,
+    allowSupportAccess: tenant.allowSupportAccess,
     createdAt: tenant.createdAt,
   };
 }
@@ -149,6 +150,7 @@ export async function updateTenantDetails(
     slug: updated.slug,
     status: updated.status,
     plan: updated.plan,
+    allowSupportAccess: updated.allowSupportAccess,
     createdAt: updated.createdAt,
   };
 }

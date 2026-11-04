@@ -109,8 +109,9 @@ export const startSupportSessionDto = z.object({
   targetMemberId: z.string().uuid().optional(),
   targetUserId: z.string().uuid().optional(),
   reason: z.string().trim().min(5).max(500),
-  ticketRef: z.string().trim().min(1).max(100),
+  ticketRef: z.string().trim().min(1).max(100).optional(),
   durationMinutes: z.coerce.number().int().min(5).max(120).default(30),
+  acknowledgement: z.boolean().default(true),
 });
 export type StartSupportSessionDto = z.infer<typeof startSupportSessionDto>;
 
@@ -122,6 +123,14 @@ export type EndSupportSessionDto = z.infer<typeof endSupportSessionDto>;
 export const listSupportSessionsQueryDto = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
+  tenantId: z.string().uuid().optional(),
+  staffId: z.string().uuid().optional(),
+  targetUserId: z.string().uuid().optional(),
+  status: z.enum(['ACTIVE', 'EXPIRED', 'TERMINATED']).optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  ticketRef: z.string().optional(),
+  search: z.string().optional(),
 });
 export type ListSupportSessionsQueryDto = z.infer<typeof listSupportSessionsQueryDto>;
 

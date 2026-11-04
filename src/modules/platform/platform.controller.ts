@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 
 import { asyncHandler } from '@/lib/async-handler';
+import { AppError } from '@/lib/errors';
 import { AppResponse } from '@/lib/responses';
 
 import * as platform2FaService from './platform-2fa.service';
@@ -229,6 +230,9 @@ export const listPermissions = asyncHandler(async (_req: Request, res: Response)
 // ==========================================
 
 export const startSupportSession = asyncHandler(async (req: Request, res: Response) => {
+  if (req.isSupportSession) {
+    throw AppError.forbidden('Nested impersonation is strictly prohibited');
+  }
   const result = await service.startSupportSession(
     req.staff!,
     req.params.id as string,
@@ -239,10 +243,14 @@ export const startSupportSession = asyncHandler(async (req: Request, res: Respon
 });
 
 export const enterSupportSession = asyncHandler(async (req: Request, res: Response) => {
+  if (req.isSupportSession) {
+    throw AppError.forbidden('Nested impersonation is strictly prohibited');
+  }
   const result = await service.enterSupportSession(
     req.staff!.id,
     req.params.id as string,
     req.id ? String(req.id) : undefined,
+    req.isSupportSession,
   );
   AppResponse.ok(result, 'Support session entered successfully').send(res);
 });

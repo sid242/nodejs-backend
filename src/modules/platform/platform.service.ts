@@ -48,6 +48,7 @@ import type {
   InviteStaffDto,
   ListPlatformTenantsQueryDto,
   ListStaffQueryDto,
+  ListSupportSessionsQueryDto,
   LoginStaffDto,
   ProvisionTenantInput,
   QueryPlatformAuditLogsDto,
@@ -751,11 +752,22 @@ export async function startSupportSession(
   data: StartSupportSessionDto,
   requestId?: string,
 ) {
+  if ((actor as any)?.isSupportSession) {
+    throw AppError.forbidden('Nested impersonation is strictly prohibited');
+  }
+
   const actorCtx = await resolveActorContext(actor);
+  if ((actorCtx as any)?.isSupportSession) {
+    throw AppError.forbidden('Nested impersonation is strictly prohibited');
+  }
 
   const tenant = await tenantsRepo.findTenantById(tenantId);
   if (!tenant || tenant.deletedAt) {
     throw AppError.notFound('Tenant organization not found');
+  }
+
+  if (tenant.allowSupportAccess === false) {
+    throw AppError.forbidden('This workspace has disabled support access');
   }
 
   // 1. Permission checks for scope & mode
@@ -775,15 +787,6 @@ export async function startSupportSession(
     throw AppError.forbidden('Requires tenant_support::impersonate permission for AS_MEMBER mode support sessions');
   }
 
-  // DEFAULT: AS_MEMBER + FULL additionally requires the tenant not to have allowSupportAccess = false
-  if (
-    data.mode === 'AS_MEMBER' &&
-    data.scope === 'FULL' &&
-    (tenant as any).allowSupportAccess === false
-  ) {
-    throw AppError.forbidden('This workspace has disabled full impersonation support access');
-  }
-
   let targetUserId = data.targetUserId;
   let targetMemberId = data.targetMemberId;
 
@@ -797,6 +800,11 @@ export async function startSupportSession(
     }
 
     if (!member || member.status !== 'ACTIVE' || member.tenantId !== tenantId) {
+      throw AppError.badRequest('Target member not found or is not active in this workspace');
+    }
+
+    const targetUser = await authRepo.findById(member.userId);
+    if (!targetUser || targetUser.status !== 'ACTIVE') {
       throw AppError.badRequest('Target member not found or is not active in this workspace');
     }
 
@@ -865,7 +873,12 @@ export async function enterSupportSession(
   actorStaffId: string,
   sessionId: string,
   requestId?: string,
+  isNested?: boolean,
 ) {
+  if (isNested) {
+    throw AppError.forbidden('Nested impersonation is strictly prohibited');
+  }
+
   const session = await platformRepo.findSupportSessionById(sessionId);
   if (!session) throw AppError.notFound('Support session not found');
 
@@ -960,7 +973,7 @@ export async function endSupportSession(
   return terminated;
 }
 
-export async function listSupportSessions(filters?: { page?: number; limit?: number }) {
+export async function listSupportSessions(filters?: ListSupportSessionsQueryDto) {
   return platformRepo.listSupportSessionsPaginated(filters);
 }
 

@@ -63,7 +63,7 @@ export async function requireSupportOrUser(
     }
 
     if (new Date(session.expiresAt) <= new Date()) {
-      await platformRepo.terminateSupportSession(session.id);
+      await platformRepo.terminateSupportSession(session.id, { status: 'EXPIRED' });
       return next(AppError.unauthorized('Support session has expired'));
     }
 
@@ -221,9 +221,12 @@ export function auditSupportActions(req: Request, res: Response, next: NextFunct
         await logSecurityEvent({
           tenantId: req.supportSession.tenantId,
           userId: req.user?.id,
+          actorUserId: null,
+          effectiveUserId: req.supportSession.targetUserId ?? req.user?.id ?? null,
           actorType: 'PLATFORM_STAFF',
           actorStaffId: req.supportSession.staffId,
           supportSessionId: req.supportSession.id,
+          source: 'IMPERSONATION',
           action,
           entityType: 'SupportAction',
           metadata: {

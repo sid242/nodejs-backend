@@ -65,6 +65,7 @@ export const updateTenantDto = z
   .object({
     name: z.string().trim().min(2).max(100).optional(),
     slug: tenantSlugSchema.optional(),
+    allowSupportAccess: z.boolean().optional(),
   })
   .strict();
 

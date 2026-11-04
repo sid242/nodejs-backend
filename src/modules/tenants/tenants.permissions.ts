@@ -59,5 +59,11 @@ export const membersModuleDefinition: DomainModuleDefinition = {
       action: 'delete',
       description: 'Remove member from organization',
     },
+    {
+      key: 'users:impersonate',
+      name: 'Impersonate Member',
+      action: 'impersonate',
+      description: 'Temporary support impersonation of tenant member',
+    },
   ],
 };

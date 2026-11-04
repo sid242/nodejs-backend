@@ -29,6 +29,7 @@ import {
 import type {
   ListPlatformTenantsQueryDto,
   ListStaffQueryDto,
+  ListSupportSessionsQueryDto,
   QueryPlatformAuditLogsDto,
   UpdateStaffDto,
 } from './platform.dto';
@@ -417,9 +418,49 @@ export async function terminateSupportSession(
   return session ?? null;
 }
 
-export async function listSupportSessionsPaginated(filters?: { page?: number; limit?: number }) {
+export async function listSupportSessionsPaginated(filters?: ListSupportSessionsQueryDto) {
   const page = filters?.page ?? 1;
   const limit = filters?.limit ?? 20;
+
+  const conditions = [];
+
+  if (filters?.tenantId) {
+    conditions.push(eq(platformSupportSessions.tenantId, filters.tenantId));
+  }
+  if (filters?.staffId) {
+    conditions.push(eq(platformSupportSessions.staffId, filters.staffId));
+  }
+  if (filters?.targetUserId) {
+    conditions.push(eq(platformSupportSessions.targetUserId, filters.targetUserId));
+  }
+  if (filters?.status) {
+    conditions.push(eq(platformSupportSessions.status, filters.status));
+  }
+  if (filters?.ticketRef) {
+    conditions.push(ilike(platformSupportSessions.ticketRef, `%${filters.ticketRef.trim()}%`));
+  }
+  if (filters?.startDate) {
+    conditions.push(gte(platformSupportSessions.startedAt, new Date(filters.startDate)));
+  }
+  if (filters?.endDate) {
+    conditions.push(lte(platformSupportSessions.startedAt, new Date(filters.endDate)));
+  }
+  if (filters?.search) {
+    const term = `%${filters.search.trim()}%`;
+    conditions.push(
+      or(
+        ilike(platformSupportSessions.reason, term),
+        ilike(platformSupportSessions.ticketRef, term),
+        ilike(platformStaff.email, term),
+        ilike(platformStaff.displayName, term),
+        ilike(tenants.name, term),
+        ilike(tenants.slug, term),
+      ),
+    );
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
   const [items, totalResult] = await Promise.all([
     db
       .select({
@@ -428,6 +469,14 @@ export async function listSupportSessionsPaginated(filters?: { page?: number; li
         staffEmail: platformStaff.email,
         staffDisplayName: platformStaff.displayName,
         tenantId: platformSupportSessions.tenantId,
+        tenantName: tenants.name,
+        tenantSlug: tenants.slug,
+        mode: platformSupportSessions.mode,
+        scope: platformSupportSessions.scope,
+        targetUserId: platformSupportSessions.targetUserId,
+        targetUserEmail: users.email,
+        targetUserName: users.name,
+        ticketRef: platformSupportSessions.ticketRef,
         reason: platformSupportSessions.reason,
         status: platformSupportSessions.status,
         expiresAt: platformSupportSessions.expiresAt,
@@ -436,10 +485,19 @@ export async function listSupportSessionsPaginated(filters?: { page?: number; li
       })
       .from(platformSupportSessions)
       .leftJoin(platformStaff, eq(platformSupportSessions.staffId, platformStaff.id))
+      .leftJoin(tenants, eq(platformSupportSessions.tenantId, tenants.id))
+      .leftJoin(users, eq(platformSupportSessions.targetUserId, users.id))
+      .where(whereClause)
       .orderBy(desc(platformSupportSessions.startedAt))
       .offset((page - 1) * limit)
       .limit(limit),
-    db.select({ count: sql<number>`count(*)::int` }).from(platformSupportSessions),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(platformSupportSessions)
+      .leftJoin(platformStaff, eq(platformSupportSessions.staffId, platformStaff.id))
+      .leftJoin(tenants, eq(platformSupportSessions.tenantId, tenants.id))
+      .leftJoin(users, eq(platformSupportSessions.targetUserId, users.id))
+      .where(whereClause),
   ]);
 
   return {

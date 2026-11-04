@@ -78,6 +78,7 @@ export const publicTenant = {
   status: tenants.status,
   plan: tenants.plan,
   urlStyle: tenants.urlStyle,
+  allowSupportAccess: tenants.allowSupportAccess,
   provisioningStatus: tenants.provisioningStatus,
   trialEndsAt: tenants.trialEndsAt,
   databaseMode: tenants.databaseMode,
@@ -90,6 +91,7 @@ export type PublicTenant = {
   slug: string;
   status: 'ACTIVE' | 'SUSPENDED' | 'TRIALING' | 'DEACTIVATED';
   plan: string;
+  allowSupportAccess?: boolean;
   urlStyle?: 'path' | 'subdomain' | 'customDomain' | string;
   databaseMode?: 'shared' | 'dedicated' | string;
   legalName?: string | null;
