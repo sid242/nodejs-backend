@@ -30,6 +30,7 @@ import type {
   ListPlatformTenantsQueryDto,
   ListStaffQueryDto,
   ListSupportSessionsQueryDto,
+  ListTenantDatabasesQueryDto,
   QueryPlatformAuditLogsDto,
   UpdateStaffDto,
 } from './platform.dto';
@@ -894,4 +895,125 @@ export async function countActiveSuperAdmins(): Promise<number> {
     .innerJoin(platformRoles, eq(platformStaff.roleId, platformRoles.id))
     .where(and(eq(platformRoles.key, 'SUPER_ADMIN'), eq(platformStaff.status, 'ACTIVE')));
   return result?.count ?? 0;
+}
+
+export async function listTenantDatabasesPaginated(filters?: ListTenantDatabasesQueryDto) {
+  const page = filters?.page ?? 1;
+  const limit = filters?.limit ?? 20;
+
+  const conditions = [isNull(tenants.deletedAt)];
+
+  if (filters?.tenantId) {
+    conditions.push(eq(tenants.id, filters.tenantId));
+  }
+
+  if (filters?.strategy && filters.strategy !== 'ALL') {
+    conditions.push(eq(tenants.databaseMode, filters.strategy));
+  }
+
+  if (filters?.provisioningStatus && filters.provisioningStatus !== 'ALL') {
+    conditions.push(eq(tenants.provisioningStatus, filters.provisioningStatus));
+  }
+
+  if (filters?.region) {
+    conditions.push(ilike(tenants.region, `%${filters.region.trim()}%`));
+  }
+
+  if (filters?.schemaVersion) {
+    conditions.push(eq(tenants.schemaVersion, filters.schemaVersion.trim()));
+  }
+
+  if (filters?.search) {
+    const term = `%${filters.search.trim()}%`;
+    conditions.push(
+      or(
+        ilike(tenants.name, term),
+        ilike(tenants.slug, term),
+        ilike(tenants.tenantCode, term),
+        ilike(tenants.databaseKey, term),
+      )!,
+    );
+  }
+
+  const whereClause = and(...conditions);
+
+  const [records, totalResult] = await Promise.all([
+    db
+      .select({
+        id: tenants.id,
+        name: tenants.name,
+        slug: tenants.slug,
+        tenantCode: tenants.tenantCode,
+        region: tenants.region,
+        databaseMode: tenants.databaseMode,
+        databaseKey: tenants.databaseKey,
+        schemaVersion: tenants.schemaVersion,
+        provisioningStatus: tenants.provisioningStatus,
+        provisioningStep: tenants.provisioningStep,
+        provisioningError: tenants.provisioningError,
+        metadata: tenants.metadata,
+        createdAt: tenants.createdAt,
+        updatedAt: tenants.updatedAt,
+      })
+      .from(tenants)
+      .where(whereClause)
+      .orderBy(desc(tenants.updatedAt))
+      .offset((page - 1) * limit)
+      .limit(limit),
+    db.select({ count: sql<number>`count(*)::int` }).from(tenants).where(whereClause),
+  ]);
+
+  const items = records.map((t) => {
+    const meta = (t.metadata as Record<string, unknown> | null) ?? {};
+    const dedicatedDbName =
+      (meta.databaseName as string) ||
+      (t.databaseMode === 'dedicated' ? `tenant_${t.id.replace(/-/g, '_')}` : 'primary_db');
+
+    const healthStatus = (meta.lastHealthCheckStatus as string) || 'UNKNOWN';
+    if (filters?.healthStatus && filters.healthStatus !== 'ALL' && healthStatus !== filters.healthStatus) {
+      // Allow filter matching
+    }
+
+    return {
+      id: t.id,
+      name: t.name,
+      slug: t.slug,
+      tenantCode: t.tenantCode,
+      region: t.region || 'us-east-1',
+      strategy: t.databaseMode as 'shared' | 'dedicated',
+      databaseKey: t.databaseKey,
+      databaseName: dedicatedDbName,
+      schemaVersion: t.schemaVersion || '1.0.0',
+      provisioningStatus: t.provisioningStatus,
+      provisioningStep: t.provisioningStep,
+      provisioningError: t.provisioningError,
+      migrationStatus: (meta.migrationStatus as string) || 'UP_TO_DATE',
+      lastMigrationAt:
+        (meta.lastMigrationAt as string) || (meta.migratedToDedicatedAt as string) || null,
+      health: {
+        status: healthStatus,
+        latencyMs: (meta.lastHealthLatencyMs as number) || null,
+        lastCheckedAt: (meta.lastHealthCheckAt as string) || null,
+      },
+      maintenanceWindow: (meta.maintenanceWindow as string) || null,
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt,
+    };
+  });
+
+  // Apply in-memory filter for computed healthStatus or migrationStatus if requested
+  let filteredItems = items;
+  if (filters?.healthStatus && filters.healthStatus !== 'ALL') {
+    filteredItems = filteredItems.filter((i) => i.health.status === filters.healthStatus);
+  }
+  if (filters?.migrationStatus && filters.migrationStatus !== 'ALL') {
+    filteredItems = filteredItems.filter((i) => i.migrationStatus === filters.migrationStatus);
+  }
+
+  return {
+    items: filteredItems,
+    total: totalResult[0]?.count ?? 0,
+    page,
+    limit,
+  };
 }

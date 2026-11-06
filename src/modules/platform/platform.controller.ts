@@ -413,3 +413,18 @@ export const overrideTenantUrlSettings = asyncHandler(async (req: Request, res: 
   );
   AppResponse.ok(result, 'Tenant URL settings overridden successfully').send(res);
 });
+
+export const listTenantDatabases = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.listTenantDatabases(req.valid?.query);
+  AppResponse.ok(result).send(res);
+});
+
+export const executeTenantDatabaseOperation = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.executeTenantDatabaseOperation(
+    req.staff!.id,
+    req.params.id as string,
+    req.valid?.body,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.ok(result, 'Tenant database operation executed successfully').send(res);
+});

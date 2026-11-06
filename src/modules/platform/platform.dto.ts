@@ -316,3 +316,41 @@ export const migrateTenantDatabaseDto = z.object({
   connectionUrl: z.string().trim().url().optional(),
 });
 export type MigrateTenantDatabaseDto = z.infer<typeof migrateTenantDatabaseDto>;
+
+export const listTenantDatabasesQueryDto = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().trim().optional(),
+  tenantId: z.string().uuid().optional(),
+  strategy: z.enum(['shared', 'dedicated', 'ALL']).optional(),
+  provisioningStatus: z
+    .enum(['ACTIVE', 'PENDING', 'PROVISIONING', 'FAILED', 'SUSPENDED', 'DEACTIVATED', 'ALL'])
+    .optional(),
+  region: z.string().trim().optional(),
+  schemaVersion: z.string().trim().optional(),
+  migrationStatus: z.enum(['UP_TO_DATE', 'PENDING', 'MIGRATING', 'FAILED', 'ALL']).optional(),
+  healthStatus: z.enum(['HEALTHY', 'UNHEALTHY', 'UNKNOWN', 'ALL']).optional(),
+});
+export type ListTenantDatabasesQueryDto = z.infer<typeof listTenantDatabasesQueryDto>;
+
+export const executeTenantDatabaseOperationDto = z.object({
+  action: z.enum([
+    'PROVISION',
+    'RETRY_PROVISIONING',
+    'MIGRATE',
+    'HEALTH_CHECK',
+    'BACKUP',
+    'RESTORE',
+    'ROLLBACK',
+  ]),
+  targetVersion: z.string().trim().max(50).optional(),
+  maintenanceWindow: z.string().trim().max(100).optional(),
+  reason: z.string().trim().min(5, 'Reason must be at least 5 characters').max(500),
+  backupConfirmed: z.boolean().default(false).optional(),
+  poolLimit: z.coerce.number().int().min(1).max(50).optional(),
+  customDatabaseName: z.string().trim().max(63).optional(),
+  connectionUrl: z.string().trim().url().optional(),
+});
+export type ExecuteTenantDatabaseOperationDto = z.infer<
+  typeof executeTenantDatabaseOperationDto
+>;

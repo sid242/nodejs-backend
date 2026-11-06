@@ -281,6 +281,20 @@ router.post(
 // ==========================================
 // 5.1 Dedicated Database Lifecycle & Health
 // ==========================================
+router.get(
+  '/database-operations',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.HEALTH_READ),
+  validate({ query: dto.listTenantDatabasesQueryDto }),
+  controller.listTenantDatabases,
+);
+
+router.post(
+  '/database-operations/:id/execute',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.TENANTS_MANAGE),
+  validate({ body: dto.executeTenantDatabaseOperationDto }),
+  controller.executeTenantDatabaseOperation,
+);
+
 router.post(
   '/tenants/:id/database/migrate-to-dedicated',
   requirePlatformPermission(PLATFORM_PERMISSIONS.TENANTS_MANAGE),
