@@ -21,7 +21,9 @@ server.keepAliveTimeout = 65_000;
 server.headersTimeout = 66_000;
 server.requestTimeout = env.HTTP_REQUEST_TIMEOUT_MS;
 
-server.listen(env.PORT, () => logger.info({ port: env.PORT }, 'api listening'));
+server.listen(env.PORT, env.HOST, () =>
+  logger.info({ host: env.HOST, port: env.PORT }, 'api listening'),
+);
 
 async function shutdown(signal: string): Promise<void> {
   if (state.shuttingDown) return;

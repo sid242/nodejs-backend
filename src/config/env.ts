@@ -5,10 +5,12 @@ const bool = z.enum(['true', 'false']).transform((v) => v === 'true');
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   APP_NAME: z.string().default('api'),
+  HOST: z.string().default('0.0.0.0'),
   PORT: z.coerce.number().int().default(3000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   TRUST_PROXY: z.coerce.number().int().default(1),
-  CORS_ORIGINS: z.string().default('http://localhost:5173'),
+  CORS_ORIGINS: z.string().default('http://localhost:5173,http://localhost:3000,http://localhost:3001'),
+  CORS_ALLOW_LAN: bool.default('true'),
 
   // Tenancy & Custom Domain Configuration
   APP_BASE_DOMAIN: z.string().default('example.com'),

@@ -185,6 +185,33 @@ curl -X POST http://localhost:3000/api/v1/auth/stop-impersonate \
 
 ---
 
+## LAN & Mobile Device Development Support
+
+To test the application on physical mobile devices (iOS Safari, Android Chrome) connected to the same Wi-Fi network:
+
+1. **Find your computer's LAN IPv4 address:**
+   - **Windows:** Run `ipconfig` and find the active Wi-Fi adapter's `IPv4 Address` (e.g. `192.168.1.45`).
+   - **macOS:** Run `ipconfig getifaddr en0`.
+   - **Linux:** Run `hostname -I`.
+2. **Configure environment variables in `.env`:**
+   ```bash
+   HOST=0.0.0.0
+   PORT=3009 # or your configured API port
+   # Add your computer's LAN IP to CORS_ORIGINS:
+   CORS_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost:3001,http://192.168.1.45:3001
+   CORS_ALLOW_LAN=true
+   ```
+3. **Firewall & Network:**
+   - Allow incoming connections on the API port (`3009`) and frontend port (`3001`) through the local OS firewall on the Private network.
+   - Verify that your Wi-Fi network does not enforce AP/client isolation (common on guest Wi-Fi networks).
+4. **Start the API:**
+   ```bash
+   npm run dev
+   ```
+   The API server will listen on `0.0.0.0:3009` and will accept credentialed CORS requests from the mobile frontend origin.
+
+---
+
 ## Scaling Rules of Thumb
 
 1. **Zero Process Memory State**: Sessions, rate limits, WebSocket rooms, and locks live in Redis. Replicas can be destroyed or added at any moment.

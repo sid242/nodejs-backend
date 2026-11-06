@@ -47,6 +47,19 @@ export async function removeCorsCustomDomain(domain: string): Promise<void> {
   }
 }
 
+export function isPrivateNetworkHostname(hostname: string): boolean {
+  const clean = hostname.toLowerCase().trim();
+  // Loopback
+  if (clean === 'localhost' || clean === '127.0.0.1' || clean === '::1') return true;
+  // 10.0.0.0 - 10.255.255.255
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(clean)) return true;
+  // 172.16.0.0 - 172.31.255.255
+  if (/^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(clean)) return true;
+  // 192.168.0.0 - 192.168.255.255
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(clean)) return true;
+  return false;
+}
+
 export async function isOriginAllowed(origin: string | undefined): Promise<boolean> {
   if (!origin) return true;
 
@@ -64,6 +77,13 @@ export async function isOriginAllowed(origin: string | undefined): Promise<boole
   }
 
   const hostname = parsedUrl.hostname.toLowerCase();
+
+  // 1b. In development, allow private local network origins (LAN mobile testing)
+  if (env.NODE_ENV === 'development' && env.CORS_ALLOW_LAN) {
+    if (isPrivateNetworkHostname(hostname)) {
+      return true;
+    }
+  }
   const rawBaseDomain = env.APP_BASE_DOMAIN.toLowerCase().split(':')[0] ?? 'localhost';
 
   // 2. Platform host match

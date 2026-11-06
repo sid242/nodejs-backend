@@ -4,7 +4,12 @@ import { after, test } from 'node:test';
 import { closeDb } from '../src/config/db';
 import { env } from '../src/config/env';
 import { closeRedisClients } from '../src/config/redis';
-import { isOriginAllowed, addCorsCustomDomain, removeCorsCustomDomain } from '../src/lib/cors';
+import {
+  isOriginAllowed,
+  addCorsCustomDomain,
+  removeCorsCustomDomain,
+  isPrivateNetworkHostname,
+} from '../src/lib/cors';
 import { tenantSlugSchema, isReservedSlug } from '../src/modules/tenants/tenants.dto';
 import { tenantsRepo } from '../src/modules/tenants/tenants.repository';
 import * as tenantsService from '../src/modules/tenants/tenants.service';
@@ -157,6 +162,19 @@ test('Dynamic CORS origin validation allows verified domains and subdomains', as
 
   await removeCorsCustomDomain(testDomain);
   assert.equal(await isOriginAllowed(`https://${testDomain}`), false);
+
+  // 5. Private LAN network origins for mobile development (Phase 13)
+  assert.equal(isPrivateNetworkHostname('192.168.1.45'), true);
+  assert.equal(isPrivateNetworkHostname('10.0.0.1'), true);
+  assert.equal(isPrivateNetworkHostname('172.20.0.5'), true);
+  assert.equal(isPrivateNetworkHostname('127.0.0.1'), true);
+  assert.equal(isPrivateNetworkHostname('localhost'), true);
+  assert.equal(isPrivateNetworkHostname('attacker.com'), false);
+
+  // Origin evaluation for mobile testing
+  assert.equal(await isOriginAllowed('http://192.168.1.45:3001'), true);
+  assert.equal(await isOriginAllowed('http://10.0.0.5:3000'), true);
+  assert.equal(await isOriginAllowed('http://malicious-external-site.com'), false);
 });
 
 test('URL settings API plan gating prevents unauthorized upgrades to subdomain/customDomain', async () => {
