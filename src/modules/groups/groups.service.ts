@@ -1,4 +1,3 @@
-import { db } from '@/config/db';
 import { AppError } from '@/lib/errors';
 import { logSecurityEvent } from '@/modules/audit/audit.service';
 import { logPlatformAction } from '@/modules/platform/platform.repository';
@@ -313,22 +312,29 @@ export async function bindTenantGroupRole(
     throw AppError.badRequest('Cannot bind roles to an archived group');
   }
 
-  const role = await rbacRepo.findRoleById(input.roleId);
-  if (!role) {
-    throw AppError.notFound('Role not found');
-  }
+  const roleIdsToBind = Array.from(new Set(input.roleIds));
 
-  // Scope enforcement: tenant group can only bind tenant roles
-  if (role.scope !== 'TENANT') {
-    throw AppError.badRequest('Cannot bind a platform role to a tenant user group');
-  }
+  const boundRoles: Array<{ id: string; name: string }> = [];
 
-  // Cross-tenant mismatch enforcement
-  if (role.tenantId && role.tenantId !== tenantId) {
-    throw AppError.badRequest('Role does not belong to this organization');
-  }
+  for (const rId of roleIdsToBind) {
+    const role = await rbacRepo.findRoleById(rId);
+    if (!role) {
+      throw AppError.notFound(`Role not found: ${rId}`);
+    }
 
-  await groupsRepo.bindRoleToGroup(groupId, input.roleId);
+    // Scope enforcement: tenant group can only bind tenant roles
+    if (role.scope !== 'TENANT') {
+      throw AppError.badRequest('Cannot bind a platform role to a tenant user group');
+    }
+
+    // Cross-tenant mismatch enforcement
+    if (role.tenantId && role.tenantId !== tenantId) {
+      throw AppError.badRequest(`Role "${role.name}" does not belong to this organization`);
+    }
+
+    await groupsRepo.bindRoleToGroup(groupId, rId);
+    boundRoles.push({ id: role.id, name: role.name });
+  }
 
   await logSecurityEvent({
     tenantId,
@@ -337,8 +343,9 @@ export async function bindTenantGroupRole(
     entityType: 'UserGroup',
     entityId: groupId,
     metadata: {
-      roleId: input.roleId,
-      roleName: role.name,
+      roleIds: boundRoles.map((r) => r.id),
+      roleNames: boundRoles.map((r) => r.name),
+      count: boundRoles.length,
       reason: input.reason,
     },
   });
@@ -346,7 +353,13 @@ export async function bindTenantGroupRole(
   // Invalidate RBAC cache for all users in the tenant
   await invalidateRbacCache(tenantId);
 
-  return { success: true, groupId, roleId: input.roleId, roleName: role.name };
+  return {
+    success: true,
+    groupId,
+    roleId: boundRoles[0]?.id,
+    roleName: boundRoles[0]?.name,
+    roles: boundRoles,
+  };
 }
 
 export async function unbindTenantGroupRole(

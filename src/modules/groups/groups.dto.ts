@@ -44,7 +44,9 @@ export const listGroupsQueryDto = z.object({
 export type ListGroupsQuery = z.infer<typeof listGroupsQueryDto>;
 
 export const bindRoleDto = z.object({
-  roleId: z.string().trim().uuid('Invalid role ID format'),
+  roleIds: z
+    .array(z.string().trim().uuid('Invalid role ID format'))
+    .min(1, 'At least one role ID is required'),
   expiresAt: z.string().datetime().optional().nullable(),
   reason: z.string().trim().max(255).optional(),
 });

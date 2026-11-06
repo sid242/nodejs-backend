@@ -26,18 +26,28 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
   });
 
   describe('1. DTO Validation for Group Role Bindings', () => {
-    it('validates bindRoleDto with a valid UUID and optional reason', () => {
+    it('validates bindRoleDto with an array of roleIds for multi-role assignment', () => {
+      const mockRole2 = '66666666-6666-6666-6666-666666666666';
       const parsed = bindRoleDto.parse({
-        roleId: mockRoleId,
-        reason: 'Assigned to billing department group',
+        roleIds: [mockRoleId, mockRole2],
+        reason: 'Bulk role assignment to group',
       });
-      assert.equal(parsed.roleId, mockRoleId);
-      assert.equal(parsed.reason, 'Assigned to billing department group');
+      assert.deepEqual(parsed.roleIds, [mockRoleId, mockRole2]);
+      assert.equal(parsed.reason, 'Bulk role assignment to group');
     });
 
-    it('rejects bindRoleDto when roleId is not a valid UUID', () => {
+    it('rejects bindRoleDto when roleIds is empty or contains invalid UUID', () => {
       assert.throws(() => {
-        bindRoleDto.parse({ roleId: 'not-a-uuid' });
+        bindRoleDto.parse({ roleIds: [] });
+      });
+      assert.throws(() => {
+        bindRoleDto.parse({ roleIds: ['not-a-uuid'] });
+      });
+    });
+
+    it('rejects bindRoleDto when roleIds is not provided', () => {
+      assert.throws(() => {
+        bindRoleDto.parse({ reason: 'No roles specified' });
       });
     });
 
@@ -69,7 +79,7 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
         await assert.rejects(
           async () => {
             await groupsService.bindTenantGroupRole(mockTenantId, mockGroupId, mockActorId, {
-              roleId: mockRoleId,
+              roleIds: [mockRoleId],
             });
           },
           (err: any) => {
@@ -97,7 +107,7 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
         await assert.rejects(
           async () => {
             await groupsService.bindTenantGroupRole(mockTenantId, mockGroupId, mockActorId, {
-              roleId: mockRoleId,
+              roleIds: [mockRoleId],
             });
           },
           (err: any) => {
@@ -134,7 +144,7 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
         await assert.rejects(
           async () => {
             await groupsService.bindTenantGroupRole(mockTenantId, mockGroupId, mockActorId, {
-              roleId: mockRoleId,
+              roleIds: [mockRoleId],
             });
           },
           (err: any) => {
@@ -172,7 +182,7 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
         await assert.rejects(
           async () => {
             await groupsService.bindTenantGroupRole(mockTenantId, mockGroupId, mockActorId, {
-              roleId: mockRoleId,
+              roleIds: [mockRoleId],
             });
           },
           (err: any) => {
@@ -225,7 +235,7 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
           mockGroupId,
           mockActorId,
           {
-            roleId: mockRoleId,
+            roleIds: [mockRoleId],
             reason: 'Quarterly financial audit',
           },
         );
@@ -235,6 +245,78 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
         assert.equal(result.roleId, mockRoleId);
         assert.equal(result.roleName, 'Finance Manager');
         assert.deepEqual(boundRoleCall, { groupId: mockGroupId, roleId: mockRoleId });
+        assert.ok(invalidatedPrefix.includes(`rbac:perms:${mockTenantId}:`));
+      } finally {
+        groupsRepo.findGroupById = origFindGroup;
+        rbacRepo.findRoleById = origFindRole;
+        groupsRepo.bindRoleToGroup = origBind;
+        cache.delByPrefix = origDelPrefix;
+      }
+    });
+
+    it('successfully binds multiple roles to a tenant group in one call and invalidates tenant cache', async () => {
+      const origFindGroup = groupsRepo.findGroupById;
+      const origFindRole = rbacRepo.findRoleById;
+      const origBind = groupsRepo.bindRoleToGroup;
+      const origDelPrefix = cache.delByPrefix;
+
+      const mockRole2 = '66666666-6666-6666-6666-666666666666';
+      const boundRoleCalls: Array<{ groupId: string; roleId: string }> = [];
+      let invalidatedPrefix = '';
+
+      groupsRepo.findGroupById = async () => ({
+        id: mockGroupId,
+        name: 'Sales Team',
+        status: 'ACTIVE',
+        scope: 'TENANT',
+        tenantId: mockTenantId,
+      } as any);
+
+      rbacRepo.findRoleById = async (id: string) => {
+        if (id === mockRoleId) {
+          return {
+            id: mockRoleId,
+            name: 'Sales Manager',
+            scope: 'TENANT',
+            tenantId: mockTenantId,
+          } as any;
+        }
+        if (id === mockRole2) {
+          return {
+            id: mockRole2,
+            name: 'Property Viewer',
+            scope: 'TENANT',
+            tenantId: mockTenantId,
+          } as any;
+        }
+        return null;
+      };
+
+      groupsRepo.bindRoleToGroup = async (gId: string, rId: string) => {
+        boundRoleCalls.push({ groupId: gId, roleId: rId });
+      };
+
+      cache.delByPrefix = async (prefix: string) => {
+        invalidatedPrefix = prefix;
+      };
+
+      try {
+        const result = await groupsService.bindTenantGroupRole(
+          mockTenantId,
+          mockGroupId,
+          mockActorId,
+          {
+            roleIds: [mockRoleId, mockRole2],
+            reason: 'Assigned Sales and Property roles',
+          },
+        );
+
+        assert.equal(result.success, true);
+        assert.equal(result.groupId, mockGroupId);
+        assert.equal(result.roles?.length, 2);
+        assert.equal(boundRoleCalls.length, 2);
+        assert.deepEqual(boundRoleCalls[0], { groupId: mockGroupId, roleId: mockRoleId });
+        assert.deepEqual(boundRoleCalls[1], { groupId: mockGroupId, roleId: mockRole2 });
         assert.ok(invalidatedPrefix.includes(`rbac:perms:${mockTenantId}:`));
       } finally {
         groupsRepo.findGroupById = origFindGroup;

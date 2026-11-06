@@ -134,7 +134,7 @@ describe('Phase 09: Enterprise Audit Logging, Retention & Effective Access Simul
     });
 
     await groupsService.bindTenantGroupRole(enterpriseTenant.id, devOpsGroup.id, adminUser.id, {
-      roleId: customRole.id,
+      roleIds: [customRole.id],
     });
 
     // Add targetUser to devOpsGroup
