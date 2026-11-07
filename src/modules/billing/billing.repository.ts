@@ -7,10 +7,13 @@ import {
   entitlementDefinitions,
   files,
   invoices,
+  payments,
   planEntitlements,
   planModules,
   plans,
+  refunds,
   roles,
+  subscriptionChanges,
   subscriptionEvents,
   subscriptions,
   tenantEntitlementOverrides,
@@ -23,17 +26,27 @@ import {
   type Invoice,
   type NewBillingWebhook,
   type NewInvoice,
+  type NewPayment,
   type NewPlan,
+  type NewRefund,
   type NewSubscription,
+  type NewSubscriptionChange,
   type NewSubscriptionEvent,
-  type NewTenantEntitlementOverride,
+  type Payment,
   type Plan,
+  type Refund,
   type Subscription,
+  type SubscriptionChange,
   type SubscriptionEvent,
   type TenantEntitlementOverride,
 } from '@/db/schema';
 
-import type { ListPlansQueryDto, ListPlatformSubscriptionsQueryDto } from './billing.dto';
+import type {
+  ListPaymentsQueryDto,
+  ListPlansQueryDto,
+  ListPlatformPaymentsQueryDto,
+  ListPlatformSubscriptionsQueryDto,
+} from './billing.dto';
 import {
   DEFAULT_ENTITLEMENT_DEFINITIONS,
   DEFAULT_PLAN_ENTITLEMENT_VALUES,
@@ -65,11 +78,7 @@ export interface InvoiceWithDetails extends Invoice {
 // ==========================================
 
 export async function findPlanByKey(key: string): Promise<PlanWithModules | null> {
-  const [record] = await db
-    .select()
-    .from(plans)
-    .where(eq(plans.key, key.toUpperCase()))
-    .limit(1);
+  const [record] = await db.select().from(plans).where(eq(plans.key, key.toUpperCase())).limit(1);
 
   if (!record) return null;
   const modules = await getPlanModuleKeys(record.id);
@@ -109,7 +118,9 @@ export async function findActivePublicPlans(): Promise<PlanWithModules[]> {
   );
 }
 
-export async function findAllPlans(options?: Partial<ListPlansQueryDto>): Promise<PlanWithModules[]> {
+export async function findAllPlans(
+  options?: Partial<ListPlansQueryDto>,
+): Promise<PlanWithModules[]> {
   const conditions = [];
 
   if (
@@ -326,10 +337,7 @@ export async function findEntitlementDefinitions(): Promise<EntitlementDefinitio
 }
 
 export async function findPlanEntitlements(planId: string): Promise<Record<string, any>> {
-  const rows = await db
-    .select()
-    .from(planEntitlements)
-    .where(eq(planEntitlements.planId, planId));
+  const rows = await db.select().from(planEntitlements).where(eq(planEntitlements.planId, planId));
 
   const result: Record<string, any> = {};
   for (const r of rows ?? []) {
@@ -475,10 +483,7 @@ export async function findTenantSubscriptionWithPlan(
   return { ...sub, plan };
 }
 
-export async function createSubscription(
-  data: NewSubscription,
-  tx?: any,
-): Promise<Subscription> {
+export async function createSubscription(data: NewSubscription, tx?: any): Promise<Subscription> {
   const client = tx ?? db;
   const [record] = await client.insert(subscriptions).values(data).returning();
   if (!record) throw new Error('Failed to create subscription record');
@@ -631,8 +636,7 @@ export async function getTenantUsage(tenantId: string): Promise<TenantUsage> {
     .from(tenantInvitations)
     .where(and(eq(tenantInvitations.tenantId, tenantId), eq(tenantInvitations.status, 'PENDING')));
 
-  const membersCount =
-    Number(activeMembersRow?.total ?? 0) + Number(pendingInvitesRow?.total ?? 0);
+  const membersCount = Number(activeMembersRow?.total ?? 0) + Number(pendingInvitesRow?.total ?? 0);
 
   // 2. Storage bytes (files uploaded to this tenant)
   const [storageRow] = await db
@@ -877,6 +881,197 @@ export async function updateInvoiceStatus(
   return record ?? null;
 }
 
+// ==========================================
+// 7. Payments Repository Operations
+// ==========================================
+
+export async function createPayment(data: NewPayment): Promise<Payment> {
+  const [record] = await db.insert(payments).values(data).returning();
+  if (!record) throw new Error('Failed to create payment record');
+  return record;
+}
+
+export async function findPaymentById(id: string): Promise<Payment | null> {
+  const [record] = await db.select().from(payments).where(eq(payments.id, id)).limit(1);
+  return record ?? null;
+}
+
+export async function findPaymentByOrderId(orderId: string): Promise<Payment | null> {
+  const [record] = await db
+    .select()
+    .from(payments)
+    .where(eq(payments.providerOrderId, orderId))
+    .limit(1);
+  return record ?? null;
+}
+
+export async function findPaymentByPaymentId(paymentId: string): Promise<Payment | null> {
+  const [record] = await db
+    .select()
+    .from(payments)
+    .where(eq(payments.providerPaymentId, paymentId))
+    .limit(1);
+  return record ?? null;
+}
+
+export async function updatePayment(
+  id: string,
+  data: Partial<NewPayment>,
+): Promise<Payment | null> {
+  const [record] = await db
+    .update(payments)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(payments.id, id))
+    .returning();
+  return record ?? null;
+}
+
+export async function findPaymentsByTenantId(
+  tenantId: string,
+  options?: Partial<ListPaymentsQueryDto>,
+): Promise<{ items: Payment[]; total: number; page: number; limit: number }> {
+  const page = Math.max(1, options?.page ?? 1);
+  const limit = Math.min(100, Math.max(1, options?.limit ?? 20));
+  const offset = (page - 1) * limit;
+
+  const conditions = [eq(payments.tenantId, tenantId)];
+  if (options?.status) {
+    conditions.push(eq(payments.status, options.status));
+  }
+  const where = and(...conditions);
+
+  const [countRes] = await db.select({ total: count() }).from(payments).where(where);
+  const items = await db
+    .select()
+    .from(payments)
+    .where(where)
+    .orderBy(desc(payments.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  return {
+    items: items ?? [],
+    total: Number(countRes?.total ?? 0),
+    page,
+    limit,
+  };
+}
+
+export async function listPaymentsForPlatform(
+  options?: Partial<ListPlatformPaymentsQueryDto>,
+): Promise<{ items: any[]; total: number; page: number; limit: number }> {
+  const page = Math.max(1, options?.page ?? 1);
+  const limit = Math.min(100, Math.max(1, options?.limit ?? 20));
+  const offset = (page - 1) * limit;
+
+  const conditions = [];
+  if (options?.tenantId) conditions.push(eq(payments.tenantId, options.tenantId));
+  if (options?.status) conditions.push(eq(payments.status, options.status));
+  if (options?.providerOrderId)
+    conditions.push(eq(payments.providerOrderId, options.providerOrderId));
+  if (options?.providerPaymentId)
+    conditions.push(eq(payments.providerPaymentId, options.providerPaymentId));
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const [countRes] = await db.select({ total: count() }).from(payments).where(where);
+  const rows = await db
+    .select({
+      payment: payments,
+      tenantName: tenants.name,
+      tenantSlug: tenants.slug,
+    })
+    .from(payments)
+    .innerJoin(tenants, eq(payments.tenantId, tenants.id))
+    .where(where)
+    .orderBy(desc(payments.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+  return {
+    items: (rows ?? []).map((r) => ({
+      ...r.payment,
+      tenantName: r.tenantName,
+      tenantSlug: r.tenantSlug,
+    })),
+    total: Number(countRes?.total ?? 0),
+    page,
+    limit,
+  };
+}
+
+// ==========================================
+// 8. Refunds Repository Operations
+// ==========================================
+
+export async function createRefund(data: NewRefund): Promise<Refund> {
+  const [record] = await db.insert(refunds).values(data).returning();
+  if (!record) throw new Error('Failed to create refund record');
+  return record;
+}
+
+export async function findRefundById(id: string): Promise<Refund | null> {
+  const [record] = await db.select().from(refunds).where(eq(refunds.id, id)).limit(1);
+  return record ?? null;
+}
+
+export async function findRefundByProviderRefundId(
+  providerRefundId: string,
+): Promise<Refund | null> {
+  const [record] = await db
+    .select()
+    .from(refunds)
+    .where(eq(refunds.providerRefundId, providerRefundId))
+    .limit(1);
+  return record ?? null;
+}
+
+export async function findRefundsByPaymentId(paymentId: string): Promise<Refund[]> {
+  return db
+    .select()
+    .from(refunds)
+    .where(eq(refunds.paymentId, paymentId))
+    .orderBy(desc(refunds.createdAt));
+}
+
+export async function findRefundsByTenantId(tenantId: string): Promise<Refund[]> {
+  return db
+    .select()
+    .from(refunds)
+    .where(eq(refunds.tenantId, tenantId))
+    .orderBy(desc(refunds.createdAt));
+}
+
+export async function updateRefund(id: string, data: Partial<NewRefund>): Promise<Refund | null> {
+  const [record] = await db
+    .update(refunds)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(refunds.id, id))
+    .returning();
+  return record ?? null;
+}
+
+// ==========================================
+// 9. Subscription Changes Repository Operations
+// ==========================================
+
+export async function createSubscriptionChange(
+  data: NewSubscriptionChange,
+): Promise<SubscriptionChange> {
+  const [record] = await db.insert(subscriptionChanges).values(data).returning();
+  if (!record) throw new Error('Failed to create subscription change record');
+  return record;
+}
+
+export async function findSubscriptionChangesByTenant(
+  tenantId: string,
+): Promise<SubscriptionChange[]> {
+  return db
+    .select()
+    .from(subscriptionChanges)
+    .where(eq(subscriptionChanges.tenantId, tenantId))
+    .orderBy(desc(subscriptionChanges.createdAt));
+}
+
 export const billingRepo = {
   findPlanByKey,
   findPlanById,
@@ -908,4 +1103,19 @@ export const billingRepo = {
   findInvoicesByTenantId,
   listInvoicesForPlatform,
   updateInvoiceStatus,
+  createPayment,
+  findPaymentById,
+  findPaymentByOrderId,
+  findPaymentByPaymentId,
+  updatePayment,
+  findPaymentsByTenantId,
+  listPaymentsForPlatform,
+  createRefund,
+  findRefundById,
+  findRefundByProviderRefundId,
+  findRefundsByPaymentId,
+  findRefundsByTenantId,
+  updateRefund,
+  createSubscriptionChange,
+  findSubscriptionChangesByTenant,
 };

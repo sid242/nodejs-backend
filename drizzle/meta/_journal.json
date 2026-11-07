@@ -225,6 +225,13 @@
       "when": 1793800064845,
       "tag": "0031_perfect_serpent_society",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1794056227089,
+      "tag": "0032_careless_wilson_fisk",
+      "breakpoints": true
     }
   ]
 }

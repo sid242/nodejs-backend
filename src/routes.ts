@@ -29,6 +29,7 @@ router.use('/platform', platformRoutes);
 router.use('/email-templates', emailTemplateRoutes);
 router.use('/billing', billingRoutes);
 router.use('/plans', billingRoutes);
+router.post('/webhooks/razorpay', billingController.handleBillingWebhook);
 router.use('/internal', internalRoutes);
 router.use('/geo', geoRoutes);
 router.use('/addresses', addressRoutes);

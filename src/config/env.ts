@@ -9,7 +9,9 @@ const schema = z.object({
   PORT: z.coerce.number().int().default(3000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   TRUST_PROXY: z.coerce.number().int().default(1),
-  CORS_ORIGINS: z.string().default('http://localhost:5173,http://localhost:3000,http://localhost:3001'),
+  CORS_ORIGINS: z
+    .string()
+    .default('http://localhost:5173,http://localhost:3000,http://localhost:3001'),
   CORS_ALLOW_LAN: bool.default('true'),
 
   // Tenancy & Custom Domain Configuration
@@ -87,6 +89,12 @@ const schema = z.object({
 
   BULL_BOARD_USER: z.string().default('admin'),
   BULL_BOARD_PASSWORD: z.string().optional(),
+
+  // Razorpay Payment Gateway
+  RAZORPAY_KEY_ID: z.string().optional(),
+  RAZORPAY_KEY_SECRET: z.string().optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  RAZORPAY_CURRENCY: z.string().default('INR'),
 
   // Observability & Sentry
   SENTRY_DSN: z.string().optional(),

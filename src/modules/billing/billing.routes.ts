@@ -14,11 +14,7 @@ const router: Router = Router();
 // ==========================================
 // 1. Webhooks (External Provider Ingress)
 // ==========================================
-router.post(
-  '/webhooks',
-  validate({ body: dto.billingWebhookDto }),
-  controller.handleBillingWebhook,
-);
+router.post(['/webhooks', '/webhooks/razorpay'], controller.handleBillingWebhook);
 
 // ==========================================
 // 2. Platform Staff Plans Catalog
@@ -141,21 +137,46 @@ router.patch(
 );
 
 // ==========================================
-// 5. Tenant Subscription & Billing
+// 5. Platform Staff Payments & Refunds
 // ==========================================
 router.get(
-  '/subscription',
-  requireAuth,
-  requireTenant,
-  controller.getTenantBillingOverview,
+  '/platform/payments',
+  requirePlatformAuth,
+  requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_READ),
+  validate({ query: dto.listPlatformPaymentsQueryDto }),
+  controller.listPlatformPayments,
 );
 
 router.get(
-  '/entitlements',
-  requireAuth,
-  requireTenant,
-  controller.getTenantEntitlements,
+  '/platform/payments/:id',
+  requirePlatformAuth,
+  requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_READ),
+  validate({ params: dto.paymentIdParamDto }),
+  controller.getPlatformPaymentById,
 );
+
+router.post(
+  '/platform/payments/:id/refund',
+  requirePlatformAuth,
+  requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_MANAGE),
+  validate({ params: dto.paymentIdParamDto, body: dto.issueRefundDto }),
+  controller.issuePaymentRefund,
+);
+
+router.post(
+  '/platform/tenants/:id/override',
+  requirePlatformAuth,
+  requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_MANAGE),
+  validate({ params: dto.tenantSubscriptionParamDto, body: dto.overrideEntitlementsDto }),
+  controller.overrideTenantEntitlements,
+);
+
+// ==========================================
+// 6. Tenant Subscription & Billing
+// ==========================================
+router.get('/subscription', requireAuth, requireTenant, controller.getTenantBillingOverview);
+
+router.get('/entitlements', requireAuth, requireTenant, controller.getTenantEntitlements);
 
 router.post(
   ['/subscription/change', '/subscription/change-request'],
@@ -163,6 +184,62 @@ router.post(
   requireTenant,
   validate({ body: dto.subscriptionChangeRequestDto }),
   controller.requestSubscriptionChange,
+);
+
+router.post(
+  '/checkout/order',
+  requireAuth,
+  requireTenant,
+  validate({ body: dto.checkoutOrderDto }),
+  controller.createCheckoutOrder,
+);
+
+router.post(
+  '/checkout/verify',
+  requireAuth,
+  requireTenant,
+  validate({ body: dto.verifyOrderPaymentDto }),
+  controller.verifyOrderPayment,
+);
+
+router.post(
+  '/subscriptions',
+  requireAuth,
+  requireTenant,
+  validate({ body: dto.checkoutSubscriptionDto }),
+  controller.createSubscriptionCheckout,
+);
+
+router.post(
+  '/subscriptions/verify',
+  requireAuth,
+  requireTenant,
+  validate({ body: dto.verifySubscriptionPaymentDto }),
+  controller.verifySubscriptionPayment,
+);
+
+router.post(
+  '/subscriptions/cancel',
+  requireAuth,
+  requireTenant,
+  validate({ body: dto.cancelSubscriptionDto }),
+  controller.cancelSubscription,
+);
+
+router.get(
+  '/payments',
+  requireAuth,
+  requireTenant,
+  validate({ query: dto.listPaymentsQueryDto }),
+  controller.listTenantPayments,
+);
+
+router.get(
+  '/payments/:id',
+  requireAuth,
+  requireTenant,
+  validate({ params: dto.paymentIdParamDto }),
+  controller.getTenantPaymentById,
 );
 
 router.get(
@@ -173,15 +250,10 @@ router.get(
   controller.getTenantInvoices,
 );
 
-router.get(
-  '/invoices/:invoiceId',
-  requireAuth,
-  requireTenant,
-  controller.getTenantInvoiceById,
-);
+router.get('/invoices/:invoiceId', requireAuth, requireTenant, controller.getTenantInvoiceById);
 
 // ==========================================
-// 6. Public Pricing & Plans Catalog
+// 7. Public Pricing & Plans Catalog
 // ==========================================
 router.get('/', controller.listPublicPlans);
 router.get('/:id', validate({ params: dto.planIdParamDto }), controller.getPlanById);

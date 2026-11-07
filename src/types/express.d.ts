@@ -71,6 +71,7 @@ declare global {
       permissions?: string[];
       db?: import('@/config/db').Database;
       valid?: ValidatedRequestData;
+      rawBody?: Buffer;
       log?: import('pino').Logger;
     }
   }

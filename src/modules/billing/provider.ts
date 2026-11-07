@@ -1,12 +1,18 @@
 import type { Request } from 'express';
 
-import type { Subscription } from '@/db/schema/index';
-import type { Tenant } from '@/db/schema/index';
+import type { Subscription, Tenant } from '@/db/schema/index';
 import { AppError } from '@/lib/errors';
+
+import { razorpayBillingProvider } from './providers/razorpay';
 
 export interface CheckoutResult {
   checkoutUrl?: string;
   providerSubscriptionId?: string;
+  providerOrderId?: string;
+  keyId?: string;
+  amountMinor?: number;
+  currency?: string;
+  planName?: string;
 }
 
 export interface WebhookResult {
@@ -28,7 +34,9 @@ export class ManualBillingProvider implements BillingProvider {
   public readonly name = 'manual';
 
   public async createCheckout(_tenant: Tenant, _planKey: string): Promise<CheckoutResult> {
-    throw AppError.badRequest('Automated checkout is not supported by manual billing provider. Please contact sales or platform staff.');
+    throw AppError.badRequest(
+      'Automated checkout is not supported by manual billing provider. Please contact sales or platform staff.',
+    );
   }
 
   public async cancel(_subscription: Subscription): Promise<void> {
@@ -43,8 +51,12 @@ export class ManualBillingProvider implements BillingProvider {
 export const manualBillingProvider = new ManualBillingProvider();
 
 export function getBillingProvider(providerName = 'manual'): BillingProvider {
-  if (providerName.toLowerCase() === 'manual') {
+  const normalized = providerName.toLowerCase();
+  if (normalized === 'manual') {
     return manualBillingProvider;
+  }
+  if (normalized === 'razorpay') {
+    return razorpayBillingProvider;
   }
   throw AppError.badRequest(`Unsupported billing provider: ${providerName}`);
 }

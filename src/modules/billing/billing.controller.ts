@@ -4,6 +4,7 @@ import { asyncHandler } from '@/lib/async-handler';
 import { AppResponse } from '@/lib/responses';
 
 import * as service from './billing.service';
+import { parseAndVerifyRazorpayWebhook } from './providers/razorpay';
 
 // ==========================================
 // 1. Public Plans Catalog
@@ -166,7 +167,21 @@ export const removeTenantOverride = asyncHandler(async (req: Request, res: Respo
 // ==========================================
 
 export const handleBillingWebhook = asyncHandler(async (req: Request, res: Response) => {
-  const result = await service.processBillingWebhook(req.body);
+  let webhookPayload: any = req.body;
+  const razorpaySig = req.headers['x-razorpay-signature'];
+
+  if (razorpaySig) {
+    const { event } = parseAndVerifyRazorpayWebhook(req);
+    const eventIdHeader = req.headers['x-razorpay-event-id'] as string | undefined;
+    webhookPayload = {
+      provider: 'razorpay',
+      eventId: eventIdHeader || `rzp_${event.event}_${event.created_at}_${Date.now()}`,
+      eventType: event.event,
+      payload: event,
+    };
+  }
+
+  const result = await service.processBillingWebhook(webhookPayload);
   return AppResponse.ok(result, 'Webhook processed').send(res);
 });
 
@@ -208,4 +223,98 @@ export const updateInvoiceStatus = asyncHandler(async (req: Request, res: Respon
     req.id ? String(req.id) : undefined,
   );
   return AppResponse.ok(updated, 'Invoice status updated').send(res);
+});
+
+// ==========================================
+// 8. Razorpay Checkout & Payments (Tenant)
+// ==========================================
+
+export const createCheckoutOrder = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenant!.id;
+  const checkout = await service.createTenantOrderCheckout(tenantId, req.body);
+  return AppResponse.created(checkout, 'Checkout order created successfully').send(res);
+});
+
+export const verifyOrderPayment = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenant!.id;
+  const userId = req.user!.id;
+  const result = await service.verifyTenantOrderPayment(tenantId, userId, req.body);
+  return AppResponse.ok(result, 'Payment verified and plan activated successfully').send(res);
+});
+
+export const createSubscriptionCheckout = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenant!.id;
+  const result = await service.createTenantSubscriptionCheckout(tenantId, req.body);
+  return AppResponse.created(result, 'Recurring subscription initialized successfully').send(res);
+});
+
+export const verifySubscriptionPayment = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenant!.id;
+  const userId = req.user!.id;
+  const result = await service.verifyTenantSubscriptionPayment(tenantId, userId, req.body);
+  return AppResponse.ok(result, 'Subscription payment verified successfully').send(res);
+});
+
+export const cancelSubscription = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenant!.id;
+  const userId = req.user!.id;
+  const result = await service.cancelTenantSubscription(tenantId, userId, req.body);
+  return AppResponse.ok(result, 'Subscription cancellation processed').send(res);
+});
+
+export const listTenantPayments = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenant!.id;
+  const result = await service.listTenantPayments(tenantId, req.query as any);
+  return AppResponse.ok(result.items, undefined, {
+    total: result.total,
+    page: result.page,
+    limit: result.limit,
+  }).send(res);
+});
+
+export const getTenantPaymentById = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenant!.id;
+  const payment = await service.getPaymentById(req.params.id as string, tenantId);
+  return AppResponse.ok(payment).send(res);
+});
+
+// ==========================================
+// 9. Platform Payments & Refunds Operations
+// ==========================================
+
+export const listPlatformPayments = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.listPlatformPayments(req.query as any);
+  return AppResponse.ok(result.items, undefined, {
+    total: result.total,
+    page: result.page,
+    limit: result.limit,
+  }).send(res);
+});
+
+export const getPlatformPaymentById = asyncHandler(async (req: Request, res: Response) => {
+  const payment = await service.getPaymentById(req.params.id as string);
+  return AppResponse.ok(payment).send(res);
+});
+
+export const issuePaymentRefund = asyncHandler(async (req: Request, res: Response) => {
+  const staffId = req.staff!.id;
+  const refund = await service.issuePaymentRefund(
+    staffId,
+    req.params.id as string,
+    req.body,
+    req.id ? String(req.id) : undefined,
+  );
+  return AppResponse.ok(refund, 'Payment refund processed successfully').send(res);
+});
+
+export const overrideTenantEntitlements = asyncHandler(async (req: Request, res: Response) => {
+  const staffId = req.staff!.id;
+  const tenantId = req.params.id as string;
+  const updated = await service.overrideTenantEntitlements(
+    staffId,
+    tenantId,
+    req.body,
+    req.id ? String(req.id) : undefined,
+  );
+  return AppResponse.ok(updated, 'Manual tenant entitlement override applied').send(res);
 });

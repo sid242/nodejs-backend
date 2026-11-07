@@ -91,7 +91,9 @@ export const assignSubscriptionDto = z.object({
 export const listPlatformSubscriptionsQueryDto = z.object({
   tenantId: z.string().uuid().optional(),
   planKey: z.string().trim().optional(),
-  status: z.enum(['TRIALING', 'ACTIVE', 'PAST_DUE', 'PAUSED', 'CANCELED', 'EXPIRED', 'ALL']).optional(),
+  status: z
+    .enum(['TRIALING', 'ACTIVE', 'PAST_DUE', 'PAUSED', 'CANCELED', 'EXPIRED', 'ALL'])
+    .optional(),
   billingInterval: z.enum(['MONTHLY', 'ANNUAL', 'LIFETIME', 'ALL']).optional(),
   periodEndBefore: z.coerce.date().optional(),
   periodEndAfter: z.coerce.date().optional(),
@@ -165,6 +167,66 @@ export const updateInvoiceStatusDto = z.object({
   paidAt: z.coerce.date().optional(),
 });
 
+// ==========================================
+// Razorpay Checkout, Subscriptions & Payments
+// ==========================================
+
+export const checkoutOrderDto = z.object({
+  planKey: z.string().trim().min(1).max(50).toUpperCase(),
+  billingInterval: z.enum(['MONTHLY', 'ANNUAL']).default('MONTHLY'),
+});
+
+export const verifyOrderPaymentDto = z.object({
+  razorpay_order_id: z.string().trim().min(1),
+  razorpay_payment_id: z.string().trim().min(1),
+  razorpay_signature: z.string().trim().min(1),
+});
+
+export const checkoutSubscriptionDto = z.object({
+  planKey: z.string().trim().min(1).max(50).toUpperCase(),
+  billingInterval: z.enum(['MONTHLY', 'ANNUAL']).default('MONTHLY'),
+  totalCount: z.coerce.number().int().min(1).max(120).default(12),
+});
+
+export const verifySubscriptionPaymentDto = z.object({
+  razorpay_subscription_id: z.string().trim().min(1),
+  razorpay_payment_id: z.string().trim().min(1),
+  razorpay_signature: z.string().trim().min(1),
+});
+
+export const cancelSubscriptionDto = z.object({
+  immediately: z.boolean().default(false),
+  reason: z.string().trim().max(500).optional(),
+});
+
+export const listPaymentsQueryDto = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  status: z.string().trim().optional(),
+});
+
+export const listPlatformPaymentsQueryDto = listPaymentsQueryDto.extend({
+  tenantId: z.string().uuid().optional(),
+  providerOrderId: z.string().trim().optional(),
+  providerPaymentId: z.string().trim().optional(),
+});
+
+export const paymentIdParamDto = z.object({
+  id: z.string().uuid(),
+});
+
+export const issueRefundDto = z.object({
+  amountMinor: z.coerce.number().int().min(1).optional(),
+  reason: z.string().trim().min(3).max(500),
+});
+
+export const overrideEntitlementsDto = z.object({
+  planKey: z.string().trim().min(1).max(50).toUpperCase().optional(),
+  status: z.enum(['TRIALING', 'ACTIVE', 'PAST_DUE', 'PAUSED', 'CANCELED', 'EXPIRED']).optional(),
+  currentPeriodEnd: z.coerce.date().optional(),
+  reason: z.string().trim().min(5).max(500),
+});
+
 export type CreatePlanDto = z.infer<typeof createPlanDto>;
 export type UpdatePlanDto = z.infer<typeof updatePlanDto>;
 export type ListPlansQueryDto = z.infer<typeof listPlansQueryDto>;
@@ -178,3 +240,13 @@ export type ListInvoicesQueryDto = z.infer<typeof listInvoicesQueryDto>;
 export type ListPlatformInvoicesQueryDto = z.infer<typeof listPlatformInvoicesQueryDto>;
 export type CreateInvoiceDto = z.infer<typeof createInvoiceDto>;
 export type UpdateInvoiceStatusDto = z.infer<typeof updateInvoiceStatusDto>;
+export type CheckoutOrderDto = z.infer<typeof checkoutOrderDto>;
+export type VerifyOrderPaymentDto = z.infer<typeof verifyOrderPaymentDto>;
+export type CheckoutSubscriptionDto = z.infer<typeof checkoutSubscriptionDto>;
+export type VerifySubscriptionPaymentDto = z.infer<typeof verifySubscriptionPaymentDto>;
+export type CancelSubscriptionDto = z.infer<typeof cancelSubscriptionDto>;
+export type ListPaymentsQueryDto = z.infer<typeof listPaymentsQueryDto>;
+export type ListPlatformPaymentsQueryDto = z.infer<typeof listPlatformPaymentsQueryDto>;
+export type PaymentIdParamDto = z.infer<typeof paymentIdParamDto>;
+export type IssueRefundDto = z.infer<typeof issueRefundDto>;
+export type OverrideEntitlementsDto = z.infer<typeof overrideEntitlementsDto>;
