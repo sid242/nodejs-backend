@@ -2,11 +2,12 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import jwt, { type JwtPayload } from 'jsonwebtoken';
 
 import { env } from '@/config/env';
-import { AUTH_HEADERS } from '@/constants/index';
+import { AUTH_HEADERS, PLATFORM_STAFF_TOKEN_COOKIE } from '@/constants/index';
 import { AppError } from '@/lib/errors';
+import { verifySupportToken } from '@/modules/auth/tokens';
 import * as platformRepo from '@/modules/platform/platform.repository';
 
-export const PLATFORM_STAFF_TOKEN_COOKIE = 'platform_staff_token';
+export { PLATFORM_STAFF_TOKEN_COOKIE };
 
 export interface PlatformStaffJwtPayload extends JwtPayload {
   sub: string;
@@ -39,42 +40,67 @@ export async function requirePlatformAuth(
   }
 
   try {
-    const decoded = jwt.verify(token, env.JWT_PLATFORM_SECRET, {
-      audience: 'platform-api',
-    });
-    if (!decoded || typeof decoded !== 'object') {
-      return next(AppError.unauthorized('Malformed platform staff token'));
+    try {
+      const decoded = jwt.verify(token, env.JWT_PLATFORM_SECRET, {
+        audience: 'platform-api',
+      });
+      if (!decoded || typeof decoded !== 'object') {
+        return next(AppError.unauthorized('Malformed platform staff token'));
+      }
+
+      const payload = decoded as PlatformStaffJwtPayload & { typ?: string };
+
+      // Strict boundary enforcement: require explicit STAFF token typ.
+      if (payload.typ !== 'STAFF') {
+        return next(AppError.unauthorized('Invalid platform staff token type'));
+      }
+
+      const staffId = payload.sub;
+      if (!staffId) {
+        return next(AppError.unauthorized('Platform staff token missing subject'));
+      }
+
+      const staffMember = await platformRepo.findStaffById(staffId);
+      if (!staffMember || staffMember.status !== 'ACTIVE') {
+        return next(AppError.unauthorized('Platform staff account is deactivated or suspended'));
+      }
+
+      const permissions = await platformRepo.getRolePermissionKeys(staffMember.roleId);
+      req.staff = {
+        id: staffMember.id,
+        email: staffMember.email,
+        displayName: staffMember.displayName,
+        roleId: staffMember.roleId,
+        roleKey: staffMember.roleKey ?? 'STAFF',
+        permissions,
+      };
+
+      return next();
+    } catch (primaryErr) {
+      // Fallback: Check if the token is a valid active support token holding staff identity
+      try {
+        const supportPayload = verifySupportToken(token);
+        if (supportPayload.typ === 'SUPPORT' && supportPayload.staffId) {
+          const staffMember = await platformRepo.findStaffById(supportPayload.staffId);
+          if (staffMember && staffMember.status === 'ACTIVE') {
+            const permissions = await platformRepo.getRolePermissionKeys(staffMember.roleId);
+            req.staff = {
+              id: staffMember.id,
+              email: staffMember.email,
+              displayName: staffMember.displayName,
+              roleId: staffMember.roleId,
+              roleKey: staffMember.roleKey ?? 'STAFF',
+              permissions,
+            };
+            req.isSupportSession = true;
+            return next();
+          }
+        }
+      } catch {
+        // Fallback failed
+      }
+      throw primaryErr;
     }
-
-    const payload = decoded as PlatformStaffJwtPayload & { typ?: string };
-
-    // Strict boundary enforcement: require explicit STAFF token typ.
-    // Standard customer access tokens cannot authenticate to platform endpoints.
-    if (payload.typ !== 'STAFF') {
-      return next(AppError.unauthorized('Invalid platform staff token type'));
-    }
-
-    const staffId = payload.sub;
-    if (!staffId) {
-      return next(AppError.unauthorized('Platform staff token missing subject'));
-    }
-
-    const staffMember = await platformRepo.findStaffById(staffId);
-    if (!staffMember || staffMember.status !== 'ACTIVE') {
-      return next(AppError.unauthorized('Platform staff account is deactivated or suspended'));
-    }
-
-    const permissions = await platformRepo.getRolePermissionKeys(staffMember.roleId);
-    req.staff = {
-      id: staffMember.id,
-      email: staffMember.email,
-      displayName: staffMember.displayName,
-      roleId: staffMember.roleId,
-      roleKey: staffMember.roleKey ?? 'STAFF',
-      permissions,
-    };
-
-    next();
   } catch {
     next(AppError.unauthorized('Invalid or expired platform staff token'));
   }

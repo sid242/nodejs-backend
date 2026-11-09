@@ -5,11 +5,7 @@ import { eq } from 'drizzle-orm';
 import { closeDb, db } from '../src/config/db';
 import { env } from '../src/config/env';
 import { closeRedisClients } from '../src/config/redis';
-import {
-  outboxEvents,
-  tenantMembers,
-  users,
-} from '../src/db/schema/index';
+import { outboxEvents, tenantMembers, users } from '../src/db/schema/index';
 import { resolveTenantContext } from '../src/middleware/tenant';
 import * as outboxRepo from '../src/modules/audit/outbox.repository';
 import { tenantsRepo } from '../src/modules/tenants/tenants.repository';
@@ -49,16 +45,20 @@ test('Phase 01: Tenant context resolution attaches req.db executor', async () =>
     user: { id: testUser.id },
   };
 
-  let middlewareError: any = null;
+  let middlewareError: any = undefined;
   await resolveTenantContext(req, {} as any, (err?: any) => {
     middlewareError = err;
   });
 
-  assert.equal(middlewareError, null, 'resolveTenantContext should succeed for valid member');
+  assert.equal(middlewareError, undefined, 'resolveTenantContext should succeed for valid member');
   assert.ok(req.tenant, 'req.tenant must be populated');
   assert.equal(req.tenant.id, tenant.id);
   assert.ok(req.db, 'req.db must be populated with database instance');
-  assert.equal(typeof req.db.select, 'function', 'req.db must be a functional Drizzle database executor');
+  assert.equal(
+    typeof req.db.select,
+    'function',
+    'req.db must be a functional Drizzle database executor',
+  );
 });
 
 test('Phase 01: Transactional Outbox repository creates and transitions event states', async () => {

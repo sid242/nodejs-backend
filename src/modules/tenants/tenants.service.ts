@@ -23,7 +23,6 @@ import { AppError } from '@/lib/errors';
 import { invalidateTenantEmailCache, verifySmtpConnection } from '@/lib/mailer';
 import { createUploadPost } from '@/lib/s3';
 import { safeFilename } from '@/lib/utils';
-import { emitToRoom } from '@/sockets/emitter';
 import * as auditRepo from '@/modules/audit/audit.repository';
 import { logSecurityEvent } from '@/modules/audit/audit.service';
 import * as authRepo from '@/modules/auth/auth.repository';
@@ -37,10 +36,11 @@ import * as billingService from '@/modules/billing/billing.service';
 import { rbacRepo } from '@/modules/rbac/rbac.repository';
 import * as rbacService from '@/modules/rbac/rbac.service';
 import { emailQueue } from '@/queues/index';
+import { emitToRoom } from '@/sockets/emitter';
 
 import { tenantBrandingRepo } from './tenant-branding.repository';
-import { buildPlatformUrl, buildTenantUrl, getEffectiveUrlMode } from './tenant-url.service';
 import { tenantEmailRepo } from './tenant-email.repository';
+import { buildPlatformUrl, buildTenantUrl, getEffectiveUrlMode } from './tenant-url.service';
 import {
   addMemberDto,
   isReservedSlug,
@@ -210,9 +210,6 @@ export async function addMemberToTenant(
   inviteUrl?: string;
   message?: string;
 }> {
-  // 1. Enforce SaaS Plan Seat Limits
-  await billingService.enforceLimit(tenantId, 'maxMembers');
-
   const dto: AddMemberDto = addMemberDto.parse(
     typeof payload === 'string'
       ? { email: payload, role: explicitRoleName || rbacService.SYSTEM_ROLES.MEMBER }
@@ -223,6 +220,17 @@ export async function addMemberToTenant(
   let targetUser = await authRepo.findByEmail(normalizedEmail);
   let isNewUser = false;
 
+  // 1. Immediately reject if target user is already an active member of this tenant
+  if (targetUser) {
+    const existing = await tenantsRepo.findTenantMember(tenantId, targetUser.id);
+    if (existing && existing.status === 'ACTIVE') {
+      throw AppError.conflict('User is already a member of this tenant');
+    }
+  }
+
+  // 2. Enforce SaaS Plan Seat Limits before provisioning new accounts or invites
+  await billingService.enforceLimit(tenantId, 'maxMembers');
+
   if (!targetUser) {
     // Automatically provision account in PENDING_VERIFICATION so the invitee can join seamlessly
     const dummyHash = await bcrypt.hash(randomUUID(), 12);
@@ -231,7 +239,7 @@ export async function addMemberToTenant(
     const defaultNamePart = normalizedEmail.split('@')[0] || 'Member';
     const computedName =
       [firstName, lastName].filter(Boolean).join(' ') ||
-      (defaultNamePart.charAt(0).toUpperCase() + defaultNamePart.slice(1));
+      defaultNamePart.charAt(0).toUpperCase() + defaultNamePart.slice(1);
 
     const created = await authRepo.createUser({
       email: normalizedEmail,
@@ -247,9 +255,6 @@ export async function addMemberToTenant(
   }
 
   const existing = await tenantsRepo.findTenantMember(tenantId, targetUser.id);
-  if (existing && existing.status === 'ACTIVE') {
-    throw AppError.conflict('User is already an active member of this tenant');
-  }
 
   let member: TenantMember;
   if (existing) {
@@ -1085,7 +1090,8 @@ export async function resolvePublicTenant(options: {
   if (host) {
     const isSubdomainOfBase = host.endsWith(`.${baseDomain}`);
     const isSubdomainOfLocalhost =
-      (baseDomain === 'localhost' || baseDomain.includes('localhost')) && host.endsWith('.localhost');
+      (baseDomain === 'localhost' || baseDomain.includes('localhost')) &&
+      host.endsWith('.localhost');
 
     if (isSubdomainOfBase || isSubdomainOfLocalhost) {
       const label = isSubdomainOfBase
@@ -1440,31 +1446,39 @@ export async function updateTenantBranding(
     accentColor: data?.accentColor ?? existing?.accentColor ?? '#06B6D4',
     secondaryColor:
       data?.secondaryColor !== undefined
-        ? (data.secondaryColor || null)
+        ? data.secondaryColor || null
         : (existing?.secondaryColor ?? null),
     primaryDarkColor:
       data?.primaryDarkColor !== undefined
-        ? (data.primaryDarkColor || null)
+        ? data.primaryDarkColor || null
         : (existing?.primaryDarkColor ?? null),
     accentDarkColor:
       data?.accentDarkColor !== undefined
-        ? (data.accentDarkColor || null)
+        ? data.accentDarkColor || null
         : (existing?.accentDarkColor ?? null),
     secondaryDarkColor:
       data?.secondaryDarkColor !== undefined
-        ? (data.secondaryDarkColor || null)
+        ? data.secondaryDarkColor || null
         : (existing?.secondaryDarkColor ?? null),
     fontFamily: data?.fontFamily ?? existing?.fontFamily ?? 'Inter',
     sidebarTheme: data?.sidebarTheme ?? existing?.sidebarTheme ?? 'DARK',
     borderRadius: data?.borderRadius ?? existing?.borderRadius ?? '0.5rem',
     authHeadline:
-      data?.authHeadline !== undefined ? (data.authHeadline || null) : (existing?.authHeadline ?? null),
+      data?.authHeadline !== undefined
+        ? data.authHeadline || null
+        : (existing?.authHeadline ?? null),
     authSubtitle:
-      data?.authSubtitle !== undefined ? (data.authSubtitle || null) : (existing?.authSubtitle ?? null),
+      data?.authSubtitle !== undefined
+        ? data.authSubtitle || null
+        : (existing?.authSubtitle ?? null),
     authCoverUrl:
-      data?.authCoverUrl !== undefined ? (data.authCoverUrl || null) : (existing?.authCoverUrl ?? null),
+      data?.authCoverUrl !== undefined
+        ? data.authCoverUrl || null
+        : (existing?.authCoverUrl ?? null),
     authLayout:
-      data?.authLayout !== undefined ? (data.authLayout || 'SPLIT') : (existing?.authLayout ?? 'SPLIT'),
+      data?.authLayout !== undefined
+        ? data.authLayout || 'SPLIT'
+        : (existing?.authLayout ?? 'SPLIT'),
     hideWatermark:
       data?.hideWatermark !== undefined
         ? Boolean(data.hideWatermark)
@@ -1667,7 +1681,12 @@ export async function reverifyAllVerifiedDomains(): Promise<{ verified: number; 
   const verifiedBrandings = await db
     .select()
     .from(tenantBrandings)
-    .where(and(eq(tenantBrandings.customDomainStatus, 'VERIFIED'), isNotNull(tenantBrandings.customDomain)));
+    .where(
+      and(
+        eq(tenantBrandings.customDomainStatus, 'VERIFIED'),
+        isNotNull(tenantBrandings.customDomain),
+      ),
+    );
 
   let verified = 0;
   let failed = 0;
@@ -1691,7 +1710,12 @@ export async function reverifyAllVerifiedDomains(): Promise<{ verified: number; 
 
     if (!matched) {
       failed++;
-      await tenantBrandingRepo.updateCustomDomainStatus(branding.tenantId, 'FAILED', null, 'FAILED');
+      await tenantBrandingRepo.updateCustomDomainStatus(
+        branding.tenantId,
+        'FAILED',
+        null,
+        'FAILED',
+      );
       await removeCorsCustomDomain(domain);
       await invalidateTenantBrandingAndUrlCaches(branding.tenantId);
 
@@ -1860,7 +1884,10 @@ export async function updateTenantUrlSettings(
 }
 
 export async function deleteTenantCustomDomain(tenantId: string, operatorUserId: string) {
-  return updateTenantUrlSettings(tenantId, operatorUserId, { customDomain: null, urlStyle: 'path' });
+  return updateTenantUrlSettings(tenantId, operatorUserId, {
+    customDomain: null,
+    urlStyle: 'path',
+  });
 }
 
 export async function overrideTenantUrlSettings(

@@ -4,15 +4,15 @@ import { asyncHandler } from '@/lib/async-handler';
 import { AppResponse } from '@/lib/responses';
 import * as billingService from '@/modules/billing/billing.service';
 import * as platformRepo from '@/modules/platform/platform.repository';
+import { rbacRepo } from '@/modules/rbac/rbac.repository';
 
+import * as tenantsRepo from './tenants.repository';
 import * as tenantsService from './tenants.service';
 
 export const createTenant = asyncHandler(async (req: Request, res: Response) => {
   const result = await tenantsService.createTenantOrganization(req.user!.id, req.valid!.body);
   AppResponse.created(result, 'Tenant organization created successfully').send(res);
 });
-
-import { rbacRepo } from '@/modules/rbac/rbac.repository';
 
 export const getMyTenants = asyncHandler(async (req: Request, res: Response) => {
   const list = await tenantsService.getUserTenants(req.user!.id);
@@ -93,7 +93,11 @@ export const getMember = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const addMember = asyncHandler(async (req: Request, res: Response) => {
-  const result = await tenantsService.addMemberToTenant(req.tenant!.id, req.user!.id, req.valid!.body);
+  const result = await tenantsService.addMemberToTenant(
+    req.tenant!.id,
+    req.user!.id,
+    req.valid!.body,
+  );
   AppResponse.created(result, 'Member added successfully').send(res);
 });
 
@@ -206,7 +210,9 @@ export const resolvePublicTenant = asyncHandler(async (req: Request, res: Respon
   const host =
     (req.query?.host as string) ??
     (req.query?.domain as string) ??
-    (!slug && !domain ? (req.headers['x-forwarded-host']?.toString() ?? req.headers.host) : undefined);
+    (!slug && !domain
+      ? (req.headers['x-forwarded-host']?.toString() ?? req.headers.host)
+      : undefined);
 
   const resolved = await tenantsService.resolvePublicTenant({ slug, domain, host });
   if (!resolved) {
@@ -263,4 +269,33 @@ export const updateTenantUrlSettings = asyncHandler(async (req: Request, res: Re
 export const deleteTenantCustomDomain = asyncHandler(async (req: Request, res: Response) => {
   const settings = await tenantsService.deleteTenantCustomDomain(req.tenant!.id, req.user!.id);
   AppResponse.ok(settings, 'Custom domain removed successfully').send(res);
+});
+
+// ─── Real-Time Debounced Availability Checks ─────────────────────────────────
+
+export const checkTenantSlugAvailability = asyncHandler(async (req: Request, res: Response) => {
+  const slug = String(req.valid?.query?.slug ?? req.query.slug ?? '')
+    .toLowerCase()
+    .trim();
+  const existing = await tenantsRepo.findTenantBySlug(slug);
+  AppResponse.ok({
+    slug,
+    available: !existing,
+  }).send(res);
+});
+
+export const checkMemberEmailAvailability = asyncHandler(async (req: Request, res: Response) => {
+  const email = String(req.valid?.query?.email ?? req.query.email ?? '')
+    .toLowerCase()
+    .trim();
+  const tenantId = req.tenant!.id;
+
+  const existingMember = await tenantsRepo.findMemberByEmail(tenantId, email);
+  const isMember = Boolean(existingMember);
+
+  AppResponse.ok({
+    email,
+    available: !isMember,
+    existsInWorkspace: isMember,
+  }).send(res);
 });

@@ -1,4 +1,16 @@
-import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, notInArray, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNotNull,
+  isNull,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm';
 
 import { db } from '@/config/db';
 import {
@@ -209,7 +221,10 @@ export async function findRoleById(id: string): Promise<RoleRecord | null> {
   return record ?? null;
 }
 
-export async function findRoleByCode(code: string, tenantId?: string | null): Promise<RoleRecord | null> {
+export async function findRoleByCode(
+  code: string,
+  tenantId?: string | null,
+): Promise<RoleRecord | null> {
   const conditions = [eq(roles.code, code)];
   if (tenantId) {
     conditions.push(or(eq(roles.tenantId, tenantId), isNull(roles.tenantId))!);
@@ -270,13 +285,24 @@ export async function setRolePermissions(roleId: string, permissionIds: string[]
   });
 }
 
-export async function assignRoleToMember(memberId: string, roleId: string, tenantId?: string): Promise<void> {
+export async function assignRoleToMember(
+  memberId: string,
+  roleId: string,
+  tenantId?: string,
+): Promise<void> {
   let resolvedTenantId = tenantId;
   if (!resolvedTenantId) {
-    const [member] = await db.select({ tenantId: tenantMembers.tenantId }).from(tenantMembers).where(eq(tenantMembers.id, memberId)).limit(1);
+    const [member] = await db
+      .select({ tenantId: tenantMembers.tenantId })
+      .from(tenantMembers)
+      .where(eq(tenantMembers.id, memberId))
+      .limit(1);
     resolvedTenantId = member?.tenantId;
   }
-  await db.insert(tenantMemberRoles).values({ memberId, roleId, tenantId: resolvedTenantId }).onConflictDoNothing();
+  await db
+    .insert(tenantMemberRoles)
+    .values({ memberId, roleId, tenantId: resolvedTenantId })
+    .onConflictDoNothing();
 }
 
 export async function removeRoleFromMember(memberId: string, roleId: string): Promise<void> {
@@ -392,13 +418,7 @@ export async function listRolesWithFilters(
 
   if (filters?.search && filters.search.trim()) {
     const q = `%${filters.search.trim()}%`;
-    conditions.push(
-      or(
-        ilike(roles.name, q),
-        ilike(roles.code, q),
-        ilike(roles.description, q),
-      ),
-    );
+    conditions.push(or(ilike(roles.name, q), ilike(roles.code, q), ilike(roles.description, q)));
   }
 
   if (filters?.module && filters.module.trim()) {
@@ -522,6 +542,7 @@ export async function countTenantOwners(tenantId: string): Promise<number> {
 
 export interface EffectivePermissionsResult {
   roles: string[];
+  roleIds?: string[];
   permissions: string[];
   provenance?: {
     directRoles: string[];
@@ -626,6 +647,7 @@ export async function getEffectivePermissions(
 
   return {
     roles: roleNames,
+    roleIds,
     permissions: perms.map((p) => p.key),
     provenance: {
       directRoles: directRoleNames,
@@ -678,7 +700,9 @@ export async function getTenantModules(tenantId: string): Promise<
   }));
 }
 
-export async function findDisabledTenantModules(tenantId: string): Promise<Array<{ id: string; key: string }>> {
+export async function findDisabledTenantModules(
+  tenantId: string,
+): Promise<Array<{ id: string; key: string }>> {
   return db
     .select({ id: appModules.id, key: appModules.key })
     .from(tenantModules)

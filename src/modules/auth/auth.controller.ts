@@ -149,3 +149,37 @@ export const redeemHandoff = asyncHandler(async (req: Request, res: Response) =>
   AppResponse.ok(result, 'Handoff code redeemed successfully').send(res);
 });
 
+// ─── Impersonation ─────────────────────────────────────────────────────────────
+
+export const impersonate = asyncHandler(async (req: Request, res: Response) => {
+  const callerId = req.staff?.id ?? req.user?.id;
+  const callerType: 'STAFF' | 'USER' = req.staff ? 'STAFF' : 'USER';
+
+  if (!callerId) {
+    throw AppError.unauthorized('Authentication required to impersonate');
+  }
+
+  const { targetUserId, reason, durationMinutes } = req.valid!.body;
+  const result = await service.impersonateUser({
+    caller: { id: callerId, type: callerType },
+    targetUserId,
+    reason,
+    durationMinutes,
+  });
+
+  AppResponse.ok(result, 'Impersonation session started successfully').send(res);
+});
+
+export const stopImpersonate = asyncHandler(async (req: Request, res: Response) => {
+  const sessionId = req.impersonator?.sessionId;
+  const impersonatorId = req.impersonator?.userId;
+  const targetUserId = req.user?.id;
+
+  const result = await service.stopImpersonation({
+    sessionId,
+    impersonatorId,
+    targetUserId,
+  });
+
+  AppResponse.ok(result, 'Impersonation session stopped successfully').send(res);
+});

@@ -83,6 +83,31 @@ export function verifySupportToken(token: string): SupportTokenPayload {
   return payload;
 }
 
+export function issueImpersonationToken(
+  targetUser: TokenUser,
+  impersonator: { id: string; type: 'USER' | 'STAFF'; role?: string },
+  durationMinutes = 30,
+  sessionId: string,
+): { accessToken: string; expiresInSeconds: number } {
+  const ttlSeconds = Math.max(60, Math.floor(durationMinutes * 60));
+  const accessToken = jwt.sign(
+    {
+      typ: 'USER',
+      impersonated: true,
+      impersonatorId: impersonator.id,
+      impersonatorType: impersonator.type,
+      sessionId,
+    },
+    env.JWT_ACCESS_SECRET,
+    {
+      subject: targetUser.id,
+      audience: 'customer-api',
+      expiresIn: ttlSeconds,
+    },
+  );
+  return { accessToken, expiresInSeconds: ttlSeconds };
+}
+
 const signAccessToken = (user: TokenUser): string =>
   jwt.sign({ typ: 'USER' }, env.JWT_ACCESS_SECRET, {
     subject: user.id,

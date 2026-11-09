@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 
 import { ACCESS_TOKEN_COOKIE, AUTH_HEADERS } from '@/constants/index';
 import { AppError } from '@/lib/errors';
-import { verifyAccessToken } from '@/modules/auth/tokens';
+import { verifyAccessToken, verifySupportToken } from '@/modules/auth/tokens';
 
 export async function requireAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
   let token: string | undefined;
@@ -17,13 +17,44 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
   if (!token) return next(AppError.unauthorized());
 
   try {
-    const payload = verifyAccessToken(token);
-    if (payload?.typ !== 'USER') {
-      return next(AppError.unauthorized('Invalid access token type'));
-    }
-    req.user = { id: payload.sub as string };
+    try {
+      const payload = verifyAccessToken(token);
+      if (payload?.typ !== 'USER') {
+        return next(AppError.unauthorized('Invalid access token type'));
+      }
+      req.user = { id: payload.sub as string };
 
-    next();
+      if (payload.impersonated) {
+        req.isImpersonated = true;
+        req.impersonator = {
+          userId: String(payload.impersonatorId ?? ''),
+          role: String(payload.impersonatorType ?? 'USER'),
+          reason: 'Active impersonation session',
+          sessionId: String(payload.sessionId ?? ''),
+        };
+      }
+
+      return next();
+    } catch (primaryErr) {
+      // Fallback: Check if the token is a valid active support token
+      try {
+        const supportPayload = verifySupportToken(token);
+        req.user = { id: (supportPayload.sub || supportPayload.staffId) as string };
+        req.isSupportSession = true;
+        req.supportSession = {
+          id: supportPayload.sess,
+          sessionId: supportPayload.sess,
+          staffId: supportPayload.staffId,
+          tenantId: supportPayload.tenantId,
+          mode: supportPayload.mode,
+          scope: supportPayload.scope,
+          expiresAt: new Date(Number(supportPayload.exp) * 1000),
+        };
+        return next();
+      } catch {
+        throw primaryErr;
+      }
+    }
   } catch (error) {
     if (error instanceof AppError) return next(error);
     next(AppError.unauthorized('Invalid or expired access token'));

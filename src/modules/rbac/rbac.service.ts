@@ -10,6 +10,7 @@ import * as dto from './rbac.dto';
 import {
   rbacRepo,
   type AppModule,
+  type EffectivePermissionsResult,
   type ListRolesResult,
   type ModuleWithPermissions,
   type Permission,
@@ -123,7 +124,7 @@ export async function seedDefaultRbac(): Promise<void> {
 export async function resolveUserPermissions(
   tenantId: string,
   userId: string,
-): Promise<{ roles: string[]; permissions: string[] }> {
+): Promise<EffectivePermissionsResult> {
   return cache.wrap(rbacCacheKey(tenantId, userId), 300, async () => {
     return rbacRepo.getEffectivePermissions(tenantId, userId);
   });
@@ -146,7 +147,14 @@ export async function createCustomTenantRole(
   descOrCaller?: string | string[],
   permissionsList?: string[],
   callerId?: string,
-): Promise<{ id: string; name: string; code: string; scope: string; isActive: boolean; permissions: string[] }> {
+): Promise<{
+  id: string;
+  name: string;
+  code: string;
+  scope: string;
+  isActive: boolean;
+  permissions: string[];
+}> {
   let name: string;
   let code: string | undefined;
   let description: string | undefined;
@@ -180,9 +188,7 @@ export async function createCustomTenantRole(
   }
 
   // 2. Scope enforcement: tenant roles cannot contain platform-scoped permissions
-  const mismatched = permissionKeys
-    .map((k) => permsMap.get(k)!)
-    .filter((p) => p.scope !== scope);
+  const mismatched = permissionKeys.map((k) => permsMap.get(k)!).filter((p) => p.scope !== scope);
   if (mismatched.length > 0) {
     throw AppError.badRequest(
       `Permission scope mismatch: cannot assign ${mismatched[0]?.scope} permission (${mismatched[0]?.key}) to a ${scope} role`,
@@ -204,7 +210,10 @@ export async function createCustomTenantRole(
   }
 
   // 4. Stable code validation and conflict check
-  const stableCode = (code ?? name).trim().toUpperCase().replace(/[^A-Z0-9_-]+/g, '_');
+  const stableCode = (code ?? name)
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_-]+/g, '_');
   const existingWithCode = await rbacRepo.findRoleByCode(stableCode, tenantId);
   if (existingWithCode) {
     throw AppError.conflict(`Role with code '${stableCode}' already exists in this workspace`);
@@ -241,7 +250,13 @@ export async function updateCustomTenantRole(
   roleId: string,
   data: dto.UpdateRoleDto,
   callerUserId?: string,
-): Promise<{ id: string; name: string; code: string | null; permissions: string[]; isActive: boolean }> {
+): Promise<{
+  id: string;
+  name: string;
+  code: string | null;
+  permissions: string[];
+  isActive: boolean;
+}> {
   const role = await rbacRepo.findRoleById(roleId);
   if (!role) throw AppError.notFound('Role not found');
   if (role.isSystem) {

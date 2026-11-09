@@ -7,10 +7,10 @@ import {
   enableTwoFactorDto,
   verifyTwoFactorChallengeDto,
 } from '@/modules/auth/auth.dto';
+import * as groupsDto from '@/modules/groups/groups.dto';
+import * as platformGroupsController from '@/modules/groups/platform-groups.controller';
 import * as rbacController from '@/modules/rbac/rbac.controller';
 import * as rbacDto from '@/modules/rbac/rbac.dto';
-import * as platformGroupsController from '@/modules/groups/platform-groups.controller';
-import * as groupsDto from '@/modules/groups/groups.dto';
 import * as tenantDto from '@/modules/tenants/tenants.dto';
 import * as usersController from '@/modules/users/users.controller';
 import * as usersDto from '@/modules/users/users.dto';
@@ -58,6 +58,13 @@ router.get(
   requirePlatformPermission(PLATFORM_PERMISSIONS.STAFF_READ),
   validate({ query: dto.listStaffQueryDto }),
   controller.listStaff,
+);
+
+router.get(
+  '/staff/check-email',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.STAFF_READ),
+  validate({ query: dto.checkStaffEmailQueryDto }),
+  controller.checkStaffEmailAvailability,
 );
 
 router.get(

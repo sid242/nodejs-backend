@@ -2,8 +2,8 @@ import crypto from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 
 import { env } from '@/config/env';
-import { AppError } from '@/lib/errors';
 import { getTenantDb } from '@/db/tenancy/tenant-db';
+import { AppError } from '@/lib/errors';
 import * as platformRepo from '@/modules/platform/platform.repository';
 import { resolveUserPermissions, SYSTEM_ROLES } from '@/modules/rbac/rbac.service';
 import * as tenantsRepo from '@/modules/tenants/tenants.repository';
@@ -161,14 +161,17 @@ export async function resolveTenantContext(
     // 5. Resolve permissions
     let effectivePermissions: string[] = [];
     let roles: string[] = [];
+    let roleIds: string[] = [];
 
     if (activeSupportSession) {
       // Under audited support delegation, staff access is granted with specific support scope
       roles = ['SUPPORT_STAFF'];
+      roleIds = [];
       effectivePermissions = ['*']; // Full troubleshooting scope bounded by support session
     } else if (member && req.user?.id) {
       const resolved = await resolveUserPermissions(tenant.id, req.user.id);
       roles = resolved.roles;
+      roleIds = resolved.roleIds ?? [];
       effectivePermissions = roles.includes(SYSTEM_ROLES.OWNER) ? ['*'] : resolved.permissions;
     }
 
@@ -194,6 +197,7 @@ export async function resolveTenantContext(
         id: member.id,
         status: member.status,
         roles,
+        roleIds,
       };
     }
 

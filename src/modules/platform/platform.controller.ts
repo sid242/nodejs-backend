@@ -3,10 +3,11 @@ import type { Request, Response } from 'express';
 import { asyncHandler } from '@/lib/async-handler';
 import { AppError } from '@/lib/errors';
 import { AppResponse } from '@/lib/responses';
+import * as tenantsService from '@/modules/tenants/tenants.service';
 
 import * as platform2FaService from './platform-2fa.service';
+import * as platformRepo from './platform.repository';
 import * as service from './platform.service';
-import * as tenantsService from '@/modules/tenants/tenants.service';
 
 // ==========================================
 // 1. Staff Authentication & Handlers
@@ -97,6 +98,17 @@ export const logout = asyncHandler(async (_req: Request, res: Response) => {
 export const listStaff = asyncHandler(async (req: Request, res: Response) => {
   const result = await service.listStaff(req.valid?.query);
   AppResponse.ok(result).send(res);
+});
+
+export const checkStaffEmailAvailability = asyncHandler(async (req: Request, res: Response) => {
+  const email = String(req.valid?.query?.email ?? req.query.email ?? '')
+    .toLowerCase()
+    .trim();
+  const existing = await platformRepo.findStaffByEmail(email);
+  AppResponse.ok({
+    email,
+    available: !existing,
+  }).send(res);
 });
 
 export const getStaff = asyncHandler(async (req: Request, res: Response) => {

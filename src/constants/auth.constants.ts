@@ -1,10 +1,16 @@
 export const COOKIE_NAMES = {
-  ACCESS_TOKEN: 'accessToken',
-  REFRESH_TOKEN: 'refreshToken',
+  ACCESS_TOKEN: 'access_token',
+  REFRESH_TOKEN: 'refresh_token',
+  PLATFORM_STAFF_TOKEN: 'platform_staff_token',
+  SUPPORT_SESSION: 'support_session_id',
+  IMPERSONATOR_BACKUP: 'impersonator_token',
 } as const;
 
 export const ACCESS_TOKEN_COOKIE = COOKIE_NAMES.ACCESS_TOKEN;
 export const REFRESH_TOKEN_COOKIE = COOKIE_NAMES.REFRESH_TOKEN;
+export const PLATFORM_STAFF_TOKEN_COOKIE = COOKIE_NAMES.PLATFORM_STAFF_TOKEN;
+export const SUPPORT_SESSION_COOKIE = COOKIE_NAMES.SUPPORT_SESSION;
+export const IMPERSONATOR_BACKUP_COOKIE = COOKIE_NAMES.IMPERSONATOR_BACKUP;
 
 export const COOKIE_PATHS = {
   ROOT: '/',

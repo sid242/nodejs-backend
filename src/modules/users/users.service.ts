@@ -2,14 +2,36 @@ import type { PublicUser } from '@/db/schema/index';
 import { cache } from '@/lib/cache';
 import { AppError } from '@/lib/errors';
 import { revokeAllUserTokens } from '@/modules/auth/tokens';
+import * as platformRepo from '@/modules/platform/platform.repository';
 import type { ListUsersQueryDto, UpdateMeDto } from '@/modules/users/users.dto';
 import * as userRepo from '@/modules/users/users.repository';
 
 export const getMe = (id: string): Promise<PublicUser> =>
   cache.wrap(`user:${id}`, 300, async () => {
     const user = await userRepo.findById(id);
-    if (!user) throw AppError.notFound('User not found');
-    return user;
+    if (user) return user;
+
+    // Check if operator is a platform staff member in a support session
+    const staff = await platformRepo.findStaffById(id);
+    if (staff) {
+      return {
+        id: staff.id,
+        name: staff.displayName,
+        email: staff.email,
+        emailVerifiedAt: staff.createdAt,
+        role: 'ADMIN',
+        status: staff.status,
+        phoneNumber: null,
+        phoneVerifiedAt: null,
+        avatarUrl: null,
+        twoFactorEnabledAt: staff.twoFactorEnabledAt,
+        lastLoginAt: staff.lastLoginAt,
+        createdAt: staff.createdAt,
+        updatedAt: staff.updatedAt,
+      } as PublicUser;
+    }
+
+    throw AppError.notFound('User not found');
   });
 
 export async function updateMe(id: string, data: UpdateMeDto): Promise<PublicUser> {

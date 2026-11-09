@@ -1,69 +1,55 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-
-import { db } from '@/config/db';
-import { redis } from '@/config/redis';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
+import jwt from 'jsonwebtoken';
 import postgres from 'postgres';
 
-import { type Database } from '@/config/db';
-import * as schema from '@/db/schema/index';
-import {
-  checkTenantDbHealth,
-  closeDedicatedPool,
-  getDedicatedPoolStats,
-} from '@/lib/db-manager';
-import type { MigrateTenantDatabaseDto } from './platform.dto';
-
+import { db, type Database } from '@/config/db';
 import { env } from '@/config/env';
 import { logger } from '@/config/logger';
-import {
-  appModules,
-  platformPermissions,
-  tenantBrandings,
-  tenantModules,
-} from '@/db/schema';
+import { redis } from '@/config/redis';
+import { appModules, platformPermissions, tenantBrandings, tenantModules } from '@/db/schema';
+import * as schema from '@/db/schema/index';
 import { cache } from '@/lib/cache';
+import { checkTenantDbHealth, closeDedicatedPool, getDedicatedPoolStats } from '@/lib/db-manager';
 import { AppError } from '@/lib/errors';
 import { provisionDedicatedDatabase } from '@/lib/provision-db';
 import * as authRepo from '@/modules/auth/auth.repository';
-import {
-  createMagicLinkToken,
-  issueSupportToken,
-} from '@/modules/auth/tokens';
+import { createMagicLinkToken, issueSupportToken } from '@/modules/auth/tokens';
 import * as billingService from '@/modules/billing/billing.service';
 import { rbacRepo } from '@/modules/rbac/rbac.repository';
 import * as rbacService from '@/modules/rbac/rbac.service';
-import { tenantsRepo } from '@/modules/tenants/tenants.repository';
 import { buildPlatformUrl, buildTenantUrl } from '@/modules/tenants/tenant-url.service';
+import { tenantsRepo } from '@/modules/tenants/tenants.repository';
 import { emailQueue } from '@/queues/index';
 
 import { createPlatformTwoFactorChallenge } from './platform-2fa.service';
-import { provisionTenantDto } from './platform.dto';
-import type {
-  AcceptStaffInviteDto,
-  CreatePlatformRoleDto,
-  CreateStaffDto,
-  ExecuteTenantDatabaseOperationDto,
-  InviteStaffDto,
-  ListPlatformTenantsQueryDto,
-  ListStaffQueryDto,
-  ListSupportSessionsQueryDto,
-  ListTenantDatabasesQueryDto,
-  LoginStaffDto,
-  ProvisionTenantInput,
-  QueryPlatformAuditLogsDto,
-  StartSupportSessionDto,
-  UpdatePlatformRoleDto,
-  UpdatePlatformTenantDto,
-  UpdatePlatformTenantSubscriptionDto,
-  UpdateStaffDto,
+import {
+  provisionTenantDto,
+  type AcceptStaffInviteDto,
+  type CreatePlatformRoleDto,
+  type CreateStaffDto,
+  type ExecuteTenantDatabaseOperationDto,
+  type InviteStaffDto,
+  type ListPlatformTenantsQueryDto,
+  type ListStaffQueryDto,
+  type ListSupportSessionsQueryDto,
+  type ListTenantDatabasesQueryDto,
+  type LoginStaffDto,
+  type MigrateTenantDatabaseDto,
+  type ProvisionTenantInput,
+  type QueryPlatformAuditLogsDto,
+  type StartSupportSessionDto,
+  type UpdatePlatformRoleDto,
+  type UpdatePlatformTenantDto,
+  type UpdatePlatformTenantSubscriptionDto,
+  type UpdateStaffDto,
 } from './platform.dto';
 import {
   PLATFORM_PERMISSION_CATALOGUE,
   PLATFORM_PERMISSIONS,
+  PLATFORM_ROLES,
   SYSTEM_PLATFORM_ROLES,
 } from './platform.permissions';
 import * as platformRepo from './platform.repository';
@@ -189,7 +175,8 @@ export async function createStaff(
 
   if (data.employeeCode) {
     const existingCode = await platformRepo.findStaffByEmployeeCode(data.employeeCode);
-    if (existingCode) throw AppError.conflict('Staff member with this employee code already exists');
+    if (existingCode)
+      throw AppError.conflict('Staff member with this employee code already exists');
   }
 
   const role = await platformRepo.findRoleById(data.roleId);
@@ -197,7 +184,7 @@ export async function createStaff(
     throw AppError.badRequest('Assigned platform role is invalid or inactive');
 
   // Escalation guard: Only SUPER_ADMIN can assign the SUPER_ADMIN role
-  if (role.key === 'SUPER_ADMIN' && actorCtx.roleKey !== 'SUPER_ADMIN') {
+  if (role.key === PLATFORM_ROLES.SUPER_ADMIN && actorCtx.roleKey !== PLATFORM_ROLES.SUPER_ADMIN) {
     throw AppError.forbidden('Only Super Admins can assign the SUPER_ADMIN role');
   }
 
@@ -280,7 +267,7 @@ export async function inviteStaff(
   }
 
   // Escalation guard: Only SUPER_ADMIN can invite a SUPER_ADMIN
-  if (role.key === 'SUPER_ADMIN' && actorCtx.roleKey !== 'SUPER_ADMIN') {
+  if (role.key === PLATFORM_ROLES.SUPER_ADMIN && actorCtx.roleKey !== PLATFORM_ROLES.SUPER_ADMIN) {
     throw AppError.forbidden('Only Super Admins can invite a Super Admin');
   }
 
@@ -364,7 +351,9 @@ export async function acceptStaffInvite(data: AcceptStaffInviteDto, requestId?: 
   }
 
   if (!staff.inviteExpiresAt || new Date(staff.inviteExpiresAt) <= new Date()) {
-    throw AppError.badRequest('Staff invitation has expired. Please ask an administrator to resend it.');
+    throw AppError.badRequest(
+      'Staff invitation has expired. Please ask an administrator to resend it.',
+    );
   }
 
   const passwordHash = await bcrypt.hash(data.password, 12);
@@ -501,14 +490,18 @@ export async function updateStaff(
 
     // Only SUPER_ADMIN may assign or remove the SUPER_ADMIN role
     if (
-      (newRoleKey === 'SUPER_ADMIN' || currentRoleKey === 'SUPER_ADMIN') &&
-      actorCtx.roleKey !== 'SUPER_ADMIN'
+      (newRoleKey === PLATFORM_ROLES.SUPER_ADMIN ||
+        currentRoleKey === PLATFORM_ROLES.SUPER_ADMIN) &&
+      actorCtx.roleKey !== PLATFORM_ROLES.SUPER_ADMIN
     ) {
       throw AppError.forbidden('Only Super Admins can assign or remove the SUPER_ADMIN role');
     }
 
     // Last Super Admin invariant: ensure at least one active SUPER_ADMIN remains
-    if (currentRoleKey === 'SUPER_ADMIN' && newRoleKey !== 'SUPER_ADMIN') {
+    if (
+      currentRoleKey === PLATFORM_ROLES.SUPER_ADMIN &&
+      newRoleKey !== PLATFORM_ROLES.SUPER_ADMIN
+    ) {
       const activeSuperAdminCount = await platformRepo.countActiveSuperAdmins();
       if (activeSuperAdminCount <= 1) {
         throw AppError.badRequest('Cannot demote the last remaining active Super Admin');
@@ -518,17 +511,19 @@ export async function updateStaff(
 
   if (data.status) {
     const hasDisablePerm =
-      actorCtx.roleKey === 'SUPER_ADMIN' ||
+      actorCtx.roleKey === PLATFORM_ROLES.SUPER_ADMIN ||
       actorCtx.permissions?.includes('*') ||
-      actorCtx.permissions?.includes('platform_staff::disable');
+      actorCtx.permissions?.includes(PLATFORM_PERMISSIONS.STAFF_DISABLE);
 
     if (!hasDisablePerm) {
-      throw AppError.forbidden('Status changes require platform_staff::disable permission');
+      throw AppError.forbidden(
+        `Status changes require ${PLATFORM_PERMISSIONS.STAFF_DISABLE} permission`,
+      );
     }
 
     if (data.status === 'SUSPENDED' || data.status === 'DEACTIVATED') {
-      if (staff.roleKey === 'SUPER_ADMIN') {
-        if (actorCtx.roleKey !== 'SUPER_ADMIN') {
+      if (staff.roleKey === PLATFORM_ROLES.SUPER_ADMIN) {
+        if (actorCtx.roleKey !== PLATFORM_ROLES.SUPER_ADMIN) {
           throw AppError.forbidden('Only Super Admins can disable a Super Admin');
         }
         const activeSuperAdminCount = await platformRepo.countActiveSuperAdmins();
@@ -569,8 +564,8 @@ export async function suspendStaff(
   const staff = await platformRepo.findStaffById(staffId);
   if (!staff) throw AppError.notFound('Platform staff member not found');
 
-  if (staff.roleKey === 'SUPER_ADMIN') {
-    if (actorCtx.roleKey !== 'SUPER_ADMIN') {
+  if (staff.roleKey === PLATFORM_ROLES.SUPER_ADMIN) {
+    if (actorCtx.roleKey !== PLATFORM_ROLES.SUPER_ADMIN) {
       throw AppError.forbidden('Only Super Admins can suspend a Super Admin');
     }
     const activeSuperAdminCount = await platformRepo.countActiveSuperAdmins();
@@ -773,21 +768,30 @@ export async function startSupportSession(
     throw AppError.forbidden('This workspace has disabled support access');
   }
 
+  // Auto-promote to AS_MEMBER mode if target user or member is specified
+  if ((data.targetUserId || data.targetMemberId) && data.mode === 'TENANT_SCOPED') {
+    data.mode = 'AS_MEMBER';
+  }
+
   // 1. Permission checks for scope & mode
   if (
     data.scope === 'FULL' &&
     !actorCtx.permissions.includes(PLATFORM_PERMISSIONS.SUPPORT_WRITE) &&
-    actorCtx.roleKey !== 'SUPER_ADMIN'
+    actorCtx.roleKey !== PLATFORM_ROLES.SUPER_ADMIN
   ) {
-    throw AppError.forbidden('Requires tenant_support::write permission for FULL scope support sessions');
+    throw AppError.forbidden(
+      'Requires tenant_support:write permission for FULL scope support sessions',
+    );
   }
 
   if (
     data.mode === 'AS_MEMBER' &&
     !actorCtx.permissions.includes(PLATFORM_PERMISSIONS.SUPPORT_IMPERSONATE) &&
-    actorCtx.roleKey !== 'SUPER_ADMIN'
+    actorCtx.roleKey !== PLATFORM_ROLES.SUPER_ADMIN
   ) {
-    throw AppError.forbidden('Requires tenant_support::impersonate permission for AS_MEMBER mode support sessions');
+    throw AppError.forbidden(
+      'Requires tenant_support:impersonate permission for AS_MEMBER mode support sessions',
+    );
   }
 
   let targetUserId = data.targetUserId;
@@ -816,9 +820,13 @@ export async function startSupportSession(
 
     // Target is not OWNER unless caller is SUPER_ADMIN
     const resolvedTarget = await rbacService.resolveUserPermissions(tenantId, targetUserId);
-    const isOwner = resolvedTarget.roles.some((r) => r.toUpperCase() === rbacService.SYSTEM_ROLES.OWNER);
-    if (isOwner && actorCtx.roleKey !== 'SUPER_ADMIN') {
-      throw AppError.forbidden('Only Super Admin may initiate a support session targeting a workspace Owner');
+    const isOwner = resolvedTarget.roles.some(
+      (r) => r.toUpperCase() === rbacService.SYSTEM_ROLES.OWNER,
+    );
+    if (isOwner && actorCtx.roleKey !== PLATFORM_ROLES.SUPER_ADMIN) {
+      throw AppError.forbidden(
+        'Only Super Admin may initiate a support session targeting a workspace Owner',
+      );
     }
   }
 
@@ -837,6 +845,18 @@ export async function startSupportSession(
     status: 'ACTIVE',
     expiresAt,
   });
+
+  const { token, expiresInSeconds } = issueSupportToken(
+    {
+      sess: session.id,
+      staffId: session.staffId,
+      tenantId: session.tenantId,
+      mode: session.mode as 'TENANT_SCOPED' | 'AS_MEMBER',
+      scope: session.scope as 'READ_ONLY' | 'FULL',
+      targetUserId: session.targetUserId,
+    },
+    durationMinutes,
+  );
 
   await platformRepo.logPlatformAction({
     actorStaffId: actorCtx.id,
@@ -861,6 +881,7 @@ export async function startSupportSession(
   return {
     sessionId: session.id,
     tenantId,
+    tenantSlug: tenant.slug,
     mode: session.mode,
     scope: session.scope,
     targetUserId: session.targetUserId ?? null,
@@ -869,6 +890,9 @@ export async function startSupportSession(
     reason: session.reason,
     expiresAt,
     status: session.status,
+    token,
+    accessToken: token,
+    expiresInSeconds,
   };
 }
 
@@ -926,6 +950,7 @@ export async function enterSupportSession(
 
   return {
     token,
+    accessToken: token,
     expiresInSeconds,
     sessionId: session.id,
     tenantId: session.tenantId,
@@ -949,7 +974,7 @@ export async function endSupportSession(
   const session = await platformRepo.findSupportSessionById(sessionId);
   if (!session) throw AppError.notFound('Support session not found');
 
-  const isSuperAdmin = actorCtx.roleKey === 'SUPER_ADMIN';
+  const isSuperAdmin = actorCtx.roleKey === PLATFORM_ROLES.SUPER_ADMIN;
   const hasEndAny = actorCtx.permissions.includes(PLATFORM_PERMISSIONS.SUPPORT_END_ANY);
   if (session.staffId !== actorCtx.id && !isSuperAdmin && !hasEndAny) {
     throw AppError.forbidden(
@@ -993,7 +1018,7 @@ export async function queryAuditLogs(filters: QueryPlatformAuditLogsDto) {
 // ==========================================
 
 export async function seedPlatformDefaults(): Promise<void> {
-  // 1. Ensure all canonical permissions exist in database
+  // 1. Ensure all canonical permissions exist in database (single-colon format)
   for (const perm of PLATFORM_PERMISSION_CATALOGUE) {
     await db
       .insert(platformPermissions)
@@ -1004,14 +1029,24 @@ export async function seedPlatformDefaults(): Promise<void> {
         resource: perm.resource,
         action: perm.action,
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: platformPermissions.key,
+        set: {
+          name: perm.name,
+          description: perm.description,
+          resource: perm.resource,
+          action: perm.action,
+        },
+      });
   }
 
-  // 2. Ensure system platform roles exist
+  // 2. Ensure system platform roles exist and have current permissions
   for (const roleDef of Object.values(SYSTEM_PLATFORM_ROLES)) {
     const existing = await platformRepo.findRoleByKey(roleDef.key);
+    const perms = await platformRepo.findPermissionsByKeys(roleDef.permissions as string[]);
+    const permIds = perms.map((p) => p.id);
+
     if (!existing) {
-      const perms = await platformRepo.findPermissionsByKeys(roleDef.permissions as string[]);
       await platformRepo.createRole(
         {
           key: roleDef.key,
@@ -1020,10 +1055,21 @@ export async function seedPlatformDefaults(): Promise<void> {
           isSystem: true,
           isActive: true,
         },
-        perms.map((p) => p.id),
+        permIds,
       );
+    } else {
+      await platformRepo.updateRole(existing.id, { updatedAt: new Date() }, permIds);
     }
   }
+
+  // 3. Clean up any obsolete double-colon permissions in database
+  await db.execute(sql`
+    DELETE FROM "PlatformRolePermission"
+    WHERE "permissionId" IN (
+      SELECT id FROM "PlatformPermission" WHERE "key" LIKE '%::%'
+    );
+    DELETE FROM "PlatformPermission" WHERE "key" LIKE '%::%';
+  `);
 }
 
 // ==========================================
@@ -1055,7 +1101,7 @@ export async function provisionTenant(
   const isDedicated = data.databaseMode === 'dedicated';
   const tenantId = randomUUID();
   const configuredDatabaseKey = data.databaseConfig?.databaseKey?.trim();
-  const databaseKey = isDedicated ? (configuredDatabaseKey || `dedicated-${tenantId}`) : 'primary';
+  const databaseKey = isDedicated ? configuredDatabaseKey || `dedicated-${tenantId}` : 'primary';
 
   const trialEndsAt = data?.trialDays
     ? new Date(Date.now() + data.trialDays * 24 * 3600 * 1000)
@@ -1141,7 +1187,7 @@ export async function provisionTenant(
     const defaultNamePart = normalizedEmail.split('@')[0] || 'Owner';
     const computedName =
       [firstName, lastName].filter(Boolean).join(' ') ||
-      (defaultNamePart.charAt(0).toUpperCase() + defaultNamePart.slice(1));
+      defaultNamePart.charAt(0).toUpperCase() + defaultNamePart.slice(1);
 
     const created = await authRepo.createUser({
       email: normalizedEmail,
@@ -1635,7 +1681,6 @@ export async function updateTenantSubscription(
   return updated;
 }
 
-
 // ==========================================
 // 8. Tenant Database Routing & Lifecycle Management
 // ==========================================
@@ -1661,190 +1706,198 @@ export async function migrateTenantToDedicated(
   const lockKey = `lock:tenant-db-migration:${tenantId}`;
   const acquired = await redis.set(lockKey, actorStaffId, 'EX', 300, 'NX');
   if (!acquired) {
-    throw AppError.conflict('A migration operation is already in progress for this tenant database');
+    throw AppError.conflict(
+      'A migration operation is already in progress for this tenant database',
+    );
   }
 
   try {
     const defaultSanitizedId = tenant.id.replace(/-/g, '_');
-  const databaseName = options?.customDatabaseName?.trim() || `tenant_${defaultSanitizedId}`;
-  const databaseKey = `dedicated-${tenant.id}`;
-  const poolLimit = options?.poolLimit ?? 5;
-  const connectionUrl = options?.connectionUrl?.trim() || env.DATABASE_URL;
+    const databaseName = options?.customDatabaseName?.trim() || `tenant_${defaultSanitizedId}`;
+    const databaseKey = `dedicated-${tenant.id}`;
+    const poolLimit = options?.poolLimit ?? 5;
+    const connectionUrl = options?.connectionUrl?.trim() || env.DATABASE_URL;
 
-  // Step 1: Provision dedicated PostgreSQL database and apply Drizzle migrations
-  const dbResult = await provisionDedicatedDatabase(tenant.id, {
-    customDatabaseName: databaseName,
-    customDatabaseKey: databaseKey,
-    poolLimit,
-    connectionUrl,
-  });
+    // Step 1: Provision dedicated PostgreSQL database and apply Drizzle migrations
+    const dbResult = await provisionDedicatedDatabase(tenant.id, {
+      customDatabaseName: databaseName,
+      customDatabaseKey: databaseKey,
+      poolLimit,
+      connectionUrl,
+    });
 
-  // Step 2: Open temporary direct connection to newly provisioned database
-  const targetUrl = new URL(connectionUrl);
-  targetUrl.pathname = `/${dbResult.databaseName}`;
-  const dedicatedClient = postgres(targetUrl.toString(), { max: 2, idle_timeout: 10 });
-  const dedicatedDb = drizzle({ client: dedicatedClient, schema }) as unknown as Database;
+    // Step 2: Open temporary direct connection to newly provisioned database
+    const targetUrl = new URL(connectionUrl);
+    targetUrl.pathname = `/${dbResult.databaseName}`;
+    const dedicatedClient = postgres(targetUrl.toString(), { max: 2, idle_timeout: 10 });
+    const dedicatedDb = drizzle({ client: dedicatedClient, schema }) as unknown as Database;
 
-  const recordsMigrated = {
-    members: 0,
-    subscriptions: 0,
-    invoices: 0,
-    files: 0,
-    modules: 0,
-    branding: 0,
-  };
+    const recordsMigrated = {
+      members: 0,
+      subscriptions: 0,
+      invoices: 0,
+      files: 0,
+      modules: 0,
+      branding: 0,
+    };
 
-  try {
-    // 2a. Replicate tenant record
-    await dedicatedDb
-      .insert(schema.tenants)
-      .values({
-        ...tenant,
+    try {
+      // 2a. Replicate tenant record
+      await dedicatedDb
+        .insert(schema.tenants)
+        .values({
+          ...tenant,
+          databaseMode: 'dedicated',
+          databaseKey: dbResult.databaseKey,
+        })
+        .onConflictDoNothing();
+
+      // 2b. Replicate tenant branding
+      const brandings = await db
+        .select()
+        .from(schema.tenantBrandings)
+        .where(eq(schema.tenantBrandings.tenantId, tenant.id));
+      if (brandings?.length) {
+        await dedicatedDb.insert(schema.tenantBrandings).values(brandings).onConflictDoNothing();
+        recordsMigrated.branding = brandings.length;
+      }
+
+      // 2c. Replicate tenant members & roles (replicate member user accounts first for FK integrity)
+      const members = await db
+        .select()
+        .from(schema.tenantMembers)
+        .where(eq(schema.tenantMembers.tenantId, tenant.id));
+      if (members?.length) {
+        const userIds = [...new Set(members.map((m) => m.userId))];
+        if (userIds.length > 0) {
+          const memberUsers = await db
+            .select()
+            .from(schema.users)
+            .where(inArray(schema.users.id, userIds));
+          if (memberUsers?.length) {
+            await dedicatedDb.insert(schema.users).values(memberUsers).onConflictDoNothing();
+          }
+        }
+
+        await dedicatedDb.insert(schema.tenantMembers).values(members).onConflictDoNothing();
+        recordsMigrated.members = members.length;
+
+        const memberIds = members.map((m) => m.id);
+        if (memberIds.length > 0) {
+          const memberRoles = await db
+            .select()
+            .from(schema.tenantMemberRoles)
+            .where(inArray(schema.tenantMemberRoles.memberId, memberIds));
+          if (memberRoles?.length) {
+            await dedicatedDb
+              .insert(schema.tenantMemberRoles)
+              .values(memberRoles)
+              .onConflictDoNothing();
+          }
+        }
+      }
+
+      // 2d. Replicate tenant custom roles
+      const customRoles = await db
+        .select()
+        .from(schema.roles)
+        .where(eq(schema.roles.tenantId, tenant.id));
+      if (customRoles?.length) {
+        await dedicatedDb.insert(schema.roles).values(customRoles).onConflictDoNothing();
+      }
+
+      // 2e. Replicate tenant modules
+      const modules = await db
+        .select()
+        .from(schema.tenantModules)
+        .where(eq(schema.tenantModules.tenantId, tenant.id));
+      if (modules?.length) {
+        await dedicatedDb.insert(schema.tenantModules).values(modules).onConflictDoNothing();
+        recordsMigrated.modules = modules.length;
+      }
+
+      // 2f. Replicate subscriptions and subscription events
+      const subs = await db
+        .select()
+        .from(schema.subscriptions)
+        .where(eq(schema.subscriptions.tenantId, tenant.id));
+      if (subs?.length) {
+        await dedicatedDb.insert(schema.subscriptions).values(subs).onConflictDoNothing();
+        recordsMigrated.subscriptions = subs.length;
+
+        const subEvents = await db
+          .select()
+          .from(schema.subscriptionEvents)
+          .where(eq(schema.subscriptionEvents.tenantId, tenant.id));
+        if (subEvents?.length) {
+          await dedicatedDb
+            .insert(schema.subscriptionEvents)
+            .values(subEvents)
+            .onConflictDoNothing();
+        }
+      }
+
+      // 2g. Replicate invoices (line items are jsonb on the invoice record)
+      const invs = await db
+        .select()
+        .from(schema.invoices)
+        .where(eq(schema.invoices.tenantId, tenant.id));
+      if (invs?.length) {
+        await dedicatedDb.insert(schema.invoices).values(invs).onConflictDoNothing();
+        recordsMigrated.invoices = invs.length;
+      }
+
+      // 2h. Replicate files
+      const fileRecords = await db
+        .select()
+        .from(schema.files)
+        .where(eq(schema.files.tenantId, tenant.id));
+      if (fileRecords?.length) {
+        await dedicatedDb.insert(schema.files).values(fileRecords).onConflictDoNothing();
+        recordsMigrated.files = fileRecords.length;
+      }
+    } finally {
+      await dedicatedClient.end({ timeout: 5 }).catch(() => {});
+    }
+
+    // Step 3: Atomically update central tenant registry in primary database
+    const [updatedTenant] = await db
+      .update(schema.tenants)
+      .set({
         databaseMode: 'dedicated',
         databaseKey: dbResult.databaseKey,
+        metadata: {
+          ...(tenant.metadata as Record<string, unknown> | null),
+          databaseName: dbResult.databaseName,
+          poolLimit: dbResult.poolLimit,
+          schemaVersion: dbResult.schemaVersion,
+          connectionUrl: options?.connectionUrl ? options.connectionUrl : undefined,
+          migratedToDedicatedAt: new Date().toISOString(),
+          migratedByStaffId: actorStaffId,
+        },
       })
-      .onConflictDoNothing();
+      .where(eq(schema.tenants.id, tenant.id))
+      .returning();
 
-    // 2b. Replicate tenant branding
-    const brandings = await db
-      .select()
-      .from(schema.tenantBrandings)
-      .where(eq(schema.tenantBrandings.tenantId, tenant.id));
-    if (brandings?.length) {
-      await dedicatedDb.insert(schema.tenantBrandings).values(brandings).onConflictDoNothing();
-      recordsMigrated.branding = brandings.length;
-    }
+    // Invalidate any active pool in cache
+    await closeDedicatedPool(dbResult.databaseKey);
 
-    // 2c. Replicate tenant members & roles (replicate member user accounts first for FK integrity)
-    const members = await db
-      .select()
-      .from(schema.tenantMembers)
-      .where(eq(schema.tenantMembers.tenantId, tenant.id));
-    if (members?.length) {
-      const userIds = [...new Set(members.map((m) => m.userId))];
-      if (userIds.length > 0) {
-        const memberUsers = await db
-          .select()
-          .from(schema.users)
-          .where(inArray(schema.users.id, userIds));
-        if (memberUsers?.length) {
-          await dedicatedDb.insert(schema.users).values(memberUsers).onConflictDoNothing();
-        }
-      }
-
-      await dedicatedDb.insert(schema.tenantMembers).values(members).onConflictDoNothing();
-      recordsMigrated.members = members.length;
-
-      const memberIds = members.map((m) => m.id);
-      if (memberIds.length > 0) {
-        const memberRoles = await db
-          .select()
-          .from(schema.tenantMemberRoles)
-          .where(inArray(schema.tenantMemberRoles.memberId, memberIds));
-        if (memberRoles?.length) {
-          await dedicatedDb.insert(schema.tenantMemberRoles).values(memberRoles).onConflictDoNothing();
-        }
-      }
-    }
-
-    // 2d. Replicate tenant custom roles
-    const customRoles = await db
-      .select()
-      .from(schema.roles)
-      .where(eq(schema.roles.tenantId, tenant.id));
-    if (customRoles?.length) {
-      await dedicatedDb.insert(schema.roles).values(customRoles).onConflictDoNothing();
-    }
-
-    // 2e. Replicate tenant modules
-    const modules = await db
-      .select()
-      .from(schema.tenantModules)
-      .where(eq(schema.tenantModules.tenantId, tenant.id));
-    if (modules?.length) {
-      await dedicatedDb.insert(schema.tenantModules).values(modules).onConflictDoNothing();
-      recordsMigrated.modules = modules.length;
-    }
-
-    // 2f. Replicate subscriptions and subscription events
-    const subs = await db
-      .select()
-      .from(schema.subscriptions)
-      .where(eq(schema.subscriptions.tenantId, tenant.id));
-    if (subs?.length) {
-      await dedicatedDb.insert(schema.subscriptions).values(subs).onConflictDoNothing();
-      recordsMigrated.subscriptions = subs.length;
-
-      const subEvents = await db
-        .select()
-        .from(schema.subscriptionEvents)
-        .where(eq(schema.subscriptionEvents.tenantId, tenant.id));
-      if (subEvents?.length) {
-        await dedicatedDb.insert(schema.subscriptionEvents).values(subEvents).onConflictDoNothing();
-      }
-    }
-
-    // 2g. Replicate invoices (line items are jsonb on the invoice record)
-    const invs = await db
-      .select()
-      .from(schema.invoices)
-      .where(eq(schema.invoices.tenantId, tenant.id));
-    if (invs?.length) {
-      await dedicatedDb.insert(schema.invoices).values(invs).onConflictDoNothing();
-      recordsMigrated.invoices = invs.length;
-    }
-
-    // 2h. Replicate files
-    const fileRecords = await db
-      .select()
-      .from(schema.files)
-      .where(eq(schema.files.tenantId, tenant.id));
-    if (fileRecords?.length) {
-      await dedicatedDb.insert(schema.files).values(fileRecords).onConflictDoNothing();
-      recordsMigrated.files = fileRecords.length;
-    }
-  } finally {
-    await dedicatedClient.end({ timeout: 5 }).catch(() => {});
-  }
-
-  // Step 3: Atomically update central tenant registry in primary database
-  const [updatedTenant] = await db
-    .update(schema.tenants)
-    .set({
-      databaseMode: 'dedicated',
-      databaseKey: dbResult.databaseKey,
+    // Step 4: Record immutable platform audit entry
+    await platformRepo.logPlatformAction({
+      actorStaffId,
+      action: 'tenant.database_migrated',
+      targetType: 'tenant',
+      targetId: tenant.id,
+      tenantId: tenant.id,
       metadata: {
-        ...(tenant.metadata as Record<string, unknown> | null),
+        previousMode: 'shared',
+        newMode: 'dedicated',
         databaseName: dbResult.databaseName,
-        poolLimit: dbResult.poolLimit,
-        schemaVersion: dbResult.schemaVersion,
-        connectionUrl: options?.connectionUrl ? options.connectionUrl : undefined,
-        migratedToDedicatedAt: new Date().toISOString(),
-        migratedByStaffId: actorStaffId,
+        databaseKey: dbResult.databaseKey,
+        recordsMigrated,
       },
-    })
-    .where(eq(schema.tenants.id, tenant.id))
-    .returning();
-
-  // Invalidate any active pool in cache
-  await closeDedicatedPool(dbResult.databaseKey);
-
-  // Step 4: Record immutable platform audit entry
-  await platformRepo.logPlatformAction({
-    actorStaffId,
-    action: 'tenant.database_migrated',
-    targetType: 'tenant',
-    targetId: tenant.id,
-    tenantId: tenant.id,
-    metadata: {
-      previousMode: 'shared',
-      newMode: 'dedicated',
-      databaseName: dbResult.databaseName,
-      databaseKey: dbResult.databaseKey,
-      recordsMigrated,
-    },
-    requestId,
-  });
+      requestId,
+    });
 
     return {
       tenant: updatedTenant,
@@ -2004,7 +2057,9 @@ export async function executeTenantDatabaseOperation(
     const lockKey = `lock:tenant-db-migration:${tenantId}`;
     const acquired = await redis.set(lockKey, actorStaffId, 'EX', 300, 'NX');
     if (!acquired) {
-      throw AppError.conflict('A migration operation is already in progress for this tenant database');
+      throw AppError.conflict(
+        'A migration operation is already in progress for this tenant database',
+      );
     }
 
     try {

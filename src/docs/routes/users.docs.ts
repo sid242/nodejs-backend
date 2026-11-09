@@ -2,11 +2,7 @@ import type { OpenAPIRegistry } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
 
 import { bearerAuth, errorResponse, successResponse } from '@/docs/helpers';
-import {
-  listUsersQueryDto,
-  updateMeDto,
-  updateUserStatusDto,
-} from '@/modules/users/users.dto';
+import { listUsersQueryDto, updateMeDto, updateUserStatusDto } from '@/modules/users/users.dto';
 
 export const UserSchema = z.object({
   id: z.string().uuid().openapi({ example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' }),
@@ -80,7 +76,7 @@ export function registerUsersDocs(registry: OpenAPIRegistry): { UserSchema: type
     method: 'get',
     path: '/api/v1/platform/users',
     summary: 'List users (Platform Staff)',
-    description: 'Returns paginated list of all users. Requires platform_users::read permission.',
+    description: 'Returns paginated list of all users. Requires platform_users:read permission.',
     tags: ['Platform Staff'],
     security: [{ [bearerAuth.name]: [] }],
     request: {
@@ -97,7 +93,7 @@ export function registerUsersDocs(registry: OpenAPIRegistry): { UserSchema: type
     method: 'get',
     path: '/api/v1/platform/users/{userId}',
     summary: 'Get user details by ID (Platform Staff)',
-    description: 'Returns full profile of specified user. Requires platform_users::read permission.',
+    description: 'Returns full profile of specified user. Requires platform_users:read permission.',
     tags: ['Platform Staff'],
     security: [{ [bearerAuth.name]: [] }],
     responses: {
@@ -112,7 +108,8 @@ export function registerUsersDocs(registry: OpenAPIRegistry): { UserSchema: type
     method: 'patch',
     path: '/api/v1/platform/users/{userId}/status',
     summary: 'Update user account status (Platform Staff)',
-    description: 'Suspends, activates, or deactivates user account. Requires platform_users::suspend permission.',
+    description:
+      'Suspends, activates, or deactivates user account. Requires platform_users:suspend permission.',
     tags: ['Platform Staff'],
     security: [{ [bearerAuth.name]: [] }],
     request: {

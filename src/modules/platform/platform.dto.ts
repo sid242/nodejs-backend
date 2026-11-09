@@ -18,7 +18,15 @@ export const listStaffQueryDto = z.object({
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   sortBy: z
-    .enum(['displayName', 'email', 'employeeCode', 'department', 'status', 'lastLoginAt', 'createdAt'])
+    .enum([
+      'displayName',
+      'email',
+      'employeeCode',
+      'department',
+      'status',
+      'lastLoginAt',
+      'createdAt',
+    ])
     .default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
@@ -34,6 +42,11 @@ export const createStaffDto = z.object({
   jobTitle: z.string().trim().max(100).optional(),
 });
 export type CreateStaffDto = z.infer<typeof createStaffDto>;
+
+export const checkStaffEmailQueryDto = z.object({
+  email: z.string().trim().email(),
+});
+export type CheckStaffEmailQueryDto = z.infer<typeof checkStaffEmailQueryDto>;
 
 export const inviteStaffDto = z.object({
   email: z.string().trim().email(),
@@ -169,16 +182,7 @@ export const listPlatformTenantsQueryDto = z.object({
   plan: z.string().trim().optional(),
   databaseMode: z.enum(['shared', 'dedicated']).optional(),
   sortBy: z
-    .enum([
-      'name',
-      'slug',
-      'legalName',
-      'tenantCode',
-      'status',
-      'plan',
-      'createdAt',
-      'trialEndsAt',
-    ])
+    .enum(['name', 'slug', 'legalName', 'tenantCode', 'status', 'plan', 'createdAt', 'trialEndsAt'])
     .default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
@@ -351,6 +355,4 @@ export const executeTenantDatabaseOperationDto = z.object({
   customDatabaseName: z.string().trim().max(63).optional(),
   connectionUrl: z.string().trim().url().optional(),
 });
-export type ExecuteTenantDatabaseOperationDto = z.infer<
-  typeof executeTenantDatabaseOperationDto
->;
+export type ExecuteTenantDatabaseOperationDto = z.infer<typeof executeTenantDatabaseOperationDto>;

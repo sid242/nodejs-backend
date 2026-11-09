@@ -37,6 +37,7 @@ if (process.env.NODE_ENV === 'production') {
 export const DEMO_PASSWORD = 'Password@123456';
 
 export const DEMO_CREDENTIALS = {
+  // Super Admin + 5 Staff Users (Total 6 Platform Staff)
   platform: [
     {
       role: 'Super Administrator',
@@ -47,11 +48,19 @@ export const DEMO_CREDENTIALS = {
       url: '/platform/login',
     },
     {
-      role: 'Customer Support Staff',
+      role: 'Customer Support Lead',
       roleKey: 'SUPPORT_STAFF',
       email: 'staff.support@yopmail.com',
       password: DEMO_PASSWORD,
-      name: 'Support Staff',
+      name: 'Support Staff Lead',
+      url: '/platform/login',
+    },
+    {
+      role: 'Customer Operations Specialist',
+      roleKey: 'SUPPORT_STAFF',
+      email: 'staff.operations@yopmail.com',
+      password: DEMO_PASSWORD,
+      name: 'Sarah Operations',
       url: '/platform/login',
     },
     {
@@ -79,12 +88,14 @@ export const DEMO_CREDENTIALS = {
       url: '/platform/login',
     },
   ],
+  // 6 Tenants with 5 Members each
   tenants: [
     {
       tenantName: 'Acme Realty Corp',
       tenantSlug: 'acme-realty',
       plan: 'PRO',
       databaseMode: 'shared',
+      primaryColor: '#E11D48',
       members: [
         {
           role: 'Tenant Owner',
@@ -103,8 +114,8 @@ export const DEMO_CREDENTIALS = {
           url: '/login',
         },
         {
-          role: 'Operations Manager',
-          tenantRole: 'MANAGER',
+          role: 'Operations Lead',
+          tenantRole: 'MEMBER',
           email: 'manager@acme.com',
           password: DEMO_PASSWORD,
           name: 'Charles Montgomery',
@@ -119,7 +130,7 @@ export const DEMO_CREDENTIALS = {
           url: '/login',
         },
         {
-          role: 'Client / Auditor Viewer',
+          role: 'Auditor Viewer',
           tenantRole: 'VIEWER',
           email: 'viewer@acme.com',
           password: DEMO_PASSWORD,
@@ -129,10 +140,11 @@ export const DEMO_CREDENTIALS = {
       ],
     },
     {
-      tenantName: 'Nexus Estates Global',
-      tenantSlug: 'nexus-estates',
+      tenantName: 'Nexus Global Technologies',
+      tenantSlug: 'nexus-global',
       plan: 'ENTERPRISE',
       databaseMode: 'dedicated',
+      primaryColor: '#2563EB',
       members: [
         {
           role: 'Tenant Owner',
@@ -151,23 +163,23 @@ export const DEMO_CREDENTIALS = {
           url: '/login',
         },
         {
-          role: 'Senior Portfolio Manager',
-          tenantRole: 'MANAGER',
+          role: 'Solutions Architect',
+          tenantRole: 'MEMBER',
           email: 'manager@nexus.com',
           password: DEMO_PASSWORD,
           name: 'Hannah Abbott',
           url: '/login',
         },
         {
-          role: 'Commercial Broker',
+          role: 'Cloud Engineer',
           tenantRole: 'MEMBER',
-          email: 'agent@nexus.com',
+          email: 'engineer@nexus.com',
           password: DEMO_PASSWORD,
           name: 'Ian Malcolm',
           url: '/login',
         },
         {
-          role: 'Investor Analyst',
+          role: 'Enterprise Analyst',
           tenantRole: 'VIEWER',
           email: 'viewer@nexus.com',
           password: DEMO_PASSWORD,
@@ -181,6 +193,7 @@ export const DEMO_CREDENTIALS = {
       tenantSlug: 'apex-dynamics',
       plan: 'FREE',
       databaseMode: 'shared',
+      primaryColor: '#059669',
       members: [
         {
           role: 'Tenant Owner',
@@ -199,23 +212,23 @@ export const DEMO_CREDENTIALS = {
           url: '/login',
         },
         {
-          role: 'Operations Manager',
-          tenantRole: 'MANAGER',
+          role: 'Robotics Project Manager',
+          tenantRole: 'MEMBER',
           email: 'manager@apex.com',
           password: DEMO_PASSWORD,
           name: 'Alex Murphy',
           url: '/login',
         },
         {
-          role: 'Field Agent',
+          role: 'Field Engineer',
           tenantRole: 'MEMBER',
-          email: 'agent@apex.com',
+          email: 'engineer@apex.com',
           password: DEMO_PASSWORD,
           name: 'Ellen Ripley',
           url: '/login',
         },
         {
-          role: 'Guest / Viewer',
+          role: 'Research Observer',
           tenantRole: 'VIEWER',
           email: 'viewer@apex.com',
           password: DEMO_PASSWORD,
@@ -229,6 +242,7 @@ export const DEMO_CREDENTIALS = {
       tenantSlug: 'starlight-ventures',
       plan: 'PRO',
       databaseMode: 'shared',
+      primaryColor: '#7C3AED',
       members: [
         {
           role: 'Tenant Owner',
@@ -247,27 +261,125 @@ export const DEMO_CREDENTIALS = {
           url: '/login',
         },
         {
-          role: 'Finance Manager',
-          tenantRole: 'MANAGER',
+          role: 'Portfolio Manager',
+          tenantRole: 'MEMBER',
           email: 'manager@starlight.com',
           password: DEMO_PASSWORD,
           name: 'Maya Lin',
           url: '/login',
         },
         {
-          role: 'Investment Associate',
+          role: 'Investment Analyst',
           tenantRole: 'MEMBER',
-          email: 'agent@starlight.com',
+          email: 'analyst@starlight.com',
           password: DEMO_PASSWORD,
           name: 'Jonah Hex',
           url: '/login',
         },
         {
-          role: 'External Auditor',
+          role: 'Limited Partner Auditor',
           tenantRole: 'VIEWER',
           email: 'viewer@starlight.com',
           password: DEMO_PASSWORD,
           name: 'Chloe Sullivan',
+          url: '/login',
+        },
+      ],
+    },
+    {
+      tenantName: 'Zenith Healthcare Labs',
+      tenantSlug: 'zenith-health',
+      plan: 'PRO',
+      databaseMode: 'shared',
+      primaryColor: '#0284C7',
+      members: [
+        {
+          role: 'Tenant Owner',
+          tenantRole: 'OWNER',
+          email: 'owner@zenith.com',
+          password: DEMO_PASSWORD,
+          name: 'Dr. Victor Frankenstein',
+          url: '/login',
+        },
+        {
+          role: 'Tenant Administrator',
+          tenantRole: 'ADMIN',
+          email: 'admin@zenith.com',
+          password: DEMO_PASSWORD,
+          name: 'Dr. Beverly Crusher',
+          url: '/login',
+        },
+        {
+          role: 'Laboratory Director',
+          tenantRole: 'MEMBER',
+          email: 'manager@zenith.com',
+          password: DEMO_PASSWORD,
+          name: 'Dana Scully',
+          url: '/login',
+        },
+        {
+          role: 'Diagnostics Specialist',
+          tenantRole: 'MEMBER',
+          email: 'specialist@zenith.com',
+          password: DEMO_PASSWORD,
+          name: 'Gregory House',
+          url: '/login',
+        },
+        {
+          role: 'Compliance Observer',
+          tenantRole: 'VIEWER',
+          email: 'viewer@zenith.com',
+          password: DEMO_PASSWORD,
+          name: 'Leonard McCoy',
+          url: '/login',
+        },
+      ],
+    },
+    {
+      tenantName: 'Horizon Mediaworks',
+      tenantSlug: 'horizon-media',
+      plan: 'ENTERPRISE',
+      databaseMode: 'dedicated',
+      primaryColor: '#D97706',
+      members: [
+        {
+          role: 'Tenant Owner',
+          tenantRole: 'OWNER',
+          email: 'owner@horizon.com',
+          password: DEMO_PASSWORD,
+          name: 'Olivia Wilde',
+          url: '/login',
+        },
+        {
+          role: 'Tenant Administrator',
+          tenantRole: 'ADMIN',
+          email: 'admin@horizon.com',
+          password: DEMO_PASSWORD,
+          name: 'Don Draper',
+          url: '/login',
+        },
+        {
+          role: 'Creative Director',
+          tenantRole: 'MEMBER',
+          email: 'manager@horizon.com',
+          password: DEMO_PASSWORD,
+          name: 'Peggy Olson',
+          url: '/login',
+        },
+        {
+          role: 'Digital Producer',
+          tenantRole: 'MEMBER',
+          email: 'creator@horizon.com',
+          password: DEMO_PASSWORD,
+          name: 'Peter Parker',
+          url: '/login',
+        },
+        {
+          role: 'Media Auditor',
+          tenantRole: 'VIEWER',
+          email: 'viewer@horizon.com',
+          password: DEMO_PASSWORD,
+          name: 'Clark Kent',
           url: '/login',
         },
       ],
@@ -277,13 +389,13 @@ export const DEMO_CREDENTIALS = {
 
 export async function seedDemo(): Promise<void> {
   logger.info('====================================================');
-  logger.info('       Starting SaaS Foundation Demo Seeder         ');
+  logger.info('       Starting Clean SaaS Foundation Demo Seeder   ');
   logger.info('====================================================');
 
   // ----------------------------------------------------
-  // 0. Clean and Wipe Old Data (Cascade Truncate)
+  // 0. Clean and Wipe Old Data (Cascade Truncate All Non-System Data)
   // ----------------------------------------------------
-  logger.info('0. Wiping existing demo users, staff, and customer tenants...');
+  logger.info('0. Wiping all existing demo data, residue tenants, and staff accounts...');
   await db.execute(sql`
     TRUNCATE TABLE 
       "PlatformSupportSession",
@@ -295,14 +407,30 @@ export async function seedDemo(): Promise<void> {
       "Session",
       "VerificationToken",
       "AuditLog",
+      "OutboxEvent",
       "EmailTemplate",
       "File",
+      "Payment",
+      "Refund",
+      "SubscriptionChange",
+      "SubscriptionEvent",
+      "Invoice",
       "Subscription",
+      "TenantEntitlementOverride",
+      "TenantUsageRecord",
       "TenantMemberRole",
       "TenantMember",
       "TenantModule",
       "TenantBranding",
       "TenantEmailConfig",
+      "TenantAuditPolicy",
+      "TenantInvitation",
+      "tenant_sso_configs",
+      "tenant_scim_tokens",
+      "UserGroupMember",
+      "UserGroupRole",
+      "UserGroup",
+      "Address",
       "Tenant",
       "User"
     CASCADE;
@@ -325,16 +453,16 @@ export async function seedDemo(): Promise<void> {
   logger.info('   ✔ Customer tenant RBAC initialized.');
 
   // ----------------------------------------------------
-  // 2. Seed Canonical Platform Permissions & System Roles
+  // 2. Seed Canonical Platform Permissions & System Roles (Single-Colon Standard)
   // ----------------------------------------------------
   logger.info('2. Seeding platform canonical permissions & system roles...');
   await seedPlatformDefaults();
   logger.info('   ✔ Platform canonical catalogue initialized.');
 
   // ----------------------------------------------------
-  // 3. Provision Platform Staff Accounts
+  // 3. Provision Platform Staff Accounts (Super Admin + 5 Staff)
   // ----------------------------------------------------
-  logger.info('3. Provisioning platform staff accounts...');
+  logger.info('3. Provisioning platform staff accounts (Super Admin + 5 Staff)...');
   const staffIdMap = new Map<string, string>();
 
   for (const staffDef of DEMO_CREDENTIALS.platform) {
@@ -344,71 +472,37 @@ export async function seedDemo(): Promise<void> {
       continue;
     }
 
-    const existing = await platformRepo.findStaffByEmail(staffDef.email);
     const passwordHash = await bcrypt.hash(staffDef.password, 12);
-
-    if (!existing) {
-      const created = await platformRepo.createStaff({
-        email: staffDef.email,
-        displayName: staffDef.name,
-        passwordHash,
-        roleId: role.id,
-        status: 'ACTIVE',
-      });
-      staffIdMap.set(staffDef.email, created.id);
-      logger.info({ email: staffDef.email, role: staffDef.roleKey }, '   ✔ Created platform staff');
-    } else {
-      await db
-        .update(platformStaff)
-        .set({
-          displayName: staffDef.name,
-          passwordHash,
-          roleId: role.id,
-          status: 'ACTIVE',
-        })
-        .where(eq(platformStaff.id, existing.id));
-      staffIdMap.set(staffDef.email, existing.id);
-      logger.info(
-        { email: staffDef.email, role: staffDef.roleKey },
-        '   ✔ Synchronized platform staff',
-      );
-    }
+    const created = await platformRepo.createStaff({
+      email: staffDef.email,
+      displayName: staffDef.name,
+      passwordHash,
+      roleId: role.id,
+      status: 'ACTIVE',
+    });
+    staffIdMap.set(staffDef.email, created.id);
+    logger.info({ email: staffDef.email, role: staffDef.roleKey }, '   ✔ Created platform staff');
   }
 
-  // Provision superadmin into global users table as standard USER (no global ADMIN role)
+  // Provision superadmin into global users table as standard USER
   const superAdminEmail = 'sid.superadmin@yopmail.com';
-  const [existingPlatformAdminUser] = await db
-    .select()
-    .from(users)
-    .where(eq(users.email, superAdminEmail))
-    .limit(1);
   const adminPasswordHash = await bcrypt.hash(DEMO_PASSWORD, 12);
 
-  if (!existingPlatformAdminUser) {
-    await db.insert(users).values({
-      email: superAdminEmail,
-      passwordHash: adminPasswordHash,
-      name: 'Siddharth SuperAdmin',
-      status: 'ACTIVE',
-      emailVerifiedAt: new Date(),
-    });
-    logger.info('   ✔ Provisioned user account for demo platform operator.');
-  } else {
-    await db
-      .update(users)
-      .set({
-        passwordHash: adminPasswordHash,
-        status: 'ACTIVE',
-        emailVerifiedAt: existingPlatformAdminUser.emailVerifiedAt ?? new Date(),
-      })
-      .where(eq(users.id, existingPlatformAdminUser.id));
-    logger.info('   ✔ Synchronized user account for demo platform operator.');
-  }
+  await db.insert(users).values({
+    email: superAdminEmail,
+    passwordHash: adminPasswordHash,
+    name: 'Siddharth SuperAdmin',
+    status: 'ACTIVE',
+    emailVerifiedAt: new Date(),
+  });
+  logger.info('   ✔ Provisioned user account for platform operator.');
 
   // ----------------------------------------------------
-  // 4. Provision Customer Users & Tenants
+  // 4. Provision Customer Users & 6 Clean Tenants
   // ----------------------------------------------------
-  logger.info('4. Provisioning customer organizations and memberships...');
+  logger.info(
+    '4. Provisioning customer organizations and memberships (6 Tenants, 5 Members each)...',
+  );
   const allModules = await db.select({ id: appModules.id }).from(appModules);
   const systemRoles = await rbacRepo.findRolesByTenant(null);
 
@@ -416,34 +510,25 @@ export async function seedDemo(): Promise<void> {
   const userIdMap = new Map<string, string>();
 
   for (const tenantDef of DEMO_CREDENTIALS.tenants) {
-    // 4a. Find or create tenant
-    let [tenantRecord] = await db
-      .select()
-      .from(tenants)
-      .where(eq(tenants.slug, tenantDef.tenantSlug))
-      .limit(1);
+    // 4a. Create tenant
+    const [tenantRecord] = await db
+      .insert(tenants)
+      .values({
+        name: tenantDef.tenantName,
+        slug: tenantDef.tenantSlug,
+        plan: tenantDef.plan,
+        status: 'ACTIVE',
+        databaseMode: tenantDef.databaseMode,
+        databaseKey:
+          tenantDef.databaseMode === 'dedicated' ? `dedicated-${tenantDef.tenantSlug}` : 'primary',
+      })
+      .returning();
 
-    if (!tenantRecord) {
-      const [created] = await db
-        .insert(tenants)
-        .values({
-          name: tenantDef.tenantName,
-          slug: tenantDef.tenantSlug,
-          plan: tenantDef.plan,
-          status: 'ACTIVE',
-          databaseMode: tenantDef.databaseMode,
-          databaseKey:
-            tenantDef.databaseMode === 'dedicated'
-              ? `dedicated-${tenantDef.tenantSlug}`
-              : 'primary',
-        })
-        .returning();
-      tenantRecord = created!;
-      logger.info({ slug: tenantDef.tenantSlug }, '   ✔ Created customer tenant');
-    } else {
-      logger.info({ slug: tenantDef.tenantSlug }, '   ℹ Customer tenant already exists');
-    }
-    tenantIdMap.set(tenantDef.tenantSlug, tenantRecord.id);
+    tenantIdMap.set(tenantDef.tenantSlug, tenantRecord!.id);
+    logger.info(
+      { slug: tenantDef.tenantSlug, plan: tenantDef.plan },
+      '   ✔ Created customer tenant',
+    );
 
     // 4b. Enable all app modules for tenant
     if (allModules.length > 0) {
@@ -451,7 +536,7 @@ export async function seedDemo(): Promise<void> {
         .insert(tenantModules)
         .values(
           allModules.map((m) => ({
-            tenantId: tenantRecord.id,
+            tenantId: tenantRecord!.id,
             moduleId: m.id,
             isEnabled: true,
           })),
@@ -463,20 +548,13 @@ export async function seedDemo(): Promise<void> {
     await db
       .insert(tenantBrandings)
       .values({
-        tenantId: tenantRecord.id,
+        tenantId: tenantRecord!.id,
         companyName: tenantDef.tenantName,
-        primaryColor:
-          tenantDef.tenantSlug === 'acme-realty'
-            ? '#E11D48'
-            : tenantDef.tenantSlug === 'nexus-estates'
-              ? '#2563EB'
-              : tenantDef.tenantSlug === 'apex-dynamics'
-                ? '#059669'
-                : '#7C3AED',
+        primaryColor: tenantDef.primaryColor,
       })
       .onConflictDoNothing();
 
-    // 4d. Provision users and member roles (no global ADMIN role - all role: USER)
+    // 4d. Provision users and member roles
     for (const memberDef of tenantDef.members) {
       let [userRecord] = await db
         .select()
@@ -498,39 +576,18 @@ export async function seedDemo(): Promise<void> {
           })
           .returning();
         userRecord = createdUser!;
-        logger.info({ email: memberDef.email }, '   ✔ Created customer user');
-      } else {
-        await db
-          .update(users)
-          .set({
-            name: memberDef.name,
-            passwordHash,
-            status: 'ACTIVE',
-            emailVerifiedAt: userRecord.emailVerifiedAt ?? new Date(),
-          })
-          .where(eq(users.id, userRecord.id));
-        logger.info({ email: memberDef.email }, '   ✔ Synchronized customer user');
       }
       userIdMap.set(memberDef.email, userRecord.id);
 
       // Add to tenant members
-      let [memberRecord] = await db
-        .select()
-        .from(tenantMembers)
-        .where(eq(tenantMembers.userId, userRecord.id))
-        .limit(1);
-
-      if (!memberRecord) {
-        const [createdMember] = await db
-          .insert(tenantMembers)
-          .values({
-            tenantId: tenantRecord.id,
-            userId: userRecord.id,
-            status: 'ACTIVE',
-          })
-          .returning();
-        memberRecord = createdMember!;
-      }
+      const [memberRecord] = await db
+        .insert(tenantMembers)
+        .values({
+          tenantId: tenantRecord!.id,
+          userId: userRecord.id,
+          status: 'ACTIVE',
+        })
+        .returning();
 
       // Assign tenant role (OWNER, ADMIN, MEMBER, VIEWER)
       const targetRole = systemRoles.find((r) => r.name === memberDef.tenantRole);
@@ -540,7 +597,7 @@ export async function seedDemo(): Promise<void> {
           .values({
             memberId: memberRecord.id,
             roleId: targetRole.id,
-            tenantId: tenantRecord.id,
+            tenantId: tenantRecord!.id,
           })
           .onConflictDoNothing();
       }
@@ -548,207 +605,136 @@ export async function seedDemo(): Promise<void> {
   }
 
   // ----------------------------------------------------
-  // 5. Seed Active Support Delegation Session
+  // 5. Seed SaaS Pricing Plans & Assign Subscriptions
   // ----------------------------------------------------
-  logger.info('5. Seeding sample active audited support session...');
+  logger.info('5. Initializing pricing tiers and subscriptions...');
+  await seedDefaultPlans();
+
+  for (const tenantDef of DEMO_CREDENTIALS.tenants) {
+    const tid = tenantIdMap.get(tenantDef.tenantSlug);
+    if (tid) {
+      await assignInitialSubscription(tid, tenantDef.plan);
+    }
+  }
+  logger.info('   ✔ Subscriptions initialized for all 6 tenants.');
+
+  // ----------------------------------------------------
+  // 6. Seed Active Audited Support Delegation Session
+  // ----------------------------------------------------
+  logger.info('6. Seeding sample active audited support session...');
   const supportStaffId = staffIdMap.get('staff.support@yopmail.com');
   const acmeTenantId = tenantIdMap.get('acme-realty');
 
   if (supportStaffId && acmeTenantId) {
-    const existingSession = await db
-      .select()
-      .from(platformSupportSessions)
-      .where(eq(platformSupportSessions.tenantId, acmeTenantId))
-      .limit(1);
-
-    if (existingSession.length === 0) {
-      await db.insert(platformSupportSessions).values({
-        staffId: supportStaffId,
-        tenantId: acmeTenantId,
-        reason: 'TICKET-4892: Investigating customer report of PDF export timeout',
-        status: 'ACTIVE',
-        expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 hours window
-      });
-      logger.info('   ✔ Active audited support session created for Acme Realty Corp.');
-    } else {
-      logger.info('   ℹ Support session already exists for Acme Realty Corp.');
-    }
+    await db.insert(platformSupportSessions).values({
+      staffId: supportStaffId,
+      tenantId: acmeTenantId,
+      reason: 'TICKET-4892: Customer reported PDF export latency investigation',
+      status: 'ACTIVE',
+      expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 hours window
+    });
+    logger.info('   ✔ Active audited support session created for Acme Realty Corp.');
   }
 
   // ----------------------------------------------------
-  // 6. Seed Platform Compliance Audit Trail
+  // 7. Seed Platform Compliance Audit Trail
   // ----------------------------------------------------
-  logger.info('6. Seeding platform compliance audit trail...');
+  logger.info('7. Seeding platform compliance audit trail...');
   const superAdminId = staffIdMap.get('sid.superadmin@yopmail.com');
 
   if (superAdminId) {
-    const existingLogs = await db.select().from(platformAuditLogs).limit(1);
-    if (existingLogs.length === 0) {
-      await db.insert(platformAuditLogs).values([
-        {
-          actorStaffId: superAdminId,
-          action: 'platform_staff.created',
-          targetType: 'staff',
-          targetId: supportStaffId ?? null,
-          metadata: { email: 'staff.support@yopmail.com', role: 'SUPPORT_STAFF' },
-          ipAddress: '127.0.0.1',
-          userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        },
-        {
-          actorStaffId: superAdminId,
-          action: 'platform_role.updated',
-          targetType: 'role',
-          targetId: 'TECHNICAL_SUPPORT',
-          metadata: { changes: { permissions: ['system_health::read', 'tenant_support::start'] } },
-          ipAddress: '127.0.0.1',
-          userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        },
-        {
-          actorStaffId: supportStaffId ?? superAdminId,
-          action: 'tenant_support.started',
-          targetType: 'tenant',
-          targetId: acmeTenantId ?? null,
-          tenantId: acmeTenantId ?? null,
-          metadata: { ticket: 'TICKET-4892', durationMinutes: 120 },
-          ipAddress: '192.168.1.42',
-          userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-        },
-        {
-          actorStaffId: supportStaffId ?? superAdminId,
-          action: 'platform_staff.login',
-          targetType: 'staff',
-          targetId: supportStaffId ?? null,
-          metadata: { loginType: 'mfa_verified' },
-          ipAddress: '192.168.1.42',
-          userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-        },
-      ]);
-      logger.info('   ✔ Platform compliance audit records seeded.');
-    }
+    await db.insert(platformAuditLogs).values([
+      {
+        actorStaffId: superAdminId,
+        action: 'platform_staff.created',
+        targetType: 'staff',
+        targetId: supportStaffId ?? null,
+        metadata: { email: 'staff.support@yopmail.com', role: 'SUPPORT_STAFF' },
+        ipAddress: '127.0.0.1',
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      },
+      {
+        actorStaffId: superAdminId,
+        action: 'platform_role.updated',
+        targetType: 'role',
+        targetId: 'TECHNICAL_SUPPORT',
+        metadata: { changes: { permissions: ['system_health:read', 'tenant_support:start'] } },
+        ipAddress: '127.0.0.1',
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      },
+      {
+        actorStaffId: supportStaffId ?? superAdminId,
+        action: 'tenant_support.started',
+        targetType: 'tenant',
+        targetId: acmeTenantId ?? null,
+        tenantId: acmeTenantId ?? null,
+        metadata: { ticket: 'TICKET-4892', durationMinutes: 120 },
+        ipAddress: '192.168.1.42',
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+      },
+    ]);
+    logger.info('   ✔ Platform compliance audit records seeded.');
   }
 
   // ----------------------------------------------------
-  // 7. Seed Customer Tenant Audit Logs & Email Templates
+  // 8. Seed Customer Tenant Audit Logs & Email Templates
   // ----------------------------------------------------
-  logger.info('7. Seeding tenant activity and email templates...');
+  logger.info('8. Seeding tenant activity and email templates for Acme...');
   const acmeOwnerId = userIdMap.get('owner@acme.com');
 
   if (acmeTenantId && acmeOwnerId) {
-    // Audit logs for Acme
-    const existingAudit = await db
-      .select()
-      .from(auditLogs)
-      .where(eq(auditLogs.tenantId, acmeTenantId))
-      .limit(1);
-    if (existingAudit.length === 0) {
-      await db.insert(auditLogs).values([
-        {
-          tenantId: acmeTenantId,
-          userId: acmeOwnerId,
-          action: 'TENANT.CREATED',
-          entityType: 'tenant',
-          entityId: acmeTenantId,
-          metadata: { plan: 'PRO', name: 'Acme Realty Corp' },
-          ipAddress: '127.0.0.1',
-        },
-        {
-          tenantId: acmeTenantId,
-          userId: acmeOwnerId,
-          action: 'USER.LOGIN',
-          entityType: 'user',
-          entityId: acmeOwnerId,
-          metadata: { authProvider: 'email_password' },
-          ipAddress: '127.0.0.1',
-        },
-        {
-          tenantId: acmeTenantId,
-          userId: acmeOwnerId,
-          action: 'SETTINGS.UPDATED',
-          entityType: 'branding',
-          entityId: acmeTenantId,
-          metadata: { brandColor: '#E11D48' },
-          ipAddress: '127.0.0.1',
-        },
-      ]);
-      logger.info('   ✔ Customer tenant audit logs seeded.');
-    }
+    await db.insert(auditLogs).values([
+      {
+        tenantId: acmeTenantId,
+        userId: acmeOwnerId,
+        action: 'TENANT.CREATED',
+        entityType: 'tenant',
+        entityId: acmeTenantId,
+        metadata: { plan: 'PRO', name: 'Acme Realty Corp' },
+        ipAddress: '127.0.0.1',
+      },
+      {
+        tenantId: acmeTenantId,
+        userId: acmeOwnerId,
+        action: 'USER.LOGIN',
+        entityType: 'user',
+        entityId: acmeOwnerId,
+        metadata: { authProvider: 'email_password' },
+        ipAddress: '127.0.0.1',
+      },
+    ]);
 
-    // Email templates for Acme
-    const existingTemplates = await db
-      .select()
-      .from(emailTemplates)
-      .where(eq(emailTemplates.tenantId, acmeTenantId))
-      .limit(1);
-    if (existingTemplates.length === 0) {
-      const templatesToSeed = [
-        {
-          tenantId: acmeTenantId,
-          name: 'Customer Welcome & Onboarding',
-          slug: 'welcome-onboarding',
-          subject: 'Welcome to {{companyName}}, {{userName}}!',
-          category: 'TRANSACTIONAL' as const,
-          status: 'PUBLISHED' as const,
-          description: 'Automated email sent to new team members upon accepting an invitation.',
-          htmlContent: `<!DOCTYPE html><html><body style="font-family: sans-serif; padding: 24px;"><h2>Welcome to {{companyName}}!</h2><p>Hi {{userName}},</p><p>Your workspace is ready. You can now access your dashboard, upload files, and collaborate with your team.</p><p><a href="{{dashboardUrl}}" style="background: #E11D48; color: white; padding: 10px 18px; border-radius: 6px; text-decoration: none;">Launch Dashboard</a></p></body></html>`,
-          variables: ['companyName', 'userName', 'dashboardUrl'],
-          createdById: acmeOwnerId,
-        },
-        {
-          tenantId: acmeTenantId,
-          name: 'Password Reset Notification',
-          slug: 'password-reset-notice',
-          subject: 'Reset your password for {{companyName}}',
-          category: 'TRANSACTIONAL' as const,
-          status: 'PUBLISHED' as const,
-          description: 'Security notification containing a time-limited password reset link.',
-          htmlContent: `<!DOCTYPE html><html><body style="font-family: sans-serif; padding: 24px;"><h2>Password Reset Request</h2><p>Hi {{userName}},</p><p>We received a request to reset your password. Click below to choose a new password within 15 minutes:</p><p><a href="{{resetUrl}}" style="background: #2563EB; color: white; padding: 10px 18px; border-radius: 6px; text-decoration: none;">Reset Password</a></p><p>If you didn't request this, please ignore this email.</p></body></html>`,
-          variables: ['companyName', 'userName', 'resetUrl'],
-          createdById: acmeOwnerId,
-        },
-        {
-          tenantId: acmeTenantId,
-          name: 'Monthly Activity Summary',
-          slug: 'monthly-statement',
-          subject: 'Your Monthly Report & Usage — {{monthName}}',
-          category: 'NOTIFICATION' as const,
-          status: 'PUBLISHED' as const,
-          description:
-            'Executive digest detailing workspace files, storage consumption, and active team members.',
-          htmlContent: `<!DOCTYPE html><html><body style="font-family: sans-serif; padding: 24px;"><h2>Monthly Activity Digest</h2><p>Hi {{userName}},</p><p>Here is your summary for {{monthName}}:</p><ul><li>Total Files: {{fileCount}}</li><li>Active Members: {{memberCount}}</li><li>Storage Used: {{storageMb}} MB</li></ul></body></html>`,
-          variables: [
-            'companyName',
-            'userName',
-            'monthName',
-            'fileCount',
-            'memberCount',
-            'storageMb',
-          ],
-          createdById: acmeOwnerId,
-        },
-      ];
+    const templatesToSeed = [
+      {
+        tenantId: acmeTenantId,
+        name: 'Customer Welcome & Onboarding',
+        slug: 'welcome-onboarding',
+        subject: 'Welcome to {{companyName}}, {{userName}}!',
+        category: 'TRANSACTIONAL' as const,
+        status: 'PUBLISHED' as const,
+        description: 'Automated email sent to new team members upon accepting an invitation.',
+        htmlContent: `<!DOCTYPE html><html><body style="font-family: sans-serif; padding: 24px;"><h2>Welcome to {{companyName}}!</h2><p>Hi {{userName}},</p><p>Your workspace is ready. You can now access your dashboard, upload files, and collaborate with your team.</p><p><a href="{{dashboardUrl}}" style="background: #E11D48; color: white; padding: 10px 18px; border-radius: 6px; text-decoration: none;">Launch Dashboard</a></p></body></html>`,
+        variables: ['companyName', 'userName', 'dashboardUrl'],
+        createdById: acmeOwnerId,
+      },
+      {
+        tenantId: acmeTenantId,
+        name: 'Password Reset Notification',
+        slug: 'password-reset-notice',
+        subject: 'Reset your password for {{companyName}}',
+        category: 'TRANSACTIONAL' as const,
+        status: 'PUBLISHED' as const,
+        description: 'Security notification containing a time-limited password reset link.',
+        htmlContent: `<!DOCTYPE html><html><body style="font-family: sans-serif; padding: 24px;"><h2>Password Reset Request</h2><p>Hi {{userName}},</p><p>We received a request to reset your password. Click below to choose a new password within 15 minutes:</p><p><a href="{{resetUrl}}" style="background: #2563EB; color: white; padding: 10px 18px; border-radius: 6px; text-decoration: none;">Reset Password</a></p><p>If you didn't request this, please ignore this email.</p></body></html>`,
+        variables: ['companyName', 'userName', 'resetUrl'],
+        createdById: acmeOwnerId,
+      },
+    ];
 
-      for (const tpl of templatesToSeed) {
-        await db.insert(emailTemplates).values(tpl).onConflictDoNothing();
-      }
-      logger.info('   ✔ Customer tenant email templates seeded.');
+    for (const tpl of templatesToSeed) {
+      await db.insert(emailTemplates).values(tpl).onConflictDoNothing();
     }
-
-    // Seed default SaaS pricing plans and assign subscriptions
-    await seedDefaultPlans();
-    await assignInitialSubscription(acmeTenantId, 'PRO');
-    const nexusTenantId = tenantIdMap.get('nexus-estates');
-    if (nexusTenantId) {
-      await assignInitialSubscription(nexusTenantId, 'ENTERPRISE');
-    }
-    const apexTenantId = tenantIdMap.get('apex-dynamics');
-    if (apexTenantId) {
-      await assignInitialSubscription(apexTenantId, 'FREE');
-    }
-    const starlightTenantId = tenantIdMap.get('starlight-ventures');
-    if (starlightTenantId) {
-      await assignInitialSubscription(starlightTenantId, 'PRO');
-    }
-    logger.info('   ✔ SaaS plans, entitlements, and tenant subscriptions seeded.');
+    logger.info('   ✔ Customer tenant email templates seeded.');
   }
 
   logger.info('====================================================');

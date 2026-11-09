@@ -27,6 +27,9 @@ export interface TenantMembershipContext {
   id: string;
   status: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
   roles: string[];
+  roleIds?: string[];
+  departmentId?: string | null;
+  regionId?: string | null;
 }
 
 export interface PlatformSupportSessionContext {
@@ -69,6 +72,7 @@ declare global {
       tenantId?: string;
       membership?: TenantMembershipContext;
       permissions?: string[];
+      actorContext?: import('@/modules/pbac/pbac.types').ActorContext;
       db?: import('@/config/db').Database;
       valid?: ValidatedRequestData;
       rawBody?: Buffer;

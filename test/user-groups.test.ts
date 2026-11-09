@@ -22,12 +22,12 @@ test('groupsModuleDefinition is registered in system domain module registry', ()
   assert.ok(permKeys.includes('groups:manage-members'));
 });
 
-test('Platform permission catalogue contains canonical resource::action groups permissions', () => {
-  assert.equal(PLATFORM_PERMISSIONS.GROUPS_READ, 'platform_groups::read');
-  assert.equal(PLATFORM_PERMISSIONS.GROUPS_CREATE, 'platform_groups::create');
-  assert.equal(PLATFORM_PERMISSIONS.GROUPS_UPDATE, 'platform_groups::update');
-  assert.equal(PLATFORM_PERMISSIONS.GROUPS_DELETE, 'platform_groups::delete');
-  assert.equal(PLATFORM_PERMISSIONS.GROUPS_MANAGE_MEMBERS, 'platform_groups::manage_members');
+test('Platform permission catalogue contains canonical resource:action groups permissions', () => {
+  assert.equal(PLATFORM_PERMISSIONS.GROUPS_READ, 'platform_groups:read');
+  assert.equal(PLATFORM_PERMISSIONS.GROUPS_CREATE, 'platform_groups:create');
+  assert.equal(PLATFORM_PERMISSIONS.GROUPS_UPDATE, 'platform_groups:update');
+  assert.equal(PLATFORM_PERMISSIONS.GROUPS_DELETE, 'platform_groups:delete');
+  assert.equal(PLATFORM_PERMISSIONS.GROUPS_MANAGE_MEMBERS, 'platform_groups:manage_members');
 });
 
 test('slugify helper formats names into clean URL-safe slugs', () => {

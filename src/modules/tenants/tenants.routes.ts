@@ -6,12 +6,12 @@ import { requirePermission } from '@/middleware/rbac';
 import { blockInSupportSession, requireSupportOrUser } from '@/middleware/support';
 import { requireTenant } from '@/middleware/tenant';
 import { validate } from '@/middleware/validate';
+import { tenantAccessRouter, tenantAuditRouter } from '@/modules/audit/audit.routes';
 import * as billingController from '@/modules/billing/billing.controller';
 import * as billingDto from '@/modules/billing/billing.dto';
 import * as invitationsController from '@/modules/invitations/invitations.controller';
 import * as invitationsDto from '@/modules/invitations/invitations.dto';
 import { invitationsRouter } from '@/modules/invitations/invitations.routes';
-import { tenantAccessRouter, tenantAuditRouter } from '@/modules/audit/audit.routes';
 import { tenantScimManagementRouter, tenantSsoRouter } from '@/modules/sso/sso.routes';
 
 import * as controller from './tenants.controller';
@@ -24,6 +24,13 @@ router.get(
   '/public/resolve',
   validate({ query: dto.resolvePublicTenantDto }),
   controller.resolvePublicTenant,
+);
+
+// Real-time debounced availability checks
+router.get(
+  '/check-slug',
+  validate({ query: dto.checkSlugQueryDto }),
+  controller.checkTenantSlugAvailability,
 );
 
 // Public invitation endpoints
@@ -121,6 +128,15 @@ router.post(
   requirePermission('members:invite'),
   validate({ body: dto.addMemberDto }),
   controller.addMember,
+);
+
+router.get(
+  '/:tenantId/members/check-email',
+  requireAuth,
+  requireTenant,
+  requirePermission('members:read'),
+  validate({ query: dto.checkMemberEmailQueryDto }),
+  controller.checkMemberEmailAvailability,
 );
 
 router.patch(

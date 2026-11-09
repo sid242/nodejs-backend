@@ -232,6 +232,13 @@
       "when": 1794056227089,
       "tag": "0032_careless_wilson_fisk",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1794230004724,
+      "tag": "0033_dear_master_chief",
+      "breakpoints": true
     }
   ]
 }

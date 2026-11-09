@@ -1,5 +1,4 @@
 import crypto from 'node:crypto';
-
 import bcrypt from 'bcryptjs';
 
 import { env } from '@/config/env';
@@ -25,6 +24,7 @@ import {
   createEmailVerificationToken,
   createMagicLinkToken,
   createPasswordResetToken,
+  issueImpersonationToken,
   issueTokens,
   revokeAllUserTokens,
   verifyAndConsumeEmailVerificationToken,
@@ -36,6 +36,7 @@ import {
   createTwoFactorChallenge,
   type TwoFactorChallengeData,
 } from '@/modules/auth/two-factor.service';
+import { rbacRepo } from '@/modules/rbac/rbac.repository';
 import {
   buildPlatformUrl,
   buildTenantUrl,
@@ -250,7 +251,8 @@ export interface MagicLinkRequestResult {
 export async function requestMagicLink(email: string): Promise<MagicLinkRequestResult> {
   const normalizedEmail = email.toLowerCase().trim();
   const user = await authRepo.findByEmail(normalizedEmail);
-  const genericMessage = 'If an account exists with this email, a magic sign-in link has been sent.';
+  const genericMessage =
+    'If an account exists with this email, a magic sign-in link has been sent.';
 
   if (!user || user.deletedAt || user.status === 'SUSPENDED' || user.status === 'DEACTIVATED') {
     return {
@@ -332,13 +334,11 @@ async function atomicGetDel(redisClient: any, key: string): Promise<string | nul
       /* fallback to Lua */
     }
   }
-  return (
-    (await redisClient?.eval?.(
-      "local v = redis.call('get', KEYS[1]); if v then redis.call('del', KEYS[1]); end; return v;",
-      1,
-      key,
-    )) as string | null
-  );
+  return (await redisClient?.eval?.(
+    "local v = redis.call('get', KEYS[1]); if v then redis.call('del', KEYS[1]); end; return v;",
+    1,
+    key,
+  )) as string | null;
 }
 
 export async function createHandoff(
@@ -397,7 +397,9 @@ export async function redeemHandoff({
 
   const raw = await atomicGetDel(redis, key);
   if (!raw) {
-    throw AppError.unauthorized('Handoff code is invalid or has expired', { code: 'HANDOFF_EXPIRED' });
+    throw AppError.unauthorized('Handoff code is invalid or has expired', {
+      code: 'HANDOFF_EXPIRED',
+    });
   }
 
   const payload = JSON.parse(raw) as { userId?: string; tenantId?: string; targetHost?: string };
@@ -453,3 +455,159 @@ export async function redeemHandoff({
   };
 }
 
+export async function impersonateUser({
+  caller,
+  targetUserId,
+  reason,
+  durationMinutes = 30,
+}: {
+  caller: { id: string; type: 'USER' | 'STAFF'; email?: string };
+  targetUserId: string;
+  reason: string;
+  durationMinutes?: number;
+}): Promise<{
+  accessToken: string;
+  sessionId: string;
+  expiresInSeconds: number;
+  expiresInMinutes: number;
+  targetUser: { id: string; name: string; email: string };
+}> {
+  if (caller.id === targetUserId) {
+    throw AppError.badRequest('Cannot impersonate yourself');
+  }
+
+  const targetUserRecord = await authRepo.findById(targetUserId);
+  if (!targetUserRecord || targetUserRecord.deletedAt) {
+    throw AppError.notFound('Target user not found');
+  }
+
+  if (targetUserRecord.status === 'SUSPENDED' || targetUserRecord.status === 'DEACTIVATED') {
+    throw AppError.forbidden(
+      `Cannot impersonate an account that is ${targetUserRecord.status.toLowerCase()}`,
+    );
+  }
+
+  if (caller.type === 'USER') {
+    const callerMemberships = await tenantsRepo.findMembershipsByUserId(caller.id);
+    const targetMemberships = await tenantsRepo.findMembershipsByUserId(targetUserId);
+
+    const sharedTenantIds = callerMemberships
+      .filter((cm: { status: string; tenantId: string }) => cm.status === 'ACTIVE')
+      .map((cm: { tenantId: string }) => cm.tenantId)
+      .filter((tid: string) =>
+        targetMemberships.some(
+          (tm: { tenantId: string; status: string }) =>
+            tm.tenantId === tid && tm.status === 'ACTIVE',
+        ),
+      );
+
+    if (sharedTenantIds.length === 0) {
+      throw AppError.forbidden('Cannot impersonate a user outside of your organizations');
+    }
+
+    let hasImpersonateAccess = false;
+
+    for (const tenantId of sharedTenantIds) {
+      const callerPerms = await rbacRepo.getEffectivePermissions(tenantId, caller.id);
+      const isCallerOwnerOrAdmin =
+        callerPerms.roles.includes('OWNER') ||
+        callerPerms.roles.includes('ADMIN') ||
+        callerPerms.permissions.includes('users:impersonate');
+
+      if (isCallerOwnerOrAdmin) {
+        const targetPerms = await rbacRepo.getEffectivePermissions(tenantId, targetUserId);
+        const targetIsOwner = targetPerms.roles.includes('OWNER');
+        const callerIsOwner = callerPerms.roles.includes('OWNER');
+
+        if (!targetIsOwner || callerIsOwner) {
+          hasImpersonateAccess = true;
+          break;
+        }
+      }
+    }
+
+    if (!hasImpersonateAccess) {
+      throw AppError.forbidden('Insufficient permissions to impersonate users in this workspace');
+    }
+  }
+
+  const sessionId = crypto.randomUUID();
+  const ttlSeconds = Math.max(60, Math.floor(durationMinutes * 60));
+
+  await redis.set(
+    `auth:impersonation:${sessionId}`,
+    JSON.stringify({
+      sessionId,
+      targetUserId,
+      impersonatorId: caller.id,
+      impersonatorType: caller.type,
+      reason,
+      durationMinutes,
+      createdAt: new Date().toISOString(),
+    }),
+    'EX',
+    ttlSeconds,
+  );
+
+  const { accessToken, expiresInSeconds } = issueImpersonationToken(
+    { id: targetUserRecord.id },
+    caller,
+    durationMinutes,
+    sessionId,
+  );
+
+  await logSecurityEvent({
+    userId: targetUserRecord.id,
+    action: 'IMPERSONATION_STARTED',
+    entityType: 'user',
+    entityId: targetUserRecord.id,
+    metadata: {
+      impersonatorId: caller.id,
+      impersonatorType: caller.type,
+      sessionId,
+      reason,
+      durationMinutes,
+    },
+  });
+
+  return {
+    accessToken,
+    sessionId,
+    expiresInSeconds,
+    expiresInMinutes: durationMinutes,
+    targetUser: {
+      id: targetUserRecord.id,
+      name: targetUserRecord.name,
+      email: targetUserRecord.email,
+    },
+  };
+}
+
+export async function stopImpersonation({
+  sessionId,
+  impersonatorId,
+  targetUserId,
+}: {
+  sessionId?: string;
+  impersonatorId?: string;
+  targetUserId?: string;
+}): Promise<{ message: string }> {
+  if (sessionId) {
+    await redis.del(`auth:impersonation:${sessionId}`);
+  }
+
+  if (targetUserId) {
+    await logSecurityEvent({
+      userId: targetUserId,
+      action: 'IMPERSONATION_STOPPED',
+      entityType: 'user',
+      entityId: targetUserId,
+      metadata: {
+        sessionId,
+        impersonatorId,
+      },
+    });
+  }
+
+  return { message: 'Impersonation session stopped successfully' };
+}

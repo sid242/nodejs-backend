@@ -1,55 +1,55 @@
 /**
- * Canonical platform permission keys adhering to the strict `resource::action` naming standard.
+ * Canonical platform permission keys adhering to the strict `resource:action` naming standard.
  * Platform permissions govern internal SaaS staff operations, distinct from tenant-user permissions.
  */
 export const PLATFORM_PERMISSIONS = {
   // Platform Staff Management
-  STAFF_READ: 'platform_staff::read',
-  STAFF_CREATE: 'platform_staff::create',
-  STAFF_UPDATE: 'platform_staff::update',
-  STAFF_DISABLE: 'platform_staff::disable',
+  STAFF_READ: 'platform_staff:read',
+  STAFF_CREATE: 'platform_staff:create',
+  STAFF_UPDATE: 'platform_staff:update',
+  STAFF_DISABLE: 'platform_staff:disable',
 
   // Platform User Groups Management
-  GROUPS_READ: 'platform_groups::read',
-  GROUPS_CREATE: 'platform_groups::create',
-  GROUPS_UPDATE: 'platform_groups::update',
-  GROUPS_DELETE: 'platform_groups::delete',
-  GROUPS_MANAGE_MEMBERS: 'platform_groups::manage_members',
+  GROUPS_READ: 'platform_groups:read',
+  GROUPS_CREATE: 'platform_groups:create',
+  GROUPS_UPDATE: 'platform_groups:update',
+  GROUPS_DELETE: 'platform_groups:delete',
+  GROUPS_MANAGE_MEMBERS: 'platform_groups:manage_members',
 
   // Platform Roles & Permissions Catalog
-  ROLES_READ: 'platform_roles::read',
-  ROLES_MANAGE: 'platform_roles::manage',
-  PERMISSIONS_READ: 'platform_permissions::read',
+  ROLES_READ: 'platform_roles:read',
+  ROLES_MANAGE: 'platform_roles:manage',
+  PERMISSIONS_READ: 'platform_permissions:read',
 
   // Platform User Administration
-  USERS_READ: 'platform_users::read',
-  USERS_UPDATE: 'platform_users::update',
-  USERS_SUSPEND: 'platform_users::suspend',
+  USERS_READ: 'platform_users:read',
+  USERS_UPDATE: 'platform_users:update',
+  USERS_SUSPEND: 'platform_users:suspend',
 
   // RBAC Catalog Management
-  RBAC_CATALOG_MANAGE: 'rbac_catalog::manage',
+  RBAC_CATALOG_MANAGE: 'rbac_catalog:manage',
 
   // Tenant Lifecycle Oversight
-  TENANTS_READ: 'tenants::read',
-  TENANTS_CREATE: 'tenants::create',
-  TENANTS_MANAGE: 'tenants::manage',
-  TENANTS_SUSPEND: 'tenants::suspend',
-  TENANTS_DELETE: 'tenants::delete',
+  TENANTS_READ: 'tenants:read',
+  TENANTS_CREATE: 'tenants:create',
+  TENANTS_MANAGE: 'tenants:manage',
+  TENANTS_SUSPEND: 'tenants:suspend',
+  TENANTS_DELETE: 'tenants:delete',
 
   // Audited Customer Support Delegation
-  SUPPORT_START: 'tenant_support::start',
-  SUPPORT_END: 'tenant_support::end',
-  SUPPORT_WRITE: 'tenant_support::write',
-  SUPPORT_IMPERSONATE: 'tenant_support::impersonate',
-  SUPPORT_END_ANY: 'tenant_support::end_any',
+  SUPPORT_START: 'tenant_support:start',
+  SUPPORT_END: 'tenant_support:end',
+  SUPPORT_WRITE: 'tenant_support:write',
+  SUPPORT_IMPERSONATE: 'tenant_support:impersonate',
+  SUPPORT_END_ANY: 'tenant_support:end_any',
 
   // Billing & Subscriptions
-  BILLING_READ: 'billing::read',
-  BILLING_MANAGE: 'billing::manage',
+  BILLING_READ: 'billing:read',
+  BILLING_MANAGE: 'billing:manage',
 
   // Audit Logs & Diagnostics
-  AUDIT_READ: 'platform_audit::read',
-  HEALTH_READ: 'system_health::read',
+  AUDIT_READ: 'platform_audit:read',
+  HEALTH_READ: 'system_health:read',
 } as const;
 
 export type PlatformPermissionKey =
@@ -144,7 +144,7 @@ export const PLATFORM_PERMISSION_CATALOGUE: PlatformPermissionDefinition[] = [
   {
     key: PLATFORM_PERMISSIONS.PERMISSIONS_READ,
     name: 'View Permission Catalogue',
-    description: 'Inspect canonical resource::action permissions catalogue',
+    description: 'Inspect canonical resource:action permissions catalogue',
     resource: 'platform_permissions',
     action: 'read',
   },
@@ -278,15 +278,25 @@ export const PLATFORM_PERMISSION_CATALOGUE: PlatformPermissionDefinition[] = [
   },
 ];
 
+export const PLATFORM_ROLES = {
+  SUPER_ADMIN: 'SUPER_ADMIN',
+  SUPPORT_STAFF: 'SUPPORT_STAFF',
+  BILLING_STAFF: 'BILLING_STAFF',
+  TECHNICAL_SUPPORT: 'TECHNICAL_SUPPORT',
+  READ_ONLY_AUDITOR: 'READ_ONLY_AUDITOR',
+} as const;
+
+export type PlatformRoleKey = (typeof PLATFORM_ROLES)[keyof typeof PLATFORM_ROLES];
+
 export const SYSTEM_PLATFORM_ROLES = {
   SUPER_ADMIN: {
-    key: 'SUPER_ADMIN',
+    key: PLATFORM_ROLES.SUPER_ADMIN,
     name: 'Super Administrator',
     description: 'Full unconstrained platform control, staff lifecycle, security, and settings',
     permissions: Object.values(PLATFORM_PERMISSIONS),
   },
   SUPPORT_STAFF: {
-    key: 'SUPPORT_STAFF',
+    key: PLATFORM_ROLES.SUPPORT_STAFF,
     name: 'Customer Support Staff',
     description:
       'View tenant metadata, manage tickets, initiate controlled tenant support sessions',
@@ -301,7 +311,7 @@ export const SYSTEM_PLATFORM_ROLES = {
     ],
   },
   BILLING_STAFF: {
-    key: 'BILLING_STAFF',
+    key: PLATFORM_ROLES.BILLING_STAFF,
     name: 'Billing & Finance Staff',
     description: 'Manage subscription tiers, invoices, and billing configurations',
     permissions: [
@@ -312,7 +322,7 @@ export const SYSTEM_PLATFORM_ROLES = {
     ],
   },
   TECHNICAL_SUPPORT: {
-    key: 'TECHNICAL_SUPPORT',
+    key: PLATFORM_ROLES.TECHNICAL_SUPPORT,
     name: 'Technical Operations & Support',
     description: 'Inspect system health, diagnostics, job queues, and time-bound troubleshooting',
     permissions: [
@@ -323,7 +333,7 @@ export const SYSTEM_PLATFORM_ROLES = {
     ],
   },
   READ_ONLY_AUDITOR: {
-    key: 'READ_ONLY_AUDITOR',
+    key: PLATFORM_ROLES.READ_ONLY_AUDITOR,
     name: 'Compliance & Security Auditor',
     description: 'Read-only access to audit logs, staff rosters, roles, and compliance records',
     permissions: [

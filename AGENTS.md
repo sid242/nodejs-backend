@@ -161,6 +161,12 @@ Every new business domain should be placed in `src/modules/<domain>/`:
 - Never append `.js` or `.ts` to relative imports or `@/*` path aliases (e.g., use `import { db } from '@/config/db';`, `export * from './invoices';`).
 - Always verify type correctness with `npm run typecheck` (`tsc --noEmit`).
 
+### 3.9 Geo & Spatial Invariants
+
+- For geographical addresses and location pins, standard PostgreSQL `numeric` / `double precision` `latitude` and `longitude` coordinates are used (`src/db/schema/location/addresses.ts`).
+- The administrative hierarchy (`geo.geo_entities`) operates entirely in plain PostgreSQL without requiring external PostGIS binaries.
+- PostGIS is optional and strictly reserved for spatial polygon boundaries (`geo_data/run_all.sh` with `INCLUDE_POLYGONS=true`). Plain PostgreSQL is the standard default.
+
 ---
 
 ## 4. Useful Commands

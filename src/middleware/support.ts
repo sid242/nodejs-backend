@@ -1,15 +1,13 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
 import { ACCESS_TOKEN_COOKIE, AUTH_HEADERS } from '@/constants/index';
-import { AppError } from '@/lib/errors';
 import { getTenantDb } from '@/db/tenancy/tenant-db';
+import { AppError } from '@/lib/errors';
 import { logSecurityEvent } from '@/modules/audit/audit.service';
 import { verifyAccessToken, verifySupportToken } from '@/modules/auth/tokens';
 import * as platformRepo from '@/modules/platform/platform.repository';
 import { resolveUserPermissions, SYSTEM_ROLES } from '@/modules/rbac/rbac.service';
 import * as tenantsRepo from '@/modules/tenants/tenants.repository';
-
-export const SUPPORT_TOKEN_COOKIE = 'support_at';
 
 export const SUPPORT_TENANT_PERMISSIONS = [
   'tenants:read',
@@ -34,16 +32,11 @@ export async function requireSupportOrUser(
 ): Promise<void> {
   let token: string | undefined;
 
-  // 1. Check support cookie first, then auth header, then standard access token cookie
-  if (req.cookies?.[SUPPORT_TOKEN_COOKIE]) {
-    token = req.cookies[SUPPORT_TOKEN_COOKIE];
-  } else {
-    const header = req.headers.authorization;
-    if (header?.startsWith(AUTH_HEADERS.PREFIX)) {
-      token = header.slice(AUTH_HEADERS.PREFIX.length).trim();
-    } else if (req.cookies?.[ACCESS_TOKEN_COOKIE]) {
-      token = req.cookies[ACCESS_TOKEN_COOKIE];
-    }
+  const header = req.headers.authorization;
+  if (header?.startsWith(AUTH_HEADERS.PREFIX)) {
+    token = header.slice(AUTH_HEADERS.PREFIX.length).trim();
+  } else if (req.cookies?.[ACCESS_TOKEN_COOKIE]) {
+    token = req.cookies[ACCESS_TOKEN_COOKIE];
   }
 
   if (!token) return next(AppError.unauthorized('Authentication required'));
@@ -59,7 +52,9 @@ export async function requireSupportOrUser(
     }
 
     if (session.status !== 'ACTIVE') {
-      return next(AppError.forbidden(`Support session is currently ${session.status.toLowerCase()}`));
+      return next(
+        AppError.forbidden(`Support session is currently ${session.status.toLowerCase()}`),
+      );
     }
 
     if (new Date(session.expiresAt) <= new Date()) {
@@ -67,7 +62,10 @@ export async function requireSupportOrUser(
       return next(AppError.unauthorized('Support session has expired'));
     }
 
-    if (session.staffId !== supportPayload.staffId || session.tenantId !== supportPayload.tenantId) {
+    if (
+      session.staffId !== supportPayload.staffId ||
+      session.tenantId !== supportPayload.tenantId
+    ) {
       return next(AppError.unauthorized('Support session claims mismatch'));
     }
 
@@ -78,7 +76,9 @@ export async function requireSupportOrUser(
     }
 
     if (tenant.status !== 'ACTIVE' && tenant.status !== 'TRIALING') {
-      return next(AppError.forbidden(`Tenant workspace is currently ${tenant.status.toLowerCase()}`));
+      return next(
+        AppError.forbidden(`Tenant workspace is currently ${tenant.status.toLowerCase()}`),
+      );
     }
 
     req.isSupportSession = true;
@@ -113,8 +113,15 @@ export async function requireSupportOrUser(
     });
 
     // If session is READ_ONLY, enforce that mutating HTTP methods are immediately blocked
-    if (session.scope === 'READ_ONLY' && req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') {
-      return next(AppError.forbidden('READ_ONLY support session cannot perform mutating operations'));
+    if (
+      session.scope === 'READ_ONLY' &&
+      req.method !== 'GET' &&
+      req.method !== 'HEAD' &&
+      req.method !== 'OPTIONS'
+    ) {
+      return next(
+        AppError.forbidden('READ_ONLY support session cannot perform mutating operations'),
+      );
     }
 
     // Resolve effective permissions based on mode & scope
@@ -199,9 +206,7 @@ export function blockInSupportSession(actionName = 'This action'): RequestHandle
   return (req: Request, _res: Response, next: NextFunction): void => {
     if (req.isSupportSession) {
       return next(
-        AppError.forbidden(
-          `${actionName} cannot be performed while inside a support session.`,
-        ),
+        AppError.forbidden(`${actionName} cannot be performed while inside a support session.`),
       );
     }
     next();

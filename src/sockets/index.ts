@@ -54,7 +54,7 @@ export function initSocket(httpServer: HttpServer): SocketManager {
       let token = socket.handshake.auth?.token;
       if (!token && socket.handshake.headers.cookie) {
         const cookies = parseCookies(socket.handshake.headers.cookie);
-        token = cookies['support_at'] || cookies[ACCESS_TOKEN_COOKIE];
+        token = cookies[ACCESS_TOKEN_COOKIE];
       }
       if (!token) throw new Error('unauthorized');
 

@@ -22,6 +22,7 @@ import {
 } from '@/db/schema';
 import * as rbacRepo from '@/modules/rbac/rbac.repository';
 import * as rbacService from '@/modules/rbac/rbac.service';
+
 import type { ListMembersQueryDto } from './tenants.dto';
 
 export async function createTenant(data: NewTenant, executor: DbExecutor = db): Promise<Tenant> {
@@ -139,10 +140,7 @@ export async function findTenantMemberById(memberId: string): Promise<TenantMemb
   return record ?? null;
 }
 
-export async function findTenantMembersPaginated(
-  tenantId: string,
-  filters: ListMembersQueryDto,
-) {
+export async function findTenantMembersPaginated(tenantId: string, filters: ListMembersQueryDto) {
   const conditions = [eq(tenantMembers.tenantId, tenantId)];
 
   if (filters?.status === 'REMOVED') {
@@ -348,10 +346,7 @@ export async function updateTenantMemberMetadata(
   return updated ?? null;
 }
 
-export async function softDeleteTenantMember(
-  tenantId: string,
-  memberId: string,
-): Promise<boolean> {
+export async function softDeleteTenantMember(tenantId: string, memberId: string): Promise<boolean> {
   const [updated] = await db
     .update(tenantMembers)
     .set({
@@ -425,6 +420,40 @@ export async function updateTenantMemberStatus(
 
 export async function findMembershipsByUserId(userId: string): Promise<TenantMember[]> {
   return db.select().from(tenantMembers).where(eq(tenantMembers.userId, userId));
+}
+
+export async function findMemberByEmail(
+  tenantId: string,
+  email: string,
+): Promise<TenantMember | null> {
+  const [record] = await db
+    .select({
+      id: tenantMembers.id,
+      tenantId: tenantMembers.tenantId,
+      userId: tenantMembers.userId,
+      status: tenantMembers.status,
+      memberCode: tenantMembers.memberCode,
+      phone: tenantMembers.phone,
+      jobTitle: tenantMembers.jobTitle,
+      department: tenantMembers.department,
+      invitedAt: tenantMembers.invitedAt,
+      joinedAt: tenantMembers.joinedAt,
+      lastLoginAt: tenantMembers.lastLoginAt,
+      deletedAt: tenantMembers.deletedAt,
+      createdAt: tenantMembers.createdAt,
+    })
+    .from(tenantMembers)
+    .innerJoin(users, eq(tenantMembers.userId, users.id))
+    .where(
+      and(
+        eq(tenantMembers.tenantId, tenantId),
+        ilike(users.email, email.trim().toLowerCase()),
+        isNull(tenantMembers.deletedAt),
+      ),
+    )
+    .limit(1);
+
+  return (record as TenantMember) ?? null;
 }
 
 export async function provisionTenantTransaction(data: {

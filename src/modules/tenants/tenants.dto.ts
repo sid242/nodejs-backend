@@ -52,6 +52,16 @@ export const tenantSlugSchema = z
     message: 'This workspace slug is reserved and cannot be used',
   });
 
+export const checkSlugQueryDto = z.object({
+  slug: tenantSlugSchema,
+});
+export type CheckSlugQueryDto = z.infer<typeof checkSlugQueryDto>;
+
+export const checkMemberEmailQueryDto = z.object({
+  email: z.string().trim().email(),
+});
+export type CheckMemberEmailQueryDto = z.infer<typeof checkMemberEmailQueryDto>;
+
 export const createTenantDto = z
   .object({
     name: z.string().trim().min(2).max(100),

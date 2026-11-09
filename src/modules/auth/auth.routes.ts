@@ -1,5 +1,9 @@
-import { Router } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
+import jwt from 'jsonwebtoken';
 
+import { env } from '@/config/env';
+import { ACCESS_TOKEN_COOKIE, AUTH_HEADERS, PLATFORM_STAFF_TOKEN_COOKIE } from '@/constants/index';
+import { AppError } from '@/lib/errors';
 import { optionalAuth, requireAuth } from '@/middleware/auth';
 import { authLimiter } from '@/middleware/rate-limit';
 import { blockInSupportSession } from '@/middleware/support';
@@ -11,6 +15,7 @@ import {
   disableTwoFactorDto,
   enableTwoFactorDto,
   forgotPasswordDto,
+  impersonateUserDto,
   loginDto,
   redeemHandoffDto,
   refreshTokenDto,
@@ -23,9 +28,53 @@ import {
   verifyMagicLinkDto,
   verifyTwoFactorChallengeDto,
 } from '@/modules/auth/auth.dto';
+import { verifyAccessToken } from '@/modules/auth/tokens';
 
 const router = Router();
 router.use(authLimiter);
+
+async function requireCallerAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
+  let token: string | undefined;
+  const header = req.headers.authorization;
+  if (header?.startsWith(AUTH_HEADERS.PREFIX)) {
+    token = header.slice(AUTH_HEADERS.PREFIX.length).trim();
+  } else if (req.cookies?.[PLATFORM_STAFF_TOKEN_COOKIE]) {
+    token = req.cookies[PLATFORM_STAFF_TOKEN_COOKIE];
+  } else if (req.cookies?.[ACCESS_TOKEN_COOKIE]) {
+    token = req.cookies[ACCESS_TOKEN_COOKIE];
+  }
+
+  if (!token) return next(AppError.unauthorized('Authentication required'));
+
+  try {
+    const decoded = jwt.verify(token, env.JWT_PLATFORM_SECRET, { audience: 'platform-api' }) as any;
+    if (decoded?.typ === 'STAFF') {
+      req.staff = {
+        id: decoded.sub,
+        email: decoded.email,
+        displayName: decoded.displayName,
+        roleId: decoded.roleId,
+        roleKey: decoded.roleKey,
+        permissions: decoded.permissions ?? [],
+      };
+      return next();
+    }
+  } catch {
+    // Continue to user access token check
+  }
+
+  try {
+    const payload = verifyAccessToken(token);
+    if (payload?.typ === 'USER') {
+      req.user = { id: payload.sub as string };
+      return next();
+    }
+  } catch {
+    // Both checks failed
+  }
+
+  return next(AppError.unauthorized('Invalid or expired authentication credentials'));
+}
 
 router.post('/register', validate({ body: registerDto }), controller.register);
 router.post('/login', validate({ body: loginDto }), controller.login);
@@ -102,10 +151,15 @@ router.post(
   validate({ body: createHandoffDto }),
   controller.createHandoff,
 );
+router.post('/handoff/redeem', validate({ body: redeemHandoffDto }), controller.redeemHandoff);
+
+// --- Impersonation ---
 router.post(
-  '/handoff/redeem',
-  validate({ body: redeemHandoffDto }),
-  controller.redeemHandoff,
+  '/impersonate',
+  requireCallerAuth,
+  validate({ body: impersonateUserDto }),
+  controller.impersonate,
 );
+router.post('/stop-impersonate', requireAuth, controller.stopImpersonate);
 
 export default router;
