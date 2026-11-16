@@ -9,6 +9,8 @@ import {
 } from '@/modules/auth/auth.dto';
 import * as groupsDto from '@/modules/groups/groups.dto';
 import * as platformGroupsController from '@/modules/groups/platform-groups.controller';
+import * as policiesController from '@/modules/policies/policies.controller';
+import * as policiesDto from '@/modules/policies/policies.dto';
 import * as rbacController from '@/modules/rbac/rbac.controller';
 import * as rbacDto from '@/modules/rbac/rbac.dto';
 import * as tenantDto from '@/modules/tenants/tenants.dto';
@@ -464,6 +466,65 @@ router.delete(
   requirePlatformPermission(PLATFORM_PERMISSIONS.GROUPS_MANAGE_MEMBERS),
   validate({ params: groupsDto.platformGroupMemberParamsDto }),
   platformGroupsController.removePlatformGroupMember,
+);
+
+// ==========================================
+// 8. Platform PBAC Policies
+// ==========================================
+router.get(
+  '/policies',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.ROLES_READ),
+  validate({ query: policiesDto.listPoliciesQueryDto }),
+  policiesController.listPlatformPolicies,
+);
+
+router.post(
+  '/policies',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.ROLES_MANAGE),
+  validate({ body: policiesDto.createPolicyDto }),
+  policiesController.createPlatformPolicy,
+);
+
+router.get(
+  '/policies/:policyId',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.ROLES_READ),
+  validate({ params: policiesDto.policyIdParamDto }),
+  policiesController.getPlatformPolicy,
+);
+
+router.patch(
+  '/policies/:policyId',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.ROLES_MANAGE),
+  validate({ params: policiesDto.policyIdParamDto, body: policiesDto.updatePolicyDto }),
+  policiesController.updatePlatformPolicy,
+);
+
+router.delete(
+  '/policies/:policyId',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.ROLES_MANAGE),
+  validate({ params: policiesDto.policyIdParamDto }),
+  policiesController.deletePlatformPolicy,
+);
+
+router.post(
+  '/policies/:policyId/roles/:roleId',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.ROLES_MANAGE),
+  validate({ params: policiesDto.policyRoleParamDto }),
+  policiesController.attachPolicyToPlatformRole,
+);
+
+router.delete(
+  '/policies/:policyId/roles/:roleId',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.ROLES_MANAGE),
+  validate({ params: policiesDto.policyRoleParamDto }),
+  policiesController.detachPolicyFromPlatformRole,
+);
+
+router.get(
+  '/policies/roles/:roleId',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.ROLES_READ),
+  validate({ params: policiesDto.roleIdParamDto }),
+  policiesController.getPoliciesForPlatformRole,
 );
 
 export default router;

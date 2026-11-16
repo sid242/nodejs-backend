@@ -14,6 +14,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { users } from '../identity/users';
+import { platformRoles } from '../platform/platform-roles';
 import { tenants } from '../tenancy/index';
 import { roles } from './rbac';
 
@@ -76,3 +77,24 @@ export const rolePolicies = pgTable(
 
 export type RolePolicy = typeof rolePolicies.$inferSelect;
 export type NewRolePolicy = typeof rolePolicies.$inferInsert;
+
+export const platformRolePolicies = pgTable(
+  'PlatformRolePolicy',
+  {
+    roleId: uuid('roleId')
+      .notNull()
+      .references(() => platformRoles.id, { onDelete: 'cascade' }),
+    policyId: uuid('policyId')
+      .notNull()
+      .references(() => policies.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.roleId, table.policyId] }),
+    index('PlatformRolePolicy_roleId_idx').on(table.roleId),
+    index('PlatformRolePolicy_policyId_idx').on(table.policyId),
+  ],
+);
+
+export type PlatformRolePolicy = typeof platformRolePolicies.$inferSelect;
+export type NewPlatformRolePolicy = typeof platformRolePolicies.$inferInsert;

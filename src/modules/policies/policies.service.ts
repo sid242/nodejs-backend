@@ -120,6 +120,85 @@ export class PoliciesService {
     }
     return policiesRepo.getPoliciesByRoleId(tenantId, roleId);
   }
+
+  // ==========================================
+  // Platform Policies
+  // ==========================================
+
+  async listPlatformPolicies(
+    filters: ListPoliciesQueryDto,
+  ): Promise<{ items: Policy[]; total: number; page: number; limit: number }> {
+    return policiesRepo.listPlatformPolicies(filters);
+  }
+
+  async getPlatformPolicyById(policyId: string): Promise<Policy> {
+    const policy = await policiesRepo.findPlatformPolicyById(policyId);
+    if (!policy) {
+      throw AppError.notFound('Platform policy not found');
+    }
+    return policy;
+  }
+
+  async createPlatformPolicy(data: CreatePolicyDto, staffId?: string): Promise<Policy> {
+    const existing = await policiesRepo.findPlatformPolicyByName(data.name);
+    if (existing) {
+      throw AppError.conflict(`Platform policy with name '${data.name}' already exists`);
+    }
+
+    return policiesRepo.createPlatformPolicy(data, staffId);
+  }
+
+  async updatePlatformPolicy(
+    policyId: string,
+    data: UpdatePolicyDto,
+    staffId?: string,
+  ): Promise<Policy> {
+    await this.getPlatformPolicyById(policyId);
+
+    if (data.name) {
+      const existing = await policiesRepo.findPlatformPolicyByName(data.name);
+      if (existing && existing.id !== policyId) {
+        throw AppError.conflict(`Platform policy with name '${data.name}' already exists`);
+      }
+    }
+
+    const updated = await policiesRepo.updatePlatformPolicy(policyId, data);
+    if (!updated) {
+      throw AppError.notFound('Platform policy not found');
+    }
+
+    return updated;
+  }
+
+  async deletePlatformPolicy(policyId: string): Promise<void> {
+    await this.getPlatformPolicyById(policyId);
+
+    const deleted = await policiesRepo.deletePlatformPolicy(policyId);
+    if (!deleted) {
+      throw AppError.notFound('Platform policy not found');
+    }
+  }
+
+  async attachPolicyToPlatformRole(policyId: string, roleId: string): Promise<{ message: string }> {
+    const policy = await this.getPlatformPolicyById(policyId);
+    await policiesRepo.attachPolicyToPlatformRole(roleId, policy.id);
+
+    return { message: `Policy '${policy.name}' attached to platform role successfully` };
+  }
+
+  async detachPolicyFromPlatformRole(
+    policyId: string,
+    roleId: string,
+  ): Promise<{ message: string }> {
+    const policy = await this.getPlatformPolicyById(policyId);
+    await policiesRepo.detachPolicyFromPlatformRole(roleId, policy.id);
+
+    return { message: `Policy '${policy.name}' detached from platform role successfully` };
+  }
+
+  async getPoliciesForPlatformRole(roleId: string): Promise<Policy[]> {
+    return policiesRepo.getPoliciesByPlatformRoleId(roleId);
+  }
 }
 
 export const policiesService = new PoliciesService();
