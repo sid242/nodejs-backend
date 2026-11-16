@@ -239,6 +239,13 @@
       "when": 1794230004724,
       "tag": "0033_dear_master_chief",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1794244069551,
+      "tag": "0034_glorious_golden_guardian",
+      "breakpoints": true
     }
   ]
 }

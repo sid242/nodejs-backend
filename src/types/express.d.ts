@@ -9,6 +9,9 @@ export interface AuthenticatedStaff {
   id: string;
   email: string;
   displayName?: string;
+  avatarUrl?: string | null;
+  department?: string | null;
+  jobTitle?: string | null;
   roleId: string;
   roleKey: string;
   permissions: string[];

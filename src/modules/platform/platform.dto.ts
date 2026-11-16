@@ -73,6 +73,7 @@ export type LoginStaffDto = z.infer<typeof loginStaffDto>;
 
 export const updateStaffDto = z.object({
   displayName: z.string().trim().min(2).max(100).optional(),
+  avatarUrl: z.string().url().nullable().optional(),
   employeeCode: z.string().trim().max(50).nullable().optional(),
   department: z.string().trim().max(100).nullable().optional(),
   jobTitle: z.string().trim().max(100).nullable().optional(),
@@ -80,6 +81,20 @@ export const updateStaffDto = z.object({
   roleId: z.string().uuid().optional(),
 });
 export type UpdateStaffDto = z.infer<typeof updateStaffDto>;
+
+export const updatePlatformProfileDto = z.object({
+  displayName: z.string().trim().min(2).max(100).optional(),
+  avatarUrl: z.string().url().nullable().optional(),
+  department: z.string().trim().max(100).nullable().optional(),
+  jobTitle: z.string().trim().max(100).nullable().optional(),
+});
+export type UpdatePlatformProfileDto = z.infer<typeof updatePlatformProfileDto>;
+
+export const changePlatformPasswordDto = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z.string().min(8, 'Password must be at least 8 characters').max(100),
+});
+export type ChangePlatformPasswordDto = z.infer<typeof changePlatformPasswordDto>;
 
 export const suspendStaffDto = z.object({
   reason: z.string().trim().min(3).max(300).optional(),

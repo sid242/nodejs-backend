@@ -13,6 +13,7 @@ export const platformStaff = pgTable(
     email: text('email').notNull(),
     passwordHash: text('passwordHash').notNull(),
     displayName: text('displayName').notNull(),
+    avatarUrl: text('avatarUrl'),
     employeeCode: text('employeeCode'),
     department: text('department'),
     jobTitle: text('jobTitle'),
@@ -41,7 +42,9 @@ export const platformStaff = pgTable(
   },
   (table) => [
     uniqueIndex('PlatformStaff_email_idx').on(table.email),
-    uniqueIndex('PlatformStaff_employeeCode_idx').on(table.employeeCode).where(isNotNull(table.employeeCode)),
+    uniqueIndex('PlatformStaff_employeeCode_idx')
+      .on(table.employeeCode)
+      .where(isNotNull(table.employeeCode)),
     index('PlatformStaff_userId_idx').on(table.userId),
     index('PlatformStaff_roleId_idx').on(table.roleId),
     index('PlatformStaff_status_idx').on(table.status),
@@ -58,6 +61,7 @@ export const publicPlatformStaff = {
   userId: platformStaff.userId,
   email: platformStaff.email,
   displayName: platformStaff.displayName,
+  avatarUrl: platformStaff.avatarUrl,
   employeeCode: platformStaff.employeeCode,
   department: platformStaff.department,
   jobTitle: platformStaff.jobTitle,

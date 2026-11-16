@@ -90,6 +90,24 @@ export const getMe = asyncHandler(async (req: Request, res: Response) => {
   AppResponse.ok(req.staff).send(res);
 });
 
+export const updateMe = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.updateStaffProfile(
+    req.staff!.id,
+    req.valid?.body,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.ok(result, 'Profile updated successfully').send(res);
+});
+
+export const changePassword = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.changeStaffPassword(
+    req.staff!.id,
+    req.valid?.body,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.ok(result, 'Password changed successfully').send(res);
+});
+
 export const logout = asyncHandler(async (_req: Request, res: Response) => {
   res.clearCookie('platform_staff_token');
   AppResponse.ok({ success: true }, 'Logged out from platform').send(res);

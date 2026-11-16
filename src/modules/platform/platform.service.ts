@@ -28,6 +28,7 @@ import { createPlatformTwoFactorChallenge } from './platform-2fa.service';
 import {
   provisionTenantDto,
   type AcceptStaffInviteDto,
+  type ChangePlatformPasswordDto,
   type CreatePlatformRoleDto,
   type CreateStaffDto,
   type ExecuteTenantDatabaseOperationDto,
@@ -41,6 +42,7 @@ import {
   type ProvisionTenantInput,
   type QueryPlatformAuditLogsDto,
   type StartSupportSessionDto,
+  type UpdatePlatformProfileDto,
   type UpdatePlatformRoleDto,
   type UpdatePlatformTenantDto,
   type UpdatePlatformTenantSubscriptionDto,
@@ -635,6 +637,64 @@ export async function resetStaffPassword(
     message: 'Staff password reset successfully',
     temporaryPassword: newPassword ? undefined : plainPassword,
   };
+}
+
+export async function updateStaffProfile(
+  staffId: string,
+  data: UpdatePlatformProfileDto,
+  requestId?: string,
+) {
+  const staff = await platformRepo.findStaffById(staffId);
+  if (!staff) throw AppError.notFound('Platform staff member not found');
+
+  const updated = await platformRepo.updateStaff(staffId, data);
+  if (!updated) throw AppError.notFound('Platform staff member not found');
+
+  await platformRepo.logPlatformAction({
+    actorStaffId: staffId,
+    action: 'platform_staff.profile_updated',
+    targetType: 'staff',
+    targetId: staffId,
+    metadata: { changedFields: Object.keys(data) },
+    requestId,
+  });
+
+  return updated;
+}
+
+export async function changeStaffPassword(
+  staffId: string,
+  data: ChangePlatformPasswordDto,
+  requestId?: string,
+) {
+  const staff = await platformRepo.findStaffById(staffId);
+  if (!staff) throw AppError.notFound('Platform staff member not found');
+
+  const staffWithHash = await platformRepo.findStaffByEmail(staff.email);
+  if (!staffWithHash) throw AppError.notFound('Platform staff member not found');
+
+  const valid = await bcrypt.compare(data.currentPassword, staffWithHash.passwordHash);
+  if (!valid) {
+    throw AppError.badRequest('Current password is incorrect');
+  }
+
+  const isSame = await bcrypt.compare(data.newPassword, staffWithHash.passwordHash);
+  if (isSame) {
+    throw AppError.badRequest('New password must be different from current password');
+  }
+
+  const passwordHash = await bcrypt.hash(data.newPassword, 12);
+  await platformRepo.updateStaff(staffId, { passwordHash });
+
+  await platformRepo.logPlatformAction({
+    actorStaffId: staffId,
+    action: 'platform_staff.password_changed',
+    targetType: 'staff',
+    targetId: staffId,
+    requestId,
+  });
+
+  return { message: 'Password changed successfully' };
 }
 
 // ==========================================

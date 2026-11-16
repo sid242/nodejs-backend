@@ -55,6 +55,7 @@ export async function findStaffById(id: string) {
       userId: platformStaff.userId,
       email: platformStaff.email,
       displayName: platformStaff.displayName,
+      avatarUrl: platformStaff.avatarUrl,
       employeeCode: platformStaff.employeeCode,
       department: platformStaff.department,
       jobTitle: platformStaff.jobTitle,
@@ -249,6 +250,7 @@ export async function updateStaff(
     .update(platformStaff)
     .set({
       ...(data.displayName !== undefined ? { displayName: data.displayName } : {}),
+      ...(data.avatarUrl !== undefined ? { avatarUrl: data.avatarUrl } : {}),
       ...(data.employeeCode !== undefined ? { employeeCode: data.employeeCode } : {}),
       ...(data.department !== undefined ? { department: data.department } : {}),
       ...(data.jobTitle !== undefined ? { jobTitle: data.jobTitle } : {}),
@@ -960,7 +962,10 @@ export async function listTenantDatabasesPaginated(filters?: ListTenantDatabases
       .orderBy(desc(tenants.updatedAt))
       .offset((page - 1) * limit)
       .limit(limit),
-    db.select({ count: sql<number>`count(*)::int` }).from(tenants).where(whereClause),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(tenants)
+      .where(whereClause),
   ]);
 
   const items = records.map((t) => {
@@ -970,7 +975,11 @@ export async function listTenantDatabasesPaginated(filters?: ListTenantDatabases
       (t.databaseMode === 'dedicated' ? `tenant_${t.id.replace(/-/g, '_')}` : 'primary_db');
 
     const healthStatus = (meta.lastHealthCheckStatus as string) || 'UNKNOWN';
-    if (filters?.healthStatus && filters.healthStatus !== 'ALL' && healthStatus !== filters.healthStatus) {
+    if (
+      filters?.healthStatus &&
+      filters.healthStatus !== 'ALL' &&
+      healthStatus !== filters.healthStatus
+    ) {
       // Allow filter matching
     }
 

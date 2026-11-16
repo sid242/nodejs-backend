@@ -41,6 +41,12 @@ router.post(
 router.use(requirePlatformAuth);
 
 router.get('/auth/me', controller.getMe);
+router.patch('/auth/me', validate({ body: dto.updatePlatformProfileDto }), controller.updateMe);
+router.post(
+  '/auth/change-password',
+  validate({ body: dto.changePlatformPasswordDto }),
+  controller.changePassword,
+);
 router.post('/auth/2fa/setup', controller.setupTwoFactor);
 router.post('/auth/2fa/enable', validate({ body: enableTwoFactorDto }), controller.enableTwoFactor);
 router.post(
