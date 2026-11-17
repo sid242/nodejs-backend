@@ -26,6 +26,7 @@ export interface PlanLimits {
   urlAccess?: PlanUrlAccess;
 }
 
+// scope: primary
 export const plans = pgTable(
   'Plan',
   {
@@ -55,6 +56,7 @@ export const plans = pgTable(
   ],
 );
 
+// scope: primary
 export const planModules = pgTable(
   'PlanModule',
   {

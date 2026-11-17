@@ -1,6 +1,13 @@
-import { and, asc, desc, eq, ilike, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
-import { db, type DbExecutor } from '@/config/db';
+import type { DbExecutor } from '@/config/db';
+import {
+  assertTenantScope,
+  currentTenantCtx,
+  primaryDbHandle,
+  tenantDb,
+} from '@/db/tenancy/context';
+import { attachUsers } from '@/lib/attach-users';
 import {
   appModules,
   plans,
@@ -25,8 +32,9 @@ import * as rbacService from '@/modules/rbac/rbac.service';
 
 import type { ListMembersQueryDto } from './tenants.dto';
 
-export async function createTenant(data: NewTenant, executor: DbExecutor = db): Promise<Tenant> {
-  const [record] = await executor.insert(tenants).values(data).returning();
+export async function createTenant(data: NewTenant, executor?: DbExecutor): Promise<Tenant> {
+  const exec = executor ?? primaryDbHandle();
+  const [record] = await exec.insert(tenants).values(data).returning();
   return record!;
 }
 
@@ -34,12 +42,12 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-
 
 export async function findTenantById(id: string): Promise<Tenant | null> {
   if (!id || !UUID_REGEX.test(id)) return null;
-  const [record] = await db.select().from(tenants).where(eq(tenants.id, id)).limit(1);
+  const [record] = await primaryDbHandle().select().from(tenants).where(eq(tenants.id, id)).limit(1);
   return record ?? null;
 }
 
 export async function findTenantBySlug(slug: string): Promise<Tenant | null> {
-  const [record] = await db
+  const [record] = await primaryDbHandle()
     .select()
     .from(tenants)
     .where(eq(tenants.slug, slug.toLowerCase()))
@@ -50,14 +58,15 @@ export async function findTenantBySlug(slug: string): Promise<Tenant | null> {
 export async function updateTenant(
   id: string,
   data: Partial<NewTenant>,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<Tenant | null> {
-  const [record] = await executor.update(tenants).set(data).where(eq(tenants.id, id)).returning();
+  const exec = executor ?? primaryDbHandle();
+  const [record] = await exec.update(tenants).set(data).where(eq(tenants.id, id)).returning();
   return record ?? null;
 }
 
 export async function findUserTenants(userId: string): Promise<PublicTenant[]> {
-  const rows = await db
+  const rows = await primaryDbHandle()
     .select({
       id: tenants.id,
       name: tenants.name,
@@ -74,7 +83,7 @@ export async function findUserTenants(userId: string): Promise<PublicTenant[]> {
   return rows as PublicTenant[];
 }
 export async function findAllActiveTenants(): Promise<PublicTenant[]> {
-  const rows = await db
+  const rows = await primaryDbHandle()
     .select({
       id: tenants.id,
       name: tenants.name,
@@ -101,9 +110,11 @@ export async function addTenantMember(
     department?: string | null;
     invitedAt?: Date | null;
   },
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<TenantMember> {
-  const [record] = await executor
+  assertTenantScope(data.tenantId);
+  const exec = executor ?? tenantDb();
+  const [record] = await exec
     .insert(tenantMembers)
     .values({
       tenantId: data.tenantId,
@@ -123,7 +134,8 @@ export async function findTenantMember(
   tenantId: string,
   userId: string,
 ): Promise<TenantMember | null> {
-  const [record] = await db
+  assertTenantScope(tenantId);
+  const [record] = await tenantDb()
     .select()
     .from(tenantMembers)
     .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, userId)))
@@ -132,7 +144,8 @@ export async function findTenantMember(
 }
 
 export async function findTenantMemberById(memberId: string): Promise<TenantMember | null> {
-  const [record] = await db
+  const exec = currentTenantCtx()?.tenantId ? tenantDb() : primaryDbHandle();
+  const [record] = await exec
     .select()
     .from(tenantMembers)
     .where(eq(tenantMembers.id, memberId))
@@ -141,6 +154,8 @@ export async function findTenantMemberById(memberId: string): Promise<TenantMemb
 }
 
 export async function findTenantMembersPaginated(tenantId: string, filters: ListMembersQueryDto) {
+  assertTenantScope(tenantId);
+  const exec = tenantDb();
   const conditions = [eq(tenantMembers.tenantId, tenantId)];
 
   if (filters?.status === 'REMOVED') {
@@ -161,14 +176,22 @@ export async function findTenantMembersPaginated(tenantId: string, filters: List
   const searchKeyword = (filters?.search || filters?.q)?.trim();
   if (searchKeyword) {
     const searchPattern = `%${searchKeyword.toLowerCase()}%`;
-    conditions.push(
-      or(
-        ilike(users.name, searchPattern),
-        ilike(users.email, searchPattern),
-        ilike(tenantMembers.phone, searchPattern),
-        ilike(tenantMembers.memberCode, searchPattern),
-      )!,
-    );
+    // Find matching user IDs from primary DB for search
+    const matchingUsers = await primaryDbHandle()
+      .select({ id: users.id })
+      .from(users)
+      .where(or(ilike(users.name, searchPattern), ilike(users.email, searchPattern)));
+    const matchedUserIds = matchingUsers.map((u) => u.id);
+
+    const searchConditions = [
+      ilike(tenantMembers.phone, searchPattern),
+      ilike(tenantMembers.memberCode, searchPattern),
+    ];
+    if (matchedUserIds.length > 0) {
+      searchConditions.push(inArray(tenantMembers.userId, matchedUserIds));
+    }
+
+    conditions.push(or(...searchConditions)!);
   }
 
   const whereClause = and(...conditions);
@@ -177,12 +200,6 @@ export async function findTenantMembersPaginated(tenantId: string, filters: List
   const sortOrder = filters?.sortOrder === 'asc' ? asc : desc;
   let orderColumn;
   switch (filters?.sortBy) {
-    case 'name':
-      orderColumn = sortOrder(users.name);
-      break;
-    case 'email':
-      orderColumn = sortOrder(users.email);
-      break;
     case 'invitedAt':
       orderColumn = sortOrder(tenantMembers.invitedAt);
       break;
@@ -201,13 +218,11 @@ export async function findTenantMembersPaginated(tenantId: string, filters: List
       break;
   }
 
-  const [items, totalResult] = await Promise.all([
-    db
+  const [rawItems, totalResult] = await Promise.all([
+    exec
       .select({
         id: tenantMembers.id,
-        userId: users.id,
-        name: users.name,
-        email: users.email,
+        userId: tenantMembers.userId,
         status: tenantMembers.status,
         memberCode: tenantMembers.memberCode,
         phone: tenantMembers.phone,
@@ -245,17 +260,36 @@ export async function findTenantMembersPaginated(tenantId: string, filters: List
         deletedAt: tenantMembers.deletedAt,
       })
       .from(tenantMembers)
-      .innerJoin(users, eq(tenantMembers.userId, users.id))
       .where(whereClause)
       .orderBy(orderColumn)
       .offset((filters.page - 1) * filters.limit)
       .limit(filters.limit),
-    db
+    exec
       .select({ count: sql<number>`count(*)::int` })
       .from(tenantMembers)
-      .innerJoin(users, eq(tenantMembers.userId, users.id))
       .where(whereClause),
   ]);
+
+  // Enrich with user profile data from primary identity cluster without cross-DB SQL join
+  const enriched = await attachUsers(rawItems, 'userId', 'user');
+
+  const items = enriched.map((r) => ({
+    id: r.id,
+    userId: r.userId,
+    name: r.user?.name ?? '',
+    email: r.user?.email ?? '',
+    status: r.status,
+    memberCode: r.memberCode,
+    phone: r.phone,
+    jobTitle: r.jobTitle,
+    department: r.department,
+    role: r.role,
+    roleId: r.roleId,
+    joinedAt: r.joinedAt,
+    invitedAt: r.invitedAt,
+    lastLoginAt: r.lastLoginAt,
+    deletedAt: r.deletedAt,
+  }));
 
   return {
     items,
@@ -266,7 +300,9 @@ export async function findTenantMembersPaginated(tenantId: string, filters: List
 }
 
 export async function findTenantMemberDetail(tenantId: string, memberId: string) {
-  const [member] = await db
+  assertTenantScope(tenantId);
+  const exec = tenantDb();
+  const [member] = await exec
     .select({
       id: tenantMembers.id,
       tenantId: tenantMembers.tenantId,
@@ -281,23 +317,28 @@ export async function findTenantMemberDetail(tenantId: string, memberId: string)
       lastLoginAt: tenantMembers.lastLoginAt,
       deletedAt: tenantMembers.deletedAt,
       createdAt: tenantMembers.createdAt,
-      user: {
-        id: users.id,
-        name: users.name,
-        email: users.email,
-        phoneNumber: users.phoneNumber,
-        status: users.status,
-      },
     })
     .from(tenantMembers)
-    .innerJoin(users, eq(tenantMembers.userId, users.id))
     .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.id, memberId)))
     .limit(1);
 
   if (!member) return null;
 
+  // Enrich user data from primary DB
+  const [userData] = await primaryDbHandle()
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      phoneNumber: users.phoneNumber,
+      status: users.status,
+    })
+    .from(users)
+    .where(eq(users.id, member.userId))
+    .limit(1);
+
   // Direct roles
-  const assignedRoles = await db
+  const assignedRoles = await exec
     .select({
       id: roles.id,
       name: roles.name,
@@ -308,7 +349,7 @@ export async function findTenantMemberDetail(tenantId: string, memberId: string)
     .where(eq(tenantMemberRoles.memberId, member.id));
 
   // Tenant user groups
-  const groups = await db
+  const groups = await exec
     .select({
       id: userGroups.id,
       name: userGroups.name,
@@ -326,6 +367,13 @@ export async function findTenantMemberDetail(tenantId: string, memberId: string)
 
   return {
     ...member,
+    user: userData ?? {
+      id: member.userId,
+      name: '',
+      email: '',
+      phoneNumber: null,
+      status: 'INACTIVE',
+    },
     roles: assignedRoles,
     groups,
   };
@@ -335,7 +383,7 @@ export async function updateTenantMemberMetadata(
   memberId: string,
   data: Partial<NewTenantMember>,
 ): Promise<TenantMember | null> {
-  const [updated] = await db
+  const [updated] = await tenantDb()
     .update(tenantMembers)
     .set({
       ...data,
@@ -347,7 +395,8 @@ export async function updateTenantMemberMetadata(
 }
 
 export async function softDeleteTenantMember(tenantId: string, memberId: string): Promise<boolean> {
-  const [updated] = await db
+  assertTenantScope(tenantId);
+  const [updated] = await tenantDb()
     .update(tenantMembers)
     .set({
       status: 'SUSPENDED',
@@ -370,12 +419,11 @@ export async function findTenantMembers(tenantId: string): Promise<
     joinedAt: Date;
   }>
 > {
-  return db
+  assertTenantScope(tenantId);
+  const rawMembers = await tenantDb()
     .select({
       id: tenantMembers.id,
-      userId: users.id,
-      name: users.name,
-      email: users.email,
+      userId: tenantMembers.userId,
       status: tenantMembers.status,
       role: sql<string>`coalesce((
         SELECT UPPER(r."name")
@@ -393,13 +441,25 @@ export async function findTenantMembers(tenantId: string): Promise<
       joinedAt: tenantMembers.joinedAt,
     })
     .from(tenantMembers)
-    .innerJoin(users, eq(tenantMembers.userId, users.id))
     .where(eq(tenantMembers.tenantId, tenantId))
     .orderBy(desc(tenantMembers.joinedAt));
+
+  const enriched = await attachUsers(rawMembers, 'userId', 'user');
+
+  return enriched.map((r) => ({
+    id: r.id,
+    userId: r.userId,
+    name: r.user?.name ?? '',
+    email: r.user?.email ?? '',
+    status: r.status,
+    role: r.role,
+    joinedAt: r.joinedAt,
+  }));
 }
 
 export async function removeTenantMember(tenantId: string, memberId: string): Promise<boolean> {
-  const [deleted] = await db
+  assertTenantScope(tenantId);
+  const [deleted] = await tenantDb()
     .delete(tenantMembers)
     .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.id, memberId)))
     .returning();
@@ -410,7 +470,7 @@ export async function updateTenantMemberStatus(
   memberId: string,
   status: 'ACTIVE' | 'INVITED' | 'SUSPENDED',
 ): Promise<TenantMember | null> {
-  const [record] = await db
+  const [record] = await tenantDb()
     .update(tenantMembers)
     .set({ status })
     .where(eq(tenantMembers.id, memberId))
@@ -419,35 +479,30 @@ export async function updateTenantMemberStatus(
 }
 
 export async function findMembershipsByUserId(userId: string): Promise<TenantMember[]> {
-  return db.select().from(tenantMembers).where(eq(tenantMembers.userId, userId));
+  return primaryDbHandle().select().from(tenantMembers).where(eq(tenantMembers.userId, userId));
 }
 
 export async function findMemberByEmail(
   tenantId: string,
   email: string,
 ): Promise<TenantMember | null> {
-  const [record] = await db
-    .select({
-      id: tenantMembers.id,
-      tenantId: tenantMembers.tenantId,
-      userId: tenantMembers.userId,
-      status: tenantMembers.status,
-      memberCode: tenantMembers.memberCode,
-      phone: tenantMembers.phone,
-      jobTitle: tenantMembers.jobTitle,
-      department: tenantMembers.department,
-      invitedAt: tenantMembers.invitedAt,
-      joinedAt: tenantMembers.joinedAt,
-      lastLoginAt: tenantMembers.lastLoginAt,
-      deletedAt: tenantMembers.deletedAt,
-      createdAt: tenantMembers.createdAt,
-    })
+  assertTenantScope(tenantId);
+  // Find matching user from primary cluster
+  const [user] = await primaryDbHandle()
+    .select({ id: users.id })
+    .from(users)
+    .where(ilike(users.email, email.trim().toLowerCase()))
+    .limit(1);
+
+  if (!user) return null;
+
+  const [record] = await tenantDb()
+    .select()
     .from(tenantMembers)
-    .innerJoin(users, eq(tenantMembers.userId, users.id))
     .where(
       and(
         eq(tenantMembers.tenantId, tenantId),
-        ilike(users.email, email.trim().toLowerCase()),
+        eq(tenantMembers.userId, user.id),
         isNull(tenantMembers.deletedAt),
       ),
     )
@@ -462,7 +517,7 @@ export async function provisionTenantTransaction(data: {
   slug: string;
   planKey: string;
 }): Promise<Tenant> {
-  return db.transaction(async (tx) => {
+  return primaryDbHandle().transaction(async (tx) => {
     // 1. Create tenant record
     const [tenant] = await tx
       .insert(tenants)
@@ -570,9 +625,10 @@ export async function provisionTenantTransaction(data: {
 export async function updateTenantUrlStyle(
   id: string,
   urlStyle: 'path' | 'subdomain' | 'customDomain',
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<Tenant | null> {
-  const [record] = await executor
+  const exec = executor ?? primaryDbHandle();
+  const [record] = await exec
     .update(tenants)
     .set({ urlStyle })
     .where(eq(tenants.id, id))

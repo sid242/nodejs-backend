@@ -12,6 +12,12 @@ const SENSITIVE_KEYS = new Set([
   'accesstoken',
   'supporttoken',
   'secret',
+  'clientsecret',
+  'oidcclientsecret',
+  'connectionurl',
+  'samlresponse',
+  'rawtoken',
+  'tokenhash',
   'totpsecret',
   'recoverycodes',
   'encryptionkey',
@@ -20,6 +26,8 @@ const SENSITIVE_KEYS = new Set([
   'cardnumber',
   'cvv',
   'cvc',
+  'x-bff-secret',
+  'x-internal-secret',
 ]);
 
 export function scrubValue(val: unknown): unknown {

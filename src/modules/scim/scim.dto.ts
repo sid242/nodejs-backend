@@ -25,7 +25,7 @@ export const scimCreateUserDto = z.object({
 });
 
 export const scimPatchOperationDto = z.object({
-  op: z.enum(['add', 'replace', 'remove', 'Add', 'Replace', 'Remove']),
+  op: z.enum(['add', 'replace', 'remove', 'Add', 'Replace', 'Remove', 'ADD', 'REPLACE', 'REMOVE']),
   path: z.string().optional(),
   value: z.any().optional(),
 });
@@ -38,8 +38,31 @@ export const scimPatchUserDto = z.object({
 export const scimQueryDto = z.object({
   filter: z.string().optional(),
   startIndex: z.coerce.number().int().min(1).default(1),
-  count: z.coerce.number().int().min(1).max(100).default(50),
+  count: z.coerce.number().int().min(1).max(200).default(50),
 });
+
+export class ScimError extends Error {
+  public status: number;
+  public scimType?: string;
+  public detail: string;
+
+  constructor(status: number, detail: string, scimType?: string) {
+    super(detail);
+    this.name = 'ScimError';
+    this.status = status;
+    this.scimType = scimType;
+    this.detail = detail;
+  }
+
+  toResponse() {
+    return {
+      schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
+      status: String(this.status),
+      ...(this.scimType ? { scimType: this.scimType } : {}),
+      detail: this.detail,
+    };
+  }
+}
 
 export type ScimCreateUserDto = z.infer<typeof scimCreateUserDto>;
 export type ScimPatchUserDto = z.infer<typeof scimPatchUserDto>;

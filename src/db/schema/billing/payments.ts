@@ -17,6 +17,7 @@ import { subscriptions } from './subscriptions';
  * Stores both one-time purchases and subscription renewal payments.
  * All amounts are stored in minor currency units (paise for INR, cents for USD).
  */
+// scope: primary
 export const payments = pgTable(
   'Payment',
   {

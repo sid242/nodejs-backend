@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { requireAuth } from '@/middleware/auth';
 import { requirePlatformAuth, requirePlatformPermission } from '@/middleware/platform';
+import { billingPublicLimiter } from '@/middleware/rate-limit';
 import { requireTenant } from '@/middleware/tenant';
 import { validate } from '@/middleware/validate';
 import { PLATFORM_PERMISSIONS } from '@/modules/platform/platform.permissions';
@@ -255,7 +256,7 @@ router.get('/invoices/:invoiceId', requireAuth, requireTenant, controller.getTen
 // ==========================================
 // 7. Public Pricing & Plans Catalog
 // ==========================================
-router.get('/', controller.listPublicPlans);
-router.get('/:id', validate({ params: dto.planIdParamDto }), controller.getPlanById);
+router.get('/', billingPublicLimiter, controller.listPublicPlans);
+router.get('/:id', billingPublicLimiter, validate({ params: dto.planIdParamDto }), controller.getPlanById);
 
 export default router;

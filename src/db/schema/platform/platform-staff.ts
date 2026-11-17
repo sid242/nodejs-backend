@@ -5,6 +5,7 @@ import { platformStaffStatusEnum } from '../enums';
 import { users } from '../identity/users';
 import { platformRoles } from './platform-roles';
 
+// scope: primary
 export const platformStaff = pgTable(
   'PlatformStaff',
   {

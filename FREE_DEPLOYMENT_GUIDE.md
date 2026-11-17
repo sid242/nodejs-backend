@@ -52,7 +52,7 @@ You connect independent free services via environment variables. There is no Lin
      ```
    - Run migrations locally once before deploying:
      ```bash
-     npm run db:migrate
+     npm run db:migrate:all
      ```
 
 2. **Redis ([Upstash](https://upstash.com))**:
@@ -62,9 +62,10 @@ You connect independent free services via environment variables. There is no Lin
      ```env
      REDIS_URL=rediss://default:your_token@your-db.upstash.io:6379
      ```
+   - *Note on Redis URL Fallbacks*: `CACHE_REDIS_URL`, `QUEUE_REDIS_URL`, and `SOCKET_REDIS_URL` automatically fall back to `REDIS_URL` in `src/config/redis.ts`, meaning you do not need 4 separate Redis clusters in free-tier environments.
 
 3. **S3 Storage ([Supabase](https://supabase.com) or [Backblaze B2](https://www.backblaze.com))**:
-   - **No Credit Card Required Option**: In Supabase, navigate to **Project Settings $\rightarrow$ Storage** and enable the S3 Access Keys.
+   - In Supabase, navigate to **Project Settings -> Storage** and enable S3 Access Keys:
      ```env
      S3_ENDPOINT=https://<project-ref>.supabase.co/storage/v1/s3
      S3_BUCKET=app-uploads
@@ -88,18 +89,24 @@ You connect independent free services via environment variables. There is no Lin
 
 5. **Deploy API on [Koyeb](https://koyeb.com) or [Render](https://render.com)**:
    - Connect your GitHub repository.
-   - Environment: **Docker** (uses existing `Dockerfile`).
-   - Add the environment variables from above.
-   - **Single Container Optimization**: Free hosting gives you 1 web container. To run both the HTTP API and the background BullMQ worker in that single container without paying for a second service, set the Docker start command to:
+   - Environment: **Docker** (uses multi-stage `Dockerfile`).
+   - Add the environment variables from the complete `.env` table below.
+   - **Single Container Optimization**: Free hosting grants 1 web container. To run both the HTTP API server and the BullMQ background worker concurrently within the same container, configure the container command to use the built-in process supervisor:
      ```bash
-     node src/server.js & node src/worker.js
+     node scripts/start-all.mjs
      ```
+     The supervisor spawns `dist/server.js` and `dist/worker.js`, pipes stdio, forwards `SIGTERM`/`SIGINT`, and exits if either process terminates so the host orchestrator restarts the container.
+
+> [!WARNING]
+> **Free Tier Limits & Sleep Warnings**:
+> - **Redis Command Limits (Upstash 10k cmd/day)**: BullMQ workers continuously poll queues using Redis commands (`BRPOPLPUSH` / `BLMOVE`). On Upstash's 10,000 commands/day free allowance, polling can deplete the quota within hours. For continuous background workers, run Redis on a small persistent VM (such as Oracle Cloud Always Free) or choose an Upstash plan with higher command limits.
+> - **Idle Sleeping Hosts**: Platforms like Render put inactive free containers to sleep after 15 minutes of inactivity. Sleeping suspends WebSocket connections and delays BullMQ cron/scheduled jobs until an inbound HTTP request wakes the container. Koyeb or an Oracle Cloud Always Free VM is recommended to maintain active background scheduling.
 
 ---
 
 ### Strategy B: The "All-in-One $0 VM" (Oracle Cloud Always Free)
 
-If you want to run the exact [`docker-compose.yml`](file:///c:/Users/Siddharth%20Prajapati/Downloads/backend/node-scalable-foundation/docker-compose.yml) stack without splitting across multiple providers:
+If you prefer running the containerized docker-compose stack without splitting across multiple providers:
 
 - **[Oracle Cloud Always Free Tier](https://www.oracle.com/cloud/free/)** includes:
   - **4 ARM Ampere OCPUs**
@@ -124,7 +131,7 @@ If you want to run the exact [`docker-compose.yml`](file:///c:/Users/Siddharth%2
 
 ### Do WebSockets require a separate server?
 
-**No.** Socket.IO runs attached directly to the existing Express HTTP server ([`src/server.ts`](file:///c:/Users/Siddharth%20Prajapati/Downloads/backend/node-scalable-foundation/src/server.ts)). When your API is deployed, the WebSocket server is deployed simultaneously on the same port.
+**No.** Socket.IO runs attached directly to the existing Express HTTP server (`src/server.ts`). When your API is deployed, the WebSocket server is deployed simultaneously on the same port.
 
 ### How WebSockets Scale Across Multiple Replicas:
 
@@ -133,7 +140,7 @@ If you want to run the exact [`docker-compose.yml`](file:///c:/Users/Siddharth%2
 2. **`transports: ['websocket']`**:
    - Locking the transport to pure WebSockets removes the need for sticky session cookies on load balancers.
 3. **`@socket.io/redis-emitter`**:
-   - Background workers running in [`src/worker.ts`](file:///c:/Users/Siddharth%20Prajapati/Downloads/backend/node-scalable-foundation/src/worker.ts) push notifications directly to clients via Redis (`emitToUser(userId, 'file:ready', payload)`), meaning worker processes do not need to run an open socket server.
+   - Background workers running in `src/worker.ts` push notifications directly to clients via Redis (`emitToUser(userId, 'file:ready', payload)`), meaning worker processes do not need to run an open socket server.
 
 ---
 
@@ -164,20 +171,32 @@ mc mirror local/app-uploads-local cloud/your-production-bucket
 
 ---
 
-## 5. White-Labeling & Direct Domain Support
+## 5. Plan-Gated Domain Routing & Wildcard TLS
 
-The white-labeling system supports three simultaneous routing modes:
+Tenant workspaces support path routing (`/w/:slug/*`), subdomains (`:slug.example.com`), and custom domains (`portal.customer.com`). Detailed routing behavior is documented in [`docs/url-and-domain-architecture.md`](./docs/url-and-domain-architecture.md).
 
-1. **Direct Custom Root Domains** (`abc.com`, `xyz.com`):
-   - Tenant sets their domain in workspace branding settings.
-   - The customer points an `A Record` or `CNAME` to your server IP/domain.
-   - When requests hit your server, the `Host` / `X-Forwarded-Host` header matches `TenantBranding.customDomain`.
-2. **Subdomains** (`test.yourplatform.com`):
-   - Subdomain (`test`) is extracted and resolved against `Tenant.slug`.
-3. **Path / Slugs** (`yourplatform.com/test`):
-   - Query parameter `?slug=test` matches `Tenant.slug`.
+### Wildcard & On-Demand TLS with Caddy
 
-All public resolutions are cached in Redis under `branding:resolve:...` for 1 hour to prevent database load on high-traffic entry pages.
+For automated SSL certificates across unlimited custom domains and subdomains, deploy Caddy as a reverse proxy with On-Demand TLS:
+
+```caddyfile
+{
+    on_demand_tls {
+        ask http://api:3000/internal/domains/allowed
+        interval 2m
+        burst 5
+    }
+}
+
+:443 {
+    tls {
+        on_demand
+    }
+    reverse_proxy api:3000
+}
+```
+
+The `/internal/domains/allowed?domain=...` endpoint checks whether the requested domain belongs to an active, verified tenant before Caddy provisions a Let's Encrypt / ZeroSSL certificate.
 
 ---
 
@@ -192,6 +211,13 @@ LOG_LEVEL=info
 TRUST_PROXY=1
 CORS_ORIGINS=https://your-frontend-domain.com
 
+# Domain & Tenancy Routing
+APP_BASE_DOMAIN=yourplatform.com
+APP_PROTOCOL=https
+PLATFORM_HOST=admin.yourplatform.com
+TENANCY_MODES=path,subdomain,custom_domain
+CUSTOM_DOMAIN_CNAME_TARGET=cname.yourplatform.com
+
 # 1. PostgreSQL (Neon.tech or Supabase)
 DATABASE_URL=postgresql://user:password@ep-sample-123.neon.tech/neondb?sslmode=require
 DB_POOL_MAX=5
@@ -199,16 +225,23 @@ DB_CONNECT_TIMEOUT_SECONDS=10
 DB_IDLE_TIMEOUT_SECONDS=30
 DB_MAX_LIFETIME_SECONDS=1800
 
-# 2. Redis (Upstash)
+# 2. Redis (Upstash) - Single instance for cache, queues, and sockets
 REDIS_URL=rediss://default:your_token@your-db.upstash.io:6379
 
-# 3. JWT Secrets (Generate with `openssl rand -hex 32`)
+# 3. Authentication & JWT Secrets (Generate with `openssl rand -hex 32`)
 JWT_ACCESS_SECRET=your_32_char_minimum_random_access_secret_string
 JWT_REFRESH_SECRET=your_32_char_minimum_random_refresh_secret_string
+JWT_PLATFORM_SECRET=your_32_char_minimum_platform_secret_string
+JWT_SUPPORT_SECRET=your_32_char_minimum_support_secret_string
 JWT_ACCESS_TTL=15m
 JWT_REFRESH_TTL_SECONDS=604800
 
-# 4. Storage (Supabase S3, Backblaze B2, or Cloudflare R2)
+# 4. Service-to-Service Secrets & Envelope Encryption
+BFF_SHARED_SECRET=your_32_char_minimum_bff_shared_secret_string
+INTERNAL_API_SECRET=your_32_char_minimum_internal_api_secret_string
+ENCRYPTION_KEY=your_32_char_minimum_master_encryption_key_string
+
+# 5. Storage (Supabase S3, Backblaze B2, or Cloudflare R2)
 S3_BUCKET=app-uploads
 S3_ENDPOINT=https://<project-ref>.supabase.co/storage/v1/s3
 S3_FORCE_PATH_STYLE=true
@@ -217,7 +250,7 @@ AWS_ACCESS_KEY_ID=your_storage_access_key
 AWS_SECRET_ACCESS_KEY=your_storage_secret_key
 S3_MAX_UPLOAD_MB=10
 
-# 5. Email & SMTP (Resend, Brevo, or SendGrid)
+# 6. Email & SMTP (Resend, Brevo, or SendGrid)
 EMAIL_PROVIDER=smtp
 SMTP_HOST=smtp.resend.com
 SMTP_PORT=465
@@ -227,7 +260,7 @@ SMTP_PASS=re_your_api_key
 SMTP_FROM_EMAIL=notifications@yourdomain.com
 SMTP_FROM_NAME=Your SaaS Platform
 
-# 6. Rate Limiting & Concurrency
+# 7. Rate Limiting & Concurrency
 RATE_LIMIT_WINDOW_MS=60000
 RATE_LIMIT_MAX=300
 AUTH_RATE_LIMIT_MAX=10

@@ -4,6 +4,7 @@ import { and, asc, eq, inArray, lt } from 'drizzle-orm';
 import { db } from '@/config/db';
 import { env } from '@/config/env';
 import { logger } from '@/config/logger';
+import * as schema from '@/db/schema';
 import { files, platformSupportSessions, subscriptions } from '@/db/schema';
 import { deleteObject } from '@/lib/s3';
 import { forEachConcurrent } from '@/lib/utils';
@@ -62,11 +63,78 @@ export async function processMaintenance(job: Job): Promise<{ removed: number; f
     return { removed: expiredTrials.length, failed: 0 };
   }
 
+  if (job.name === 'cleanup-stale-db-operations') {
+    const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000);
+    const staleOps = await db
+      .update(schema.tenantDbOperations)
+      .set({
+        status: 'FAILED',
+        finishedAt: new Date(),
+        error: 'Operation timed out after remaining in RUNNING state for more than 2 hours',
+      })
+      .where(
+        and(
+          eq(schema.tenantDbOperations.status, 'RUNNING'),
+          lt(schema.tenantDbOperations.startedAt, twoHoursAgo),
+        ),
+      )
+      .returning();
+    if (staleOps.length > 0) {
+      logger.warn({ count: staleOps.length }, 'Marked stale database operations as FAILED');
+    }
+    return { removed: staleOps.length, failed: 0 };
+  }
+
   if (job.name === 'domain-reverify') {
     const { reverifyAllVerifiedDomains } = await import('@/modules/tenants/tenants.service');
     const result = await reverifyAllVerifiedDomains();
     logger.info(result, 'Completed periodic custom domain re-verification');
     return { removed: result.failed, failed: 0 };
+  }
+
+  if (job.name === 'process-outbox-events') {
+    const { processOutboxEvents } = await import('@/queues/workers/outbox.worker');
+    const result = await processOutboxEvents(job);
+    return { removed: result.processed, failed: result.failed };
+  }
+
+  if (job.name === 'audit-retention-purge') {
+    const { purgeTenantExpiredLogs } = await import('@/modules/audit/audit.service');
+    const allTenants = await db.select({ id: schema.tenants.id }).from(schema.tenants);
+    let totalPurged = 0;
+    for (const t of allTenants) {
+      try {
+        const res = await purgeTenantExpiredLogs(t.id);
+        totalPurged += res.deletedCount;
+      } catch (err) {
+        logger.error({ err, tenantId: t.id }, 'Audit retention purge failed for tenant');
+      }
+    }
+    return { removed: totalPurged, failed: 0 };
+  }
+
+  if (job.name === 'verify-audit-chains') {
+    const { verifyAuditChain } = await import('@/modules/audit/audit.service');
+    const allTenants = await db
+      .select({ id: schema.tenants.id, slug: schema.tenants.slug })
+      .from(schema.tenants)
+      .where(eq(schema.tenants.status, 'ACTIVE'));
+    let brokenChains = 0;
+    for (const t of allTenants) {
+      try {
+        const res = await verifyAuditChain(t.id);
+        if (!res.verified) {
+          brokenChains++;
+          logger.error(
+            { tenantId: t.id, tenantSlug: t.slug, err: res.error, brokenAtId: res.brokenAtId },
+            '[ALERT] Tamper detection: Audit log hash chain verification failed for workspace!',
+          );
+        }
+      } catch (err) {
+        logger.error({ err, tenantId: t.id }, 'Audit chain verification job query failed');
+      }
+    }
+    return { removed: 0, failed: brokenChains };
   }
 
   throw new Error(`Unknown maintenance job: ${job.name}`);

@@ -1,6 +1,8 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 
-import { db } from '@/config/db';
+import type { DbExecutor } from '@/config/db';
+import { assertTenantScope, primaryDbHandle, tenantDb } from '@/db/tenancy/context';
+import { attachUsers } from '@/lib/attach-users';
 import {
   roles,
   tenantInvitations,
@@ -22,38 +24,57 @@ export interface InvitationWithDetails extends TenantInvitation {
 
 export async function findInvitationByTokenHash(
   tokenHash: string,
+  executor: DbExecutor = tenantDb(),
 ): Promise<InvitationWithDetails | null> {
-  const [row] = await db
-    .select({
-      invitation: tenantInvitations,
-      roleName: roles.name,
-      tenantName: tenants.name,
-      tenantSlug: tenants.slug,
-      invitedByName: users.name,
-    })
+  const [invitation] = await executor
+    .select()
     .from(tenantInvitations)
-    .innerJoin(tenants, eq(tenantInvitations.tenantId, tenants.id))
-    .innerJoin(roles, eq(tenantInvitations.roleId, roles.id))
-    .leftJoin(users, eq(tenantInvitations.invitedByUserId, users.id))
     .where(eq(tenantInvitations.tokenHash, tokenHash))
     .limit(1);
 
-  if (!row) return null;
+  if (!invitation) return null;
+
+  // Resolve role from tenantDb
+  const [role] = await executor
+    .select({ name: roles.name })
+    .from(roles)
+    .where(eq(roles.id, invitation.roleId))
+    .limit(1);
+
+  // Resolve tenant and invitedBy from primaryDb
+  const primaryDb = primaryDbHandle();
+  const [tenant] = await primaryDb
+    .select({ name: tenants.name, slug: tenants.slug })
+    .from(tenants)
+    .where(eq(tenants.id, invitation.tenantId))
+    .limit(1);
+
+  let invitedByName: string | null = null;
+  if (invitation.invitedByUserId) {
+    const [inviter] = await primaryDb
+      .select({ name: users.name })
+      .from(users)
+      .where(eq(users.id, invitation.invitedByUserId))
+      .limit(1);
+    invitedByName = inviter?.name ?? null;
+  }
 
   return {
-    ...row.invitation,
-    roleName: row.roleName,
-    tenantName: row.tenantName,
-    tenantSlug: row.tenantSlug,
-    invitedByName: row.invitedByName,
+    ...invitation,
+    roleName: role?.name,
+    tenantName: tenant?.name,
+    tenantSlug: tenant?.slug,
+    invitedByName,
   };
 }
 
 export async function findPendingInvitationByEmail(
   tenantId: string,
   email: string,
+  executor: DbExecutor = tenantDb(),
 ): Promise<TenantInvitation | null> {
-  const [row] = await db
+  assertTenantScope(tenantId);
+  const [row] = await executor
     .select()
     .from(tenantInvitations)
     .where(
@@ -71,62 +92,95 @@ export async function findPendingInvitationByEmail(
 export async function findInvitationById(
   tenantId: string,
   id: string,
+  executor: DbExecutor = tenantDb(),
 ): Promise<InvitationWithDetails | null> {
-  const [row] = await db
-    .select({
-      invitation: tenantInvitations,
-      roleName: roles.name,
-      tenantName: tenants.name,
-      tenantSlug: tenants.slug,
-      invitedByName: users.name,
-    })
+  assertTenantScope(tenantId);
+  const [invitation] = await executor
+    .select()
     .from(tenantInvitations)
-    .innerJoin(tenants, eq(tenantInvitations.tenantId, tenants.id))
-    .innerJoin(roles, eq(tenantInvitations.roleId, roles.id))
-    .leftJoin(users, eq(tenantInvitations.invitedByUserId, users.id))
     .where(and(eq(tenantInvitations.tenantId, tenantId), eq(tenantInvitations.id, id)))
     .limit(1);
 
-  if (!row) return null;
+  if (!invitation) return null;
+
+  const [role] = await executor
+    .select({ name: roles.name })
+    .from(roles)
+    .where(eq(roles.id, invitation.roleId))
+    .limit(1);
+
+  const primaryDb = primaryDbHandle();
+  const [tenant] = await primaryDb
+    .select({ name: tenants.name, slug: tenants.slug })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
+    .limit(1);
+
+  let invitedByName: string | null = null;
+  if (invitation.invitedByUserId) {
+    const [inviter] = await primaryDb
+      .select({ name: users.name })
+      .from(users)
+      .where(eq(users.id, invitation.invitedByUserId))
+      .limit(1);
+    invitedByName = inviter?.name ?? null;
+  }
 
   return {
-    ...row.invitation,
-    roleName: row.roleName,
-    tenantName: row.tenantName,
-    tenantSlug: row.tenantSlug,
-    invitedByName: row.invitedByName,
+    ...invitation,
+    roleName: role?.name,
+    tenantName: tenant?.name,
+    tenantSlug: tenant?.slug,
+    invitedByName,
   };
 }
 
-export async function listInvitations(tenantId: string): Promise<InvitationWithDetails[]> {
-  const rows = await db
-    .select({
-      invitation: tenantInvitations,
-      roleName: roles.name,
-      tenantName: tenants.name,
-      tenantSlug: tenants.slug,
-      invitedByName: users.name,
-    })
+export async function listInvitations(
+  tenantId: string,
+  executor: DbExecutor = tenantDb(),
+): Promise<InvitationWithDetails[]> {
+  assertTenantScope(tenantId);
+  const items = await executor
+    .select()
     .from(tenantInvitations)
-    .innerJoin(tenants, eq(tenantInvitations.tenantId, tenants.id))
-    .innerJoin(roles, eq(tenantInvitations.roleId, roles.id))
-    .leftJoin(users, eq(tenantInvitations.invitedByUserId, users.id))
     .where(eq(tenantInvitations.tenantId, tenantId))
     .orderBy(desc(tenantInvitations.createdAt));
 
-  return (rows ?? []).map((r) => ({
-    ...r.invitation,
-    roleName: r.roleName,
-    tenantName: r.tenantName,
-    tenantSlug: r.tenantSlug,
-    invitedByName: r.invitedByName,
+  if (!items || items.length === 0) return [];
+
+  // Fetch roles from tenantDb
+  const roleIds = [...new Set(items.map((i) => i.roleId))];
+  const roleRows = roleIds.length
+    ? await executor.select().from(roles).where(inArray(roles.id, roleIds))
+    : [];
+  const roleMap = new Map(roleRows.map((r) => [r.id, r.name]));
+
+  // Fetch tenant details from primaryDb
+  const primaryDb = primaryDbHandle();
+  const [tenant] = await primaryDb
+    .select({ name: tenants.name, slug: tenants.slug })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
+    .limit(1);
+
+  // Attach inviter names from primaryDb
+  const enriched = await attachUsers(items, 'invitedByUserId', 'inviter');
+
+  return enriched.map((item) => ({
+    ...item,
+    roleName: roleMap.get(item.roleId),
+    tenantName: tenant?.name,
+    tenantSlug: tenant?.slug,
+    invitedByName: item.inviter?.name ?? null,
   }));
 }
 
 export async function createInvitation(
   data: NewTenantInvitation,
+  executor: DbExecutor = tenantDb(),
 ): Promise<TenantInvitation> {
-  const [record] = await db.insert(tenantInvitations).values(data).returning();
+  assertTenantScope(data.tenantId);
+  const [record] = await executor.insert(tenantInvitations).values(data).returning();
   if (!record) throw new Error('Failed to create invitation record');
   return record;
 }
@@ -134,11 +188,19 @@ export async function createInvitation(
 export async function updateInvitation(
   id: string,
   data: Partial<NewTenantInvitation>,
+  tenantId?: string,
+  executor: DbExecutor = tenantDb(),
 ): Promise<TenantInvitation | null> {
-  const [record] = await db
+  assertTenantScope(tenantId);
+  const conditions = [eq(tenantInvitations.id, id)];
+  if (tenantId) {
+    conditions.push(eq(tenantInvitations.tenantId, tenantId));
+  }
+
+  const [record] = await executor
     .update(tenantInvitations)
     .set(data)
-    .where(eq(tenantInvitations.id, id))
+    .where(and(...conditions))
     .returning();
 
   return record ?? null;
@@ -147,8 +209,10 @@ export async function updateInvitation(
 export async function revokeInvitation(
   tenantId: string,
   id: string,
+  executor: DbExecutor = tenantDb(),
 ): Promise<TenantInvitation | null> {
-  const [record] = await db
+  assertTenantScope(tenantId);
+  const [record] = await executor
     .update(tenantInvitations)
     .set({
       status: 'REVOKED',
@@ -160,12 +224,16 @@ export async function revokeInvitation(
   return record ?? null;
 }
 
+/**
+ * Creates user in central Identity Registry (Primary DB ALWAYS)
+ */
 export async function createInvitedUser(data: {
   email: string;
   name: string;
   passwordHash: string;
 }): Promise<User> {
-  const [createdUser] = await db
+  const primaryDb = primaryDbHandle();
+  const [createdUser] = await primaryDb
     .insert(users)
     .values({
       email: data.email,
@@ -180,19 +248,26 @@ export async function createInvitedUser(data: {
   return createdUser;
 }
 
-export async function executeAcceptanceTransaction(data: {
-  tenantId: string;
-  userId: string;
-  roleId: string;
-  invitationId: string;
-  memberMetadata?: {
-    memberCode?: string | null;
-    phone?: string | null;
-    jobTitle?: string | null;
-    department?: string | null;
-  };
-}): Promise<{ memberId: string }> {
-  return db.transaction(async (tx) => {
+/**
+ * Executes membership acceptance in tenant database
+ */
+export async function executeAcceptanceTransaction(
+  data: {
+    tenantId: string;
+    userId: string;
+    roleId: string;
+    invitationId: string;
+    memberMetadata?: {
+      memberCode?: string | null;
+      phone?: string | null;
+      jobTitle?: string | null;
+      department?: string | null;
+    };
+  },
+  executor: DbExecutor = tenantDb(),
+): Promise<{ memberId: string }> {
+  assertTenantScope(data.tenantId);
+  return (executor as any).transaction(async (tx: DbExecutor) => {
     // 1. Check if membership exists
     const [existingMember] = await tx
       .select()
@@ -231,7 +306,7 @@ export async function executeAcceptanceTransaction(data: {
       memberId = newMember!.id;
     }
 
-    // 2. Assign the role granted by the invitation
+    // 2. Assign role granted by invitation
     await tx
       .insert(tenantMemberRoles)
       .values({ memberId, roleId: data.roleId, tenantId: data.tenantId })
@@ -250,4 +325,3 @@ export async function executeAcceptanceTransaction(data: {
     return { memberId };
   });
 }
-

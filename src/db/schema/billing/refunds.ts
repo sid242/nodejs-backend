@@ -16,6 +16,7 @@ import { payments } from './payments';
  * Refund records for processed payment refunds.
  * All amounts are stored in minor currency units (paise for INR, cents for USD).
  */
+// scope: primary
 export const refunds = pgTable(
   'Refund',
   {

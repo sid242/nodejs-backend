@@ -53,3 +53,23 @@ export async function updateStatus(
     .returning(publicUser);
   return (user as PublicUser) ?? null;
 }
+
+export async function createManagedUser(data: {
+  email: string;
+  name: string;
+  authMethod?: 'SCIM' | 'SSO' | 'PASSWORD';
+  status?: 'ACTIVE' | 'PENDING_VERIFICATION';
+}): Promise<PublicUser> {
+  const [user] = await db
+    .insert(users)
+    .values({
+      email: data.email.trim().toLowerCase(),
+      name: data.name,
+      passwordHash: null,
+      authMethod: data.authMethod ?? 'SCIM',
+      status: data.status ?? 'ACTIVE',
+      emailVerifiedAt: new Date(),
+    })
+    .returning(publicUser);
+  return user as PublicUser;
+}

@@ -106,7 +106,7 @@ services:
 
   worker:
     <<: *app
-    command: ['node', 'src/worker.js']
+    command: ['node', 'dist/worker.js']
     stop_grace_period: 60s
 
   nginx:

@@ -1,8 +1,12 @@
+import { and, asc, eq, gte, lte } from 'drizzle-orm';
+
 import { logger } from '@/config/logger';
-import type { NewAuditLog, TenantAuditPolicy } from '@/db/schema/index';
+import { primaryDbHandle } from '@/db/tenancy/context';
+import { auditLogs, users, type NewAuditLog, type TenantAuditPolicy } from '@/db/schema/index';
 import { AppError } from '@/lib/errors';
 import * as billingService from '@/modules/billing/billing.service';
 
+import { computeAuditRowHash } from './audit.crypto';
 import { redactSensitiveData } from './audit.redactor';
 import * as auditRepo from './audit.repository';
 
@@ -11,6 +15,8 @@ export interface AuditEventPayload {
   userId?: string | null;
   actorUserId?: string | null;
   effectiveUserId?: string | null;
+  actorEmail?: string | null;
+  actorName?: string | null;
   actorType?: 'USER' | 'PLATFORM_STAFF' | 'SYSTEM';
   actorStaffId?: string | null;
   supportSessionId?: string | null;
@@ -41,11 +47,32 @@ export async function logSecurityEvent(event: AuditEventPayload): Promise<void> 
     const actorId = event.actorUserId ?? event.userId ?? null;
     const effectiveId = event.effectiveUserId ?? event.userId ?? actorId;
 
+    let actorEmail = event.actorEmail ?? null;
+    let actorName = event.actorName ?? null;
+
+    if ((!actorEmail || !actorName) && actorId) {
+      try {
+        const [u] = await primaryDbHandle()
+          .select({ email: users.email, name: users.name })
+          .from(users)
+          .where(eq(users.id, actorId))
+          .limit(1);
+        if (u) {
+          actorEmail = actorEmail ?? u.email;
+          actorName = actorName ?? u.name;
+        }
+      } catch {
+        /* non-blocking actor lookup */
+      }
+    }
+
     const sanitizedData: NewAuditLog = {
       tenantId: event?.tenantId ?? null,
       userId: actorId,
       actorUserId: actorId,
       effectiveUserId: effectiveId,
+      actorEmail,
+      actorName,
       actorType: event?.actorType ?? 'USER',
       actorStaffId: event?.actorStaffId ?? null,
       supportSessionId: event?.supportSessionId ?? null,
@@ -333,4 +360,79 @@ export function enrichAuditMetadata(
     ...(impersonator.reason && { impersonationReason: impersonator.reason }),
     ...(impersonator.sessionId && { impersonationSessionId: impersonator.sessionId }),
   };
+}
+
+export interface VerifyChainResult {
+  verified: boolean;
+  totalChecked: number;
+  brokenAtId?: string;
+  expectedPrevHash?: string;
+  actualPrevHash?: string;
+  error?: string;
+}
+
+/**
+ * Validates the cryptographic tamper-evident hash chain for a tenant workspace.
+ * Recalculates every row's SHA-256 hash and verifies strict sequential chaining against predecessor rows.
+ */
+export async function verifyAuditChain(
+  tenantId: string,
+  fromDate?: Date,
+  toDate?: Date,
+): Promise<VerifyChainResult> {
+  const conditions = [eq(auditLogs.tenantId, tenantId)];
+  if (fromDate) conditions.push(gte(auditLogs.createdAt, fromDate));
+  if (toDate) conditions.push(lte(auditLogs.createdAt, toDate));
+
+  const rows = await primaryDbHandle()
+    .select()
+    .from(auditLogs)
+    .where(and(...conditions))
+    .orderBy(asc(auditLogs.createdAt), asc(auditLogs.id));
+
+  let lastHash: string | null = null;
+  let totalChecked = 0;
+
+  for (const row of rows) {
+    totalChecked++;
+
+    // If predecessor row existed, verify prevHash pointer
+    if (lastHash !== null && row.prevHash && row.prevHash !== lastHash) {
+      return {
+        verified: false,
+        totalChecked,
+        brokenAtId: row.id,
+        expectedPrevHash: lastHash,
+        actualPrevHash: row.prevHash ?? undefined,
+        error: `Hash chain broken at row ${row.id}: expected prevHash ${lastHash}, found ${row.prevHash}`,
+      };
+    }
+
+    // Recompute row hash
+    const computed = computeAuditRowHash(row.prevHash, {
+      tenantId: row.tenantId,
+      action: row.action,
+      actorUserId: row.actorUserId,
+      actorEmail: row.actorEmail,
+      actorType: row.actorType,
+      source: row.source,
+      result: row.result,
+      entityType: row.entityType,
+      entityId: row.entityId,
+      createdAt: row.createdAt,
+    });
+
+    if (row.rowHash && row.rowHash !== computed) {
+      return {
+        verified: false,
+        totalChecked,
+        brokenAtId: row.id,
+        error: `Row hash mismatch at row ${row.id}: computed ${computed}, recorded ${row.rowHash}. Tampering detected.`,
+      };
+    }
+
+    lastHash = row.rowHash ?? computed;
+  }
+
+  return { verified: true, totalChecked };
 }

@@ -3,6 +3,7 @@ import { index, integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-c
 import { verificationTokenTypeEnum } from '../enums';
 import { users } from './users';
 
+// scope: primary
 export const verificationTokens = pgTable(
   'VerificationToken',
   {

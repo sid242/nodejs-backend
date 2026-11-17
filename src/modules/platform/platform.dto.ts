@@ -133,13 +133,15 @@ export type UpdatePlatformRoleDto = z.infer<typeof updatePlatformRoleDto>;
 
 export const startSupportSessionDto = z.object({
   mode: z.enum(['TENANT_SCOPED', 'AS_MEMBER']).default('TENANT_SCOPED'),
-  scope: z.enum(['READ_ONLY', 'FULL']).default('READ_ONLY'),
+  scope: z.enum(['READ_ONLY', 'ASSIST', 'FULL', 'FULL_ADMIN']).default('READ_ONLY'),
   targetMemberId: z.string().uuid().optional(),
   targetUserId: z.string().uuid().optional(),
   reason: z.string().trim().min(5).max(500),
   ticketRef: z.string().trim().min(1).max(100).optional(),
   durationMinutes: z.coerce.number().int().min(5).max(120).default(30),
   acknowledgement: z.boolean().default(true),
+  tenantConsent: z.boolean().optional(),
+  approvedByStaffId: z.string().uuid().optional(),
 });
 export type StartSupportSessionDto = z.infer<typeof startSupportSessionDto>;
 
@@ -361,13 +363,21 @@ export const executeTenantDatabaseOperationDto = z.object({
     'BACKUP',
     'RESTORE',
     'ROLLBACK',
+    'VERIFY',
   ]),
   targetVersion: z.string().trim().max(50).optional(),
   maintenanceWindow: z.string().trim().max(100).optional(),
   reason: z.string().trim().min(5, 'Reason must be at least 5 characters').max(500),
   backupConfirmed: z.boolean().default(false).optional(),
+  discardDedicatedData: z.boolean().default(false).optional(),
+  approvedByStaffId: z.string().uuid().optional(),
   poolLimit: z.coerce.number().int().min(1).max(50).optional(),
   customDatabaseName: z.string().trim().max(63).optional(),
   connectionUrl: z.string().trim().url().optional(),
 });
 export type ExecuteTenantDatabaseOperationDto = z.infer<typeof executeTenantDatabaseOperationDto>;
+
+export const approveTenantDatabaseOperationDto = z.object({
+  reason: z.string().trim().min(5, 'Approval reason must be at least 5 characters').max(500),
+});
+export type ApproveTenantDatabaseOperationDto = z.infer<typeof approveTenantDatabaseOperationDto>;

@@ -1,9 +1,15 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/server.ts', 'src/worker.ts', 'src/db/migrate.ts', 'src/db/seed.ts'],
+  entry: [
+    'src/server.ts',
+    'src/worker.ts',
+    'src/db/migrate.ts',
+    'src/db/migrate-all.ts',
+    'src/db/seed.ts',
+  ],
   format: ['esm'],
-  target: 'node22',
+  target: 'node24',
   outDir: 'dist',
   clean: true,
   sourcemap: true,

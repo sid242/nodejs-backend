@@ -15,6 +15,7 @@ import { actorTypeEnum, subscriptionStatusEnum } from '../enums';
 import { plans } from './plans';
 import { tenants } from '../tenancy/tenants';
 
+// scope: primary
 export const subscriptions = pgTable(
   'Subscription',
   {
@@ -56,6 +57,7 @@ export const subscriptions = pgTable(
   ],
 );
 
+// scope: primary
 export const subscriptionEvents = pgTable(
   'SubscriptionEvent',
   {

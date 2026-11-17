@@ -4,6 +4,7 @@ import { emailTemplateCategoryEnum, emailTemplateStatusEnum } from '../enums';
 import { tenants } from '../tenancy/index';
 import { users } from '../identity/users';
 
+// scope: tenant
 export const emailTemplates = pgTable(
   'EmailTemplate',
   {

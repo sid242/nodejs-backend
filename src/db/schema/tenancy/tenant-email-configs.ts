@@ -10,6 +10,7 @@ import {
 
 import { tenants } from './tenants';
 
+// scope: tenant
 export const tenantEmailConfigs = pgTable(
   'TenantEmailConfig',
   {

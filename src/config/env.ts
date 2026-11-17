@@ -22,14 +22,20 @@ const schema = z.object({
   TENANCY_MODES: z.string().default('path,subdomain,customDomain'),
   CUSTOM_DOMAIN_CNAME_TARGET: z.string().default('tenants.example.com'),
   BFF_SHARED_SECRET: z.string().min(16).default('bff-dev-shared-secret-key-min-16-chars'),
+  BFF_SHARED_SECRET_PREVIOUS: z.string().min(16).optional(),
   INTERNAL_API_SECRET: z.string().min(16).default('internal-dev-secret-key-min-16-chars'),
+  INTERNAL_ALLOWED_IPS: z.string().optional(),
   FRONTEND_URL: z.string().optional(),
+  SSO_SP_ENTITY_ID_BASE: z.string().optional(),
 
   DATABASE_URL: z.string().min(1),
+  DATABASE_MIGRATION_URL: z.string().min(1).optional(),
   DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
   DB_CONNECT_TIMEOUT_SECONDS: z.coerce.number().int().min(1).max(60).default(10),
   DB_IDLE_TIMEOUT_SECONDS: z.coerce.number().int().min(1).max(3600).default(30),
   DB_MAX_LIFETIME_SECONDS: z.coerce.number().int().min(60).max(86400).default(1800),
+  DEDICATED_POOL_MAX_TENANTS: z.coerce.number().int().min(1).max(200).default(20),
+  DEDICATED_POOL_SIZE: z.coerce.number().int().min(1).max(20).default(5),
   REDIS_URL: z.string().default('redis://localhost:6379'),
   CACHE_REDIS_URL: z.string().optional(),
   QUEUE_REDIS_URL: z.string().optional(),
@@ -67,11 +73,14 @@ const schema = z.object({
   SMTP_FROM_EMAIL: z.string().optional(),
   SMTP_FROM_NAME: z.string().optional(),
 
-  // Encryption key for tenant credential storage (defaults derived from JWT_ACCESS_SECRET)
+  // Encryption key for tenant credential storage
   ENCRYPTION_KEY: z
     .string()
     .transform((val) => (val?.trim() ? val : undefined))
     .pipe(z.string().min(16).optional()),
+  ENCRYPTION_KEYS: z.string().optional(),
+  ENCRYPTION_ACTIVE_KEY: z.string().default('default'),
+  SECRET_STORE_PROVIDER: z.enum(['encrypted-db', 'aws']).default('encrypted-db'),
 
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60_000),
   RATE_LIMIT_MAX: z.coerce.number().default(300),
@@ -107,9 +116,47 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-if (parsed.data.NODE_ENV === 'production' && !process.env.APP_BASE_DOMAIN) {
-  console.error('Invalid environment variables: APP_BASE_DOMAIN is required in production.');
-  process.exit(1);
+if (parsed.data.NODE_ENV === 'production') {
+  if (!process.env.APP_BASE_DOMAIN) {
+    console.error('Invalid environment variables: APP_BASE_DOMAIN is required in production.');
+    process.exit(1);
+  }
+
+  const hasEncryptionKey = parsed.data.ENCRYPTION_KEY || parsed.data.ENCRYPTION_KEYS;
+  if (!hasEncryptionKey) {
+    console.error('Invalid environment variables: ENCRYPTION_KEY (>=32 chars) or ENCRYPTION_KEYS is required in production.');
+    process.exit(1);
+  }
+
+  if (parsed.data.ENCRYPTION_KEY && parsed.data.ENCRYPTION_KEY.length < 32) {
+    console.error('Invalid environment variables: ENCRYPTION_KEY must be at least 32 characters long in production.');
+    process.exit(1);
+  }
+
+  if (
+    parsed.data.ENCRYPTION_KEY &&
+    (parsed.data.ENCRYPTION_KEY === parsed.data.JWT_ACCESS_SECRET ||
+      parsed.data.ENCRYPTION_KEY === parsed.data.JWT_REFRESH_SECRET)
+  ) {
+    console.error('Invalid environment variables: ENCRYPTION_KEY must be distinct from JWT secrets.');
+    process.exit(1);
+  }
+
+  if (!process.env.BFF_SHARED_SECRET || parsed.data.BFF_SHARED_SECRET === 'bff-dev-shared-secret-key-min-16-chars') {
+    console.error('Invalid environment variables: Dedicated non-default BFF_SHARED_SECRET is required in production.');
+    process.exit(1);
+  }
+
+  if (
+    !process.env.INTERNAL_API_SECRET ||
+    parsed.data.INTERNAL_API_SECRET === 'internal-dev-secret-key-min-16-chars' ||
+    parsed.data.INTERNAL_API_SECRET.length < 32
+  ) {
+    console.error(
+      'Invalid environment variables: Dedicated non-default INTERNAL_API_SECRET (min 32 chars) is required in production.',
+    );
+    process.exit(1);
+  }
 }
 
 export const env = {

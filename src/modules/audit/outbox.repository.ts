@@ -30,7 +30,8 @@ export async function fetchPendingOutboxEvents(
     .from(outboxEvents)
     .where(eq(outboxEvents.status, 'PENDING'))
     .orderBy(asc(outboxEvents.createdAt))
-    .limit(limit);
+    .limit(limit)
+    .for('update', { skipLocked: true });
 }
 
 /**

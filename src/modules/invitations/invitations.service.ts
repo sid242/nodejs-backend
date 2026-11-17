@@ -7,6 +7,7 @@ import { AppError } from '@/lib/errors';
 import { logSecurityEvent } from '@/modules/audit/audit.service';
 import * as authRepo from '@/modules/auth/auth.repository';
 import { issueTokens } from '@/modules/auth/tokens';
+import { assertSsoNotEnforced } from '@/modules/sso/sso.enforcement';
 import { enforceLimit } from '@/modules/billing/billing.service';
 import * as rbacRepo from '@/modules/rbac/rbac.repository';
 import * as rbacService from '@/modules/rbac/rbac.service';
@@ -307,6 +308,13 @@ export async function acceptTenantInvitation(
 
   const normalizedInvitedEmail = invitation.email.toLowerCase();
   const existingUser = await authRepo.findByEmail(normalizedInvitedEmail);
+
+  // Mandatory SSO enforcement check
+  await assertSsoNotEnforced({
+    email: normalizedInvitedEmail,
+    userId: existingUser?.id,
+    targetTenantId: invitation.tenantId,
+  });
 
   let targetUserId: string;
   let userForTokens: PublicUser;

@@ -14,6 +14,7 @@ import {
 import { addressOwnerTypeEnum, addressTypeEnum } from '../enums';
 import { tenants } from '../tenancy/tenants';
 
+// scope: tenant
 export const addresses = pgTable(
   'Address',
   {

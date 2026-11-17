@@ -146,6 +146,10 @@ export async function disableTwoFactor(
     throw AppError.badRequest(AUTH_MESSAGES.TWO_FACTOR_NOT_ENABLED);
   }
 
+  if (!user.passwordHash) {
+    throw AppError.badRequest('Password verification is not available for SSO accounts');
+  }
+
   // Verify current password
   const passwordValid = await bcrypt.compare(password, user.passwordHash);
   if (!passwordValid) {

@@ -19,6 +19,7 @@ import type {
   VerifyEmailDto,
 } from '@/modules/auth/auth.dto';
 import * as authRepo from '@/modules/auth/auth.repository';
+import { assertSsoNotEnforced } from '@/modules/sso/sso.enforcement';
 import {
   consumeRefreshToken,
   createEmailVerificationToken,
@@ -82,13 +83,23 @@ export async function login({
   password,
 }: LoginDto): Promise<AuthResult | TwoFactorChallengeData> {
   const record = await authRepo.findByEmail(email);
+
+  // If user account is managed without password (e.g. SCIM/SSO provisioned)
+  if (record && !record.passwordHash) {
+    await assertSsoNotEnforced({ email: record.email, userId: record.id });
+    throw AppError.unauthorized('Account is managed via Single Sign-On. Please sign in with SSO.');
+  }
+
   const ok = await bcrypt.compare(password, record?.passwordHash ?? DUMMY_HASH);
-  if (!record || !ok || record.deletedAt)
+  if (!record || !record.passwordHash || !ok || record.deletedAt)
     throw AppError.unauthorized(AUTH_MESSAGES.INVALID_CREDENTIALS);
 
   if (record.status === 'SUSPENDED' || record.status === 'DEACTIVATED') {
     throw AppError.forbidden(`Account is ${record.status.toLowerCase()}`);
   }
+
+  // Mandatory SSO enforcement check (allows break-glass for OWNER accounts with ssoBypass: true)
+  await assertSsoNotEnforced({ email: record.email, userId: record.id });
 
   if (!record.emailVerifiedAt) {
     throw AppError.forbidden(AUTH_MESSAGES.EMAIL_NOT_VERIFIED, {
@@ -155,6 +166,11 @@ export async function resetPassword({
   password,
 }: ResetPasswordDto): Promise<{ message: string }> {
   const userId = await verifyAndConsumePasswordResetToken(token);
+  const existingUser = await authRepo.findById(userId);
+  if (existingUser) {
+    await assertSsoNotEnforced({ email: existingUser.email, userId: existingUser.id });
+  }
+
   const passwordHash = await bcrypt.hash(password, 12);
 
   const user = await authRepo.updatePassword(userId, passwordHash);
@@ -175,6 +191,10 @@ export async function changePassword(
   const user = await authRepo.findById(userId);
   if (!user || user.deletedAt) {
     throw AppError.notFound('User not found');
+  }
+
+  if (!user.passwordHash) {
+    throw AppError.badRequest('Password changes are not permitted for SSO-managed accounts');
   }
 
   const isCurrentValid = await bcrypt.compare(currentPassword, user.passwordHash);
@@ -251,6 +271,13 @@ export interface MagicLinkRequestResult {
 export async function requestMagicLink(email: string): Promise<MagicLinkRequestResult> {
   const normalizedEmail = email.toLowerCase().trim();
   const user = await authRepo.findByEmail(normalizedEmail);
+
+  if (user) {
+    await assertSsoNotEnforced({ email: normalizedEmail, userId: user.id });
+  } else {
+    await assertSsoNotEnforced({ email: normalizedEmail });
+  }
+
   const genericMessage =
     'If an account exists with this email, a magic sign-in link has been sent.';
 
@@ -300,6 +327,9 @@ export async function verifyMagicLink(token: string): Promise<AuthResult> {
     throw AppError.unauthorized('User account not found');
   }
 
+  // Mandatory SSO enforcement check
+  await assertSsoNotEnforced({ email: userRecord.email, userId: userRecord.id });
+
   if (userRecord.status === 'SUSPENDED' || userRecord.status === 'DEACTIVATED') {
     throw AppError.forbidden(`Account is ${userRecord.status.toLowerCase()}`);
   }
@@ -320,7 +350,7 @@ export async function verifyMagicLink(token: string): Promise<AuthResult> {
 
   await cache.del(`${REDIS_PREFIXES.USER_CACHE}${userId}`);
   const memberships = await getUserMembershipsWithCanonicalUrls(finalUser.id);
-  return { user: finalUser, ...(await issueTokens(finalUser)), memberships };
+  return { user: finalUser, ...(await issueTokens(finalUser, 'MAGIC_LINK')), memberships };
 }
 
 /**
@@ -344,6 +374,7 @@ async function atomicGetDel(redisClient: any, key: string): Promise<string | nul
 export async function createHandoff(
   userId: string,
   { tenantId, targetHost }: CreateHandoffDto,
+  authMethod = 'SSO',
 ): Promise<{ handoffUrl: string; code: string }> {
   const member = await tenantsRepo.findTenantMember(tenantId, userId);
   if (!member || member?.status !== 'ACTIVE') {
@@ -368,7 +399,7 @@ export async function createHandoff(
   const codeHash = crypto.createHash('sha256').update(code).digest('hex');
   await redis?.set?.(
     `handoff:${codeHash}`,
-    JSON.stringify({ userId, tenantId, targetHost: normalizedTargetHost }),
+    JSON.stringify({ userId, tenantId, targetHost: normalizedTargetHost, authMethod }),
     'EX',
     60,
   );
@@ -379,7 +410,7 @@ export async function createHandoff(
     action: 'AUTH_HANDOFF_ISSUED',
     entityType: 'handoff',
     entityId: codeHash,
-    metadata: { targetHost: normalizedTargetHost },
+    metadata: { targetHost: normalizedTargetHost, authMethod },
   });
 
   const protocol = normalizedTargetHost?.includes('localhost') ? 'http' : 'https';
@@ -402,7 +433,12 @@ export async function redeemHandoff({
     });
   }
 
-  const payload = JSON.parse(raw) as { userId?: string; tenantId?: string; targetHost?: string };
+  const payload = JSON.parse(raw) as {
+    userId?: string;
+    tenantId?: string;
+    targetHost?: string;
+    authMethod?: string;
+  };
   const normalizedHost = host?.trim()?.toLowerCase()?.split(':')?.[0] ?? '';
 
   if (!payload?.targetHost || payload.targetHost !== normalizedHost) {
@@ -434,7 +470,7 @@ export async function redeemHandoff({
     createdAt: userRecord.createdAt,
   };
 
-  const tokens = await issueTokens(user);
+  const tokens = await issueTokens(user, payload.authMethod ?? 'SSO');
   const memberships = await getUserMembershipsWithCanonicalUrls(user.id);
 
   await logSecurityEvent({

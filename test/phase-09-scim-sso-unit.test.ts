@@ -180,13 +180,15 @@ describe('SCIM 2.0 Directory Sync & Enterprise SSO Unit Tests', () => {
   });
 
   describe('2. SSO Domain Discovery & Initiation', () => {
-    it('discovers workspace SSO for claimed email domain', async () => {
+    it('discovers workspace SSO for claimed email domain without leaking tenant metadata', async () => {
       const lookup = await ssoService.lookupSso(`alice@${testDomain}`);
       assert.strictEqual(lookup.ssoAvailable, true);
-      assert.strictEqual(lookup.tenantId, enterpriseTenant.id);
-      assert.strictEqual(lookup.tenantSlug, enterpriseTenant.slug);
-      assert.strictEqual(lookup.enforceSso, true);
-      assert.strictEqual(lookup.providerType, 'SAML');
+      assert.ok(lookup.redirectUrl?.includes('/api/v1/auth/sso/initiate?email='));
+      // Asserts that tenant enumeration properties are completely omitted for privacy
+      assert.strictEqual((lookup as any).tenantId, undefined);
+      assert.strictEqual((lookup as any).tenantSlug, undefined);
+      assert.strictEqual((lookup as any).enforceSso, undefined);
+      assert.strictEqual((lookup as any).providerType, undefined);
     });
 
     it('returns ssoAvailable=false for unclaimed email domain', async () => {

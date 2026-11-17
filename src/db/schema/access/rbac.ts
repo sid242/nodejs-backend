@@ -14,6 +14,7 @@ import {
 import { userGroups } from '../identity/user-groups';
 import { tenantMembers, tenants } from '../tenancy/index';
 
+// scope: primary
 export const appModules = pgTable(
   'AppModule',
   {
@@ -36,6 +37,7 @@ export const appModules = pgTable(
 export type AppModule = typeof appModules.$inferSelect;
 export type NewAppModule = typeof appModules.$inferInsert;
 
+// scope: primary
 export const permissions = pgTable(
   'Permission',
   {
@@ -66,6 +68,7 @@ export const permissions = pgTable(
 export type Permission = typeof permissions.$inferSelect;
 export type NewPermission = typeof permissions.$inferInsert;
 
+// scope: tenant
 export const tenantModules = pgTable(
   'TenantModule',
   {
@@ -87,6 +90,7 @@ export const tenantModules = pgTable(
 export type TenantModule = typeof tenantModules.$inferSelect;
 export type NewTenantModule = typeof tenantModules.$inferInsert;
 
+// scope: tenant
 export const roles = pgTable(
   'AppRole',
   {
@@ -119,6 +123,7 @@ export const roles = pgTable(
 export type RoleRecord = typeof roles.$inferSelect;
 export type NewRoleRecord = typeof roles.$inferInsert;
 
+// scope: tenant
 export const rolePermissions = pgTable(
   'RolePermission',
   {
@@ -139,6 +144,7 @@ export const rolePermissions = pgTable(
 export type RolePermission = typeof rolePermissions.$inferSelect;
 export type NewRolePermission = typeof rolePermissions.$inferInsert;
 
+// scope: tenant
 export const tenantMemberRoles = pgTable(
   'TenantMemberRole',
   {
@@ -161,6 +167,7 @@ export const tenantMemberRoles = pgTable(
 export type TenantMemberRole = typeof tenantMemberRoles.$inferSelect;
 export type NewTenantMemberRole = typeof tenantMemberRoles.$inferInsert;
 
+// scope: tenant
 export const userGroupRoles = pgTable(
   'UserGroupRole',
   {

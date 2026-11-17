@@ -1,6 +1,8 @@
 import { and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
-import { db, type DbExecutor } from '@/config/db';
+import type { DbExecutor } from '@/config/db';
+import { assertTenantScope, primaryDbHandle, tenantDb } from '@/db/tenancy/context';
+import { attachUsers } from '@/lib/attach-users';
 import {
   permissions,
   platformStaff,
@@ -10,13 +12,25 @@ import {
   userGroupMembers,
   userGroupRoles,
   userGroups,
-  users,
   type NewUserGroup,
   type NewUserGroupMember,
   type RoleRecord,
   type UserGroup,
   type UserGroupMember,
 } from '@/db/schema';
+
+function resolveGroupExecutor(
+  scope?: 'PLATFORM' | 'TENANT',
+  tenantId?: string,
+  executor?: DbExecutor,
+): DbExecutor {
+  if (executor) return executor;
+  if (scope === 'TENANT' || tenantId) {
+    if (tenantId) assertTenantScope(tenantId);
+    return tenantDb();
+  }
+  return primaryDbHandle();
+}
 
 export interface GroupListFilters {
   scope: 'PLATFORM' | 'TENANT';
@@ -36,9 +50,10 @@ export interface GroupWithMemberCount extends UserGroup {
 
 export async function createGroup(
   data: NewUserGroup,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<UserGroup> {
-  const [record] = await executor.insert(userGroups).values(data).returning();
+  const exec = resolveGroupExecutor(data.scope, data.tenantId ?? undefined, executor);
+  const [record] = await exec.insert(userGroups).values(data).returning();
   return record!;
 }
 
@@ -46,8 +61,9 @@ export async function findGroupById(
   id: string,
   scope: 'PLATFORM' | 'TENANT',
   tenantId?: string,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<UserGroup | null> {
+  const exec = resolveGroupExecutor(scope, tenantId, executor);
   const conditions = [eq(userGroups.id, id), eq(userGroups.scope, scope)];
 
   if (scope === 'TENANT') {
@@ -57,7 +73,7 @@ export async function findGroupById(
     conditions.push(isNull(userGroups.tenantId));
   }
 
-  const [record] = await executor
+  const [record] = await exec
     .select()
     .from(userGroups)
     .where(and(...conditions))
@@ -70,8 +86,9 @@ export async function findGroupBySlug(
   slug: string,
   scope: 'PLATFORM' | 'TENANT',
   tenantId?: string,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<UserGroup | null> {
+  const exec = resolveGroupExecutor(scope, tenantId, executor);
   const conditions = [
     eq(userGroups.slug, slug.toLowerCase()),
     eq(userGroups.scope, scope),
@@ -85,7 +102,7 @@ export async function findGroupBySlug(
     conditions.push(isNull(userGroups.tenantId));
   }
 
-  const [record] = await executor
+  const [record] = await exec
     .select()
     .from(userGroups)
     .where(and(...conditions))
@@ -96,7 +113,7 @@ export async function findGroupBySlug(
 
 export async function listGroups(
   filters: GroupListFilters,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<{ items: GroupWithMemberCount[]; total: number; page: number; limit: number }> {
   const {
     scope,
@@ -109,6 +126,7 @@ export async function listGroups(
     sortOrder = 'desc',
   } = filters;
 
+  const exec = resolveGroupExecutor(scope, tenantId, executor);
   const conditions = [eq(userGroups.scope, scope)];
 
   if (scope === 'TENANT') {
@@ -147,7 +165,7 @@ export async function listGroups(
   const whereClause = and(...conditions);
 
   // Total count
-  const countRows = await executor
+  const countRows = await exec
     .select({ totalCount: count() })
     .from(userGroups)
     .where(whereClause);
@@ -174,7 +192,7 @@ export async function listGroups(
     WHERE "UserGroupMember"."groupId" = "UserGroup"."id"
   )`;
 
-  const rows = await executor
+  const rows = await exec
     .select({
       id: userGroups.id,
       name: userGroups.name,
@@ -209,8 +227,9 @@ export async function updateGroup(
   scope: 'PLATFORM' | 'TENANT',
   tenantId: string | undefined,
   data: Partial<NewUserGroup>,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<UserGroup | null> {
+  const exec = resolveGroupExecutor(scope, tenantId, executor);
   const conditions = [eq(userGroups.id, id), eq(userGroups.scope, scope)];
 
   if (scope === 'TENANT') {
@@ -220,7 +239,7 @@ export async function updateGroup(
     conditions.push(isNull(userGroups.tenantId));
   }
 
-  const [record] = await executor
+  const [record] = await exec
     .update(userGroups)
     .set({
       ...data,
@@ -236,8 +255,9 @@ export async function archiveGroup(
   id: string,
   scope: 'PLATFORM' | 'TENANT',
   tenantId?: string,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<UserGroup | null> {
+  const exec = resolveGroupExecutor(scope, tenantId, executor);
   const conditions = [eq(userGroups.id, id), eq(userGroups.scope, scope)];
 
   if (scope === 'TENANT') {
@@ -247,7 +267,7 @@ export async function archiveGroup(
     conditions.push(isNull(userGroups.tenantId));
   }
 
-  const [record] = await executor
+  const [record] = await exec
     .update(userGroups)
     .set({
       status: 'ARCHIVED',
@@ -262,10 +282,15 @@ export async function archiveGroup(
 
 export async function addGroupMembers(
   members: NewUserGroupMember[],
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<UserGroupMember[]> {
   if (members.length === 0) return [];
-  return executor.insert(userGroupMembers).values(members).returning();
+  const exec = resolveGroupExecutor(
+    members[0]?.tenantId ? 'TENANT' : 'PLATFORM',
+    members[0]?.tenantId ?? undefined,
+    executor,
+  );
+  return exec.insert(userGroupMembers).values(members).returning();
 }
 
 export async function removeGroupMember(
@@ -273,9 +298,10 @@ export async function removeGroupMember(
   memberId: string,
   scope: 'PLATFORM' | 'TENANT',
   tenantId?: string,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<boolean> {
-  const group = await findGroupById(groupId, scope, tenantId, executor);
+  const exec = resolveGroupExecutor(scope, tenantId, executor);
+  const group = await findGroupById(groupId, scope, tenantId, exec);
   if (!group) return false;
 
   const conditions = [eq(userGroupMembers.groupId, groupId)];
@@ -289,7 +315,7 @@ export async function removeGroupMember(
     conditions.push(eq(userGroupMembers.staffId, memberId));
   }
 
-  const deleted = await executor
+  const deleted = await exec
     .delete(userGroupMembers)
     .where(and(...conditions))
     .returning({ id: userGroupMembers.id });
@@ -301,19 +327,20 @@ export async function findExistingMemberIds(
   groupId: string,
   ids: string[],
   scope: 'PLATFORM' | 'TENANT',
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<string[]> {
   if (ids.length === 0) return [];
+  const exec = resolveGroupExecutor(scope, undefined, executor);
 
   if (scope === 'TENANT') {
-    const rows = await executor
+    const rows = await exec
       .select({ userId: userGroupMembers.userId })
       .from(userGroupMembers)
       .where(and(eq(userGroupMembers.groupId, groupId), inArray(userGroupMembers.userId, ids)));
 
     return rows.map((r) => r.userId!).filter(Boolean);
   } else {
-    const rows = await executor
+    const rows = await exec
       .select({ staffId: userGroupMembers.staffId })
       .from(userGroupMembers)
       .where(and(eq(userGroupMembers.groupId, groupId), inArray(userGroupMembers.staffId, ids)));
@@ -327,7 +354,7 @@ export async function listTenantGroupMembers(
   tenantId: string,
   page = 1,
   limit = 20,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<{
   items: Array<{
     id: string;
@@ -341,12 +368,14 @@ export async function listTenantGroupMembers(
   page: number;
   limit: number;
 }> {
+  assertTenantScope(tenantId);
+  const exec = executor ?? tenantDb();
   const whereClause = and(
     eq(userGroupMembers.groupId, groupId),
     eq(userGroupMembers.tenantId, tenantId),
   );
 
-  const countRows = await executor
+  const countRows = await exec
     .select({ totalCount: count() })
     .from(userGroupMembers)
     .where(whereClause);
@@ -357,24 +386,30 @@ export async function listTenantGroupMembers(
 
   const offset = (page - 1) * limit;
 
-  const rows = await executor
+  const rows = await exec
     .select({
       id: userGroupMembers.id,
-      userId: users.id,
-      name: users.name,
-      email: users.email,
-      status: users.status,
+      userId: userGroupMembers.userId,
       joinedGroupAt: userGroupMembers.createdAt,
     })
     .from(userGroupMembers)
-    .innerJoin(users, eq(userGroupMembers.userId, users.id))
     .where(whereClause)
     .orderBy(desc(userGroupMembers.createdAt))
     .limit(limit)
     .offset(offset);
 
+  // Cross-DB safe user enrichment
+  const enriched = await attachUsers(rows, 'userId', 'user');
+
   return {
-    items: rows,
+    items: enriched.map((r) => ({
+      id: r.id,
+      userId: r.userId!,
+      name: r.user?.name ?? '',
+      email: r.user?.email ?? '',
+      status: r.user?.status ?? 'INACTIVE',
+      joinedGroupAt: r.joinedGroupAt,
+    })),
     total,
     page,
     limit,
@@ -385,7 +420,7 @@ export async function listPlatformGroupMembers(
   groupId: string,
   page = 1,
   limit = 20,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<{
   items: Array<{
     id: string;
@@ -400,9 +435,10 @@ export async function listPlatformGroupMembers(
   page: number;
   limit: number;
 }> {
+  const exec = executor ?? primaryDbHandle();
   const whereClause = eq(userGroupMembers.groupId, groupId);
 
-  const countRows = await executor
+  const countRows = await exec
     .select({ totalCount: count() })
     .from(userGroupMembers)
     .where(whereClause);
@@ -413,7 +449,7 @@ export async function listPlatformGroupMembers(
 
   const offset = (page - 1) * limit;
 
-  const rows = await executor
+  const rows = await exec
     .select({
       id: userGroupMembers.id,
       staffId: platformStaff.id,
@@ -441,11 +477,13 @@ export async function listPlatformGroupMembers(
 export async function validateActiveTenantMembers(
   tenantId: string,
   userIds: string[],
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<string[]> {
   if (userIds.length === 0) return [];
+  assertTenantScope(tenantId);
+  const exec = executor ?? tenantDb();
 
-  const rows = await executor
+  const rows = await exec
     .select({ userId: tenantMembers.userId })
     .from(tenantMembers)
     .where(
@@ -461,11 +499,12 @@ export async function validateActiveTenantMembers(
 
 export async function validateActivePlatformStaff(
   staffIds: string[],
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<string[]> {
   if (staffIds.length === 0) return [];
+  const exec = executor ?? primaryDbHandle();
 
-  const rows = await executor
+  const rows = await exec
     .select({ id: platformStaff.id })
     .from(platformStaff)
     .where(and(inArray(platformStaff.id, staffIds), eq(platformStaff.status, 'ACTIVE')));
@@ -476,9 +515,10 @@ export async function validateActivePlatformStaff(
 export async function bindRoleToGroup(
   groupId: string,
   roleId: string,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<void> {
-  await executor
+  const exec = executor ?? tenantDb();
+  await exec
     .insert(userGroupRoles)
     .values({ groupId, roleId })
     .onConflictDoNothing();
@@ -487,9 +527,10 @@ export async function bindRoleToGroup(
 export async function unbindRoleFromGroup(
   groupId: string,
   roleId: string,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<boolean> {
-  const deleted = await executor
+  const exec = executor ?? tenantDb();
+  const deleted = await exec
     .delete(userGroupRoles)
     .where(and(eq(userGroupRoles.groupId, groupId), eq(userGroupRoles.roleId, roleId)))
     .returning();
@@ -498,9 +539,10 @@ export async function unbindRoleFromGroup(
 
 export async function listGroupRoles(
   groupId: string,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<Array<RoleRecord & { permissions: string[] }>> {
-  const groupRoles = await executor
+  const exec = executor ?? tenantDb();
+  const groupRoles = await exec
     .select({
       id: roles.id,
       tenantId: roles.tenantId,
@@ -520,7 +562,7 @@ export async function listGroupRoles(
   const roleIds = groupRoles.map((r) => r.id);
   const permsByRole = new Map<string, string[]>();
   if (roleIds.length > 0) {
-    const permRows = await executor
+    const permRows = await exec
       .select({
         roleId: rolePermissions.roleId,
         permissionKey: permissions.key,
@@ -544,9 +586,10 @@ export async function listGroupRoles(
 
 export async function getGroupContributedPermissions(
   groupId: string,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<string[]> {
-  const perms = await executor
+  const exec = executor ?? tenantDb();
+  const perms = await exec
     .selectDistinct({ key: permissions.key })
     .from(userGroupRoles)
     .innerJoin(roles, eq(userGroupRoles.roleId, roles.id))
@@ -559,9 +602,10 @@ export async function getGroupContributedPermissions(
 
 export async function findGroupMemberUserIds(
   groupId: string,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<string[]> {
-  const rows = await executor
+  const exec = executor ?? tenantDb();
+  const rows = await exec
     .select({ userId: userGroupMembers.userId })
     .from(userGroupMembers)
     .where(and(eq(userGroupMembers.groupId, groupId), isNotNull(userGroupMembers.userId)));

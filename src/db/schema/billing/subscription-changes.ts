@@ -8,6 +8,7 @@ import { subscriptions } from './subscriptions';
  * Tracks subscription plan change requests and their outcomes.
  * Records upgrade, downgrade, and cancellation operations.
  */
+// scope: primary
 export const subscriptionChanges = pgTable(
   'SubscriptionChange',
   {

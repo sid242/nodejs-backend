@@ -100,12 +100,15 @@ export async function isOriginAllowed(origin: string | undefined): Promise<boole
     }
   }
 
-  if (rawBaseDomain === 'localhost' || hostname.endsWith('.localhost')) {
-    const parts = hostname.split('.');
-    if (parts.length === 2 && parts[1] === 'localhost') {
-      const label = parts[0];
-      if (label && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label) && !isReservedSlug(label)) {
-        return true;
+  // 3b. Localhost subdomain match only allowed in non-production environments
+  if (env.NODE_ENV !== 'production') {
+    if (rawBaseDomain === 'localhost' || hostname.endsWith('.localhost')) {
+      const parts = hostname.split('.');
+      if (parts.length === 2 && parts[1] === 'localhost') {
+        const label = parts[0];
+        if (label && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label) && !isReservedSlug(label)) {
+          return true;
+        }
       }
     }
   }

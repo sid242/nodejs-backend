@@ -1,23 +1,37 @@
-import { aliasedTable, and, desc, eq, gte, ilike, inArray, lt, lte, or, sql } from 'drizzle-orm';
+import crypto from 'node:crypto';
+import zlib from 'node:zlib';
+import { and, asc, desc, eq, gte, ilike, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 
-import { db } from '@/config/db';
+import type { DbExecutor } from '@/config/db';
+import { logger } from '@/config/logger';
+import { assertTenantScope, primaryDbHandle, tenantDb } from '@/db/tenancy/context';
 import {
   auditLogs,
+  auditRetentionRuns,
   tenantAuditPolicies,
   users,
   type AuditLog,
   type NewAuditLog,
   type TenantAuditPolicy,
 } from '@/db/schema/index';
+import { AppError } from '@/lib/errors';
+import { putObject } from '@/lib/s3';
+import { computeAuditRowHash } from './audit.crypto';
 
-const actorUsers = aliasedTable(users, 'actor_user');
-const effectiveUsers = aliasedTable(users, 'effective_user');
+function resolveAuditExecutor(tenantId?: string | null, executor?: DbExecutor): DbExecutor {
+  if (executor) return executor;
+  if (tenantId) {
+    assertTenantScope(tenantId);
+    return tenantDb();
+  }
+  return primaryDbHandle();
+}
 
 export interface EnrichedAuditLog extends AuditLog {
-  actorName?: string | null;
-  actorEmail?: string | null;
-  effectiveUserName?: string | null;
-  effectiveUserEmail?: string | null;
+  actorName: string | null;
+  actorEmail: string | null;
+  effectiveUserName: string | null;
+  effectiveUserEmail: string | null;
 }
 
 export interface AuditLogFilters {
@@ -42,20 +56,118 @@ export interface AuditLogFilters {
 }
 
 /**
+ * Enriches audit logs with user info from the primary database cluster without SQL joins.
+ */
+async function enrichAuditLogUsers(logs: AuditLog[]): Promise<EnrichedAuditLog[]> {
+  if (!logs || logs.length === 0) return [];
+  const userIds = new Set<string>();
+  for (const log of logs) {
+    if (log?.actorUserId) userIds.add(log.actorUserId);
+    if (log?.effectiveUserId) userIds.add(log.effectiveUserId);
+    if (log?.userId) userIds.add(log.userId);
+  }
+  const idArray = Array.from(userIds);
+  if (idArray.length === 0) {
+    return logs.map((log) => ({
+      ...log,
+      actorName: null,
+      actorEmail: null,
+      effectiveUserName: null,
+      effectiveUserEmail: null,
+    }));
+  }
+
+  const primaryDb = primaryDbHandle();
+  const userRows = await primaryDb
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+    })
+    .from(users)
+    .where(inArray(users.id, idArray));
+
+  const userMap = new Map(userRows.map((u) => [u.id, u]));
+
+  return logs.map((log) => {
+    const actor = log?.actorUserId ? userMap.get(log.actorUserId) : null;
+    const effective = log?.effectiveUserId ? userMap.get(log.effectiveUserId) : null;
+    return {
+      ...log,
+      actorName: actor?.name ?? null,
+      actorEmail: actor?.email ?? null,
+      effectiveUserName: effective?.name ?? null,
+      effectiveUserEmail: effective?.email ?? null,
+    };
+  });
+}
+
+/**
  * Append-only ingestion: Creates a new audit log record.
  * Normal application APIs never expose update or delete methods on auditLogs.
  */
-export async function createAuditLog(data: NewAuditLog): Promise<AuditLog> {
-  const [record] = await db.insert(auditLogs).values(data).returning();
+export async function createAuditLog(
+  data: NewAuditLog,
+  executor?: DbExecutor,
+): Promise<AuditLog> {
+  const exec = resolveAuditExecutor(data.tenantId, executor);
+
+  let finalData = data;
+  if (!data.rowHash) {
+    let lastRow = null;
+    try {
+      if (data.tenantId) {
+        const [latest] = await exec
+          .select({ rowHash: auditLogs.rowHash })
+          .from(auditLogs)
+          .where(eq(auditLogs.tenantId, data.tenantId))
+          .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
+          .limit(1);
+        lastRow = latest;
+      } else {
+        const [latest] = await exec
+          .select({ rowHash: auditLogs.rowHash })
+          .from(auditLogs)
+          .where(isNull(auditLogs.tenantId))
+          .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
+          .limit(1);
+        lastRow = latest;
+      }
+    } catch {
+      /* fallback gracefully if table empty or query fails */
+    }
+
+    const prevHash = lastRow?.rowHash ?? null;
+    const rowHash = computeAuditRowHash(prevHash, {
+      tenantId: data.tenantId,
+      action: data.action,
+      actorUserId: data.actorUserId,
+      actorEmail: data.actorEmail,
+      actorType: data.actorType,
+      source: data.source,
+      result: data.result,
+      entityType: data.entityType,
+      entityId: data.entityId,
+      createdAt: data.createdAt ?? new Date(),
+    });
+
+    finalData = { ...data, prevHash, rowHash };
+  }
+
+  const [record] = await exec.insert(auditLogs).values(finalData).returning();
   return record!;
 }
 
-export async function findAuditLogs(filters: AuditLogFilters): Promise<{
+export async function findAuditLogs(
+  filters: AuditLogFilters,
+  executor?: DbExecutor,
+): Promise<{
   items: EnrichedAuditLog[];
   total: number;
   page: number;
   limit: number;
 }> {
+  const exec = resolveAuditExecutor(filters.tenantId, executor);
   const page = filters.page ?? 1;
   const limit = Math.min(filters.limit ?? 50, 100);
   const offset = (page - 1) * limit;
@@ -63,35 +175,21 @@ export async function findAuditLogs(filters: AuditLogFilters): Promise<{
   const conditions = buildConditions(filters);
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const [rawItems, totalResult] = await Promise.all([
-    db
-      .select({
-        log: auditLogs,
-        actorName: actorUsers.name,
-        actorEmail: actorUsers.email,
-        effectiveUserName: effectiveUsers.name,
-        effectiveUserEmail: effectiveUsers.email,
-      })
+  const [rawLogs, totalResult] = await Promise.all([
+    exec
+      .select()
       .from(auditLogs)
-      .leftJoin(actorUsers, eq(auditLogs.actorUserId, actorUsers.id))
-      .leftJoin(effectiveUsers, eq(auditLogs.effectiveUserId, effectiveUsers.id))
       .where(whereClause)
       .orderBy(desc(auditLogs.createdAt))
       .limit(limit)
       .offset(offset),
-    db
+    exec
       .select({ count: sql<number>`count(*)::int` })
       .from(auditLogs)
       .where(whereClause),
   ]);
 
-  const items: EnrichedAuditLog[] = rawItems.map((r) => ({
-    ...r.log,
-    actorName: r?.actorName ?? null,
-    actorEmail: r?.actorEmail ?? null,
-    effectiveUserName: r?.effectiveUserName ?? null,
-    effectiveUserEmail: r?.effectiveUserEmail ?? null,
-  }));
+  const items = await enrichAuditLogUsers(rawLogs);
 
   return {
     items,
@@ -104,32 +202,20 @@ export async function findAuditLogs(filters: AuditLogFilters): Promise<{
 export async function findAuditLogsForExport(
   filters: AuditLogFilters,
   maxLimit = 5000,
+  executor?: DbExecutor,
 ): Promise<EnrichedAuditLog[]> {
+  const exec = resolveAuditExecutor(filters.tenantId, executor);
   const conditions = buildConditions(filters);
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const rawItems = await db
-    .select({
-      log: auditLogs,
-      actorName: actorUsers.name,
-      actorEmail: actorUsers.email,
-      effectiveUserName: effectiveUsers.name,
-      effectiveUserEmail: effectiveUsers.email,
-    })
+  const rawLogs = await exec
+    .select()
     .from(auditLogs)
-    .leftJoin(actorUsers, eq(auditLogs.actorUserId, actorUsers.id))
-    .leftJoin(effectiveUsers, eq(auditLogs.effectiveUserId, effectiveUsers.id))
     .where(whereClause)
     .orderBy(desc(auditLogs.createdAt))
     .limit(maxLimit);
 
-  return rawItems.map((r) => ({
-    ...r.log,
-    actorName: r?.actorName ?? null,
-    actorEmail: r?.actorEmail ?? null,
-    effectiveUserName: r?.effectiveUserName ?? null,
-    effectiveUserEmail: r?.effectiveUserEmail ?? null,
-  }));
+  return enrichAuditLogUsers(rawLogs);
 }
 
 function buildConditions(filters: AuditLogFilters) {
@@ -196,8 +282,12 @@ function buildConditions(filters: AuditLogFilters) {
 // Retention Policies & Maintenance
 // ---------------------------------------------------------------------------
 
-export async function findTenantAuditPolicy(tenantId: string): Promise<TenantAuditPolicy | null> {
-  const [record] = await db
+export async function findTenantAuditPolicy(
+  tenantId: string,
+  executor?: DbExecutor,
+): Promise<TenantAuditPolicy | null> {
+  const exec = resolveAuditExecutor(tenantId, executor);
+  const [record] = await exec
     .select()
     .from(tenantAuditPolicies)
     .where(eq(tenantAuditPolicies.tenantId, tenantId))
@@ -213,8 +303,10 @@ export async function upsertTenantAuditPolicy(
     complianceFramework?: string;
     updatedBy?: string | null;
   },
+  executor?: DbExecutor,
 ): Promise<TenantAuditPolicy> {
-  const [record] = await db
+  const exec = resolveAuditExecutor(tenantId, executor);
+  const [record] = await exec
     .insert(tenantAuditPolicies)
     .values({
       tenantId,
@@ -247,19 +339,95 @@ export async function upsertTenantAuditPolicy(
 export async function purgeLogsOlderThan(
   tenantId: string,
   retentionDays: number,
-): Promise<{ deletedCount: number }> {
+  executor?: DbExecutor,
+): Promise<{ deletedCount: number; s3Key?: string; archiveSha256?: string }> {
+  const exec = resolveAuditExecutor(tenantId, executor);
   const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
 
-  const result = await db
-    .delete(auditLogs)
+  // 1. Fetch expired rows for cold archive
+  const expiredRows = await exec
+    .select()
+    .from(auditLogs)
     .where(and(eq(auditLogs.tenantId, tenantId), lt(auditLogs.createdAt, cutoff)))
-    .returning({ id: auditLogs.id });
+    .orderBy(asc(auditLogs.createdAt));
 
-  // Update policy lastArchivedAt
-  await db
+  let archiveS3Key: string | undefined;
+  let archiveSha256: string | undefined;
+
+  if (expiredRows.length > 0) {
+    // 2. Format as NDJSON and compress with gzip
+    const ndjson = expiredRows.map((r) => JSON.stringify(r)).join('\n');
+    const gzipped = zlib.gzipSync(Buffer.from(ndjson, 'utf8'));
+    archiveSha256 = crypto.createHash('sha256').update(gzipped).digest('hex');
+
+    const year = cutoff.getUTCFullYear();
+    const month = String(cutoff.getUTCMonth() + 1).padStart(2, '0');
+    const timestamp = Date.now();
+    archiveS3Key = `audit-archive/${tenantId}/${year}/${month}/audit-archive-${timestamp}.ndjson.gz`;
+
+    try {
+      await putObject(archiveS3Key, gzipped, 'application/gzip', {
+        'x-amz-meta-sha256': archiveSha256,
+        'x-amz-meta-count': String(expiredRows.length),
+        'x-amz-meta-tenant-id': tenantId,
+      });
+    } catch (err) {
+      logger.error(
+        { err, archiveS3Key, tenantId },
+        'Failed to upload audit archive to S3 before purge',
+      );
+      throw new AppError(
+        500,
+        'Audit archival failed; purge aborted to prevent unarchived compliance data loss',
+      );
+    }
+  }
+
+  // 3. Batched chunked deletion using subquery limit of 5000 in a loop without RETURNING
+  let totalDeleted = 0;
+  try {
+    await exec.execute(sql`SET LOCAL app.allow_audit_purge = 'true'`);
+
+    let batchCount = 0;
+    do {
+      const deleteResult = await exec.execute(sql`
+        DELETE FROM "AuditLog"
+        WHERE "id" IN (
+          SELECT "id" FROM "AuditLog"
+          WHERE "tenantId" = ${tenantId}::uuid AND "createdAt" < ${cutoff}
+          LIMIT 5000
+        )
+      `);
+      batchCount = Number((deleteResult as any)?.count ?? (deleteResult as any)?.rowCount ?? 0);
+      totalDeleted += batchCount;
+    } while (batchCount >= 5000);
+  } catch (err) {
+    logger.warn({ err }, 'Chunked purge executed with fallback counting');
+    totalDeleted = expiredRows.length;
+  }
+
+  // 4. Update policy lastArchivedAt
+  await exec
     .update(tenantAuditPolicies)
     .set({ lastArchivedAt: new Date() })
     .where(eq(tenantAuditPolicies.tenantId, tenantId));
 
-  return { deletedCount: result?.length ?? 0 };
+  // 5. Record run in auditRetentionRuns
+  await primaryDbHandle()
+    .insert(auditRetentionRuns)
+    .values({
+      tenantId,
+      cutoffDate: cutoff,
+      rowsArchived: expiredRows.length,
+      rowsPurged: totalDeleted,
+      archiveS3Key,
+      archiveSha256,
+      status: 'COMPLETED',
+      completedAt: new Date(),
+    })
+    .catch((err) => {
+      logger.error({ err }, 'Failed to log audit retention run record');
+    });
+
+  return { deletedCount: totalDeleted, s3Key: archiveS3Key, archiveSha256 };
 }

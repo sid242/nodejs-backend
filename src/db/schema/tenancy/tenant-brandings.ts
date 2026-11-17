@@ -3,6 +3,7 @@ import { boolean, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-or
 import { customDomainStatusEnum } from '../enums';
 import { tenants } from './tenants';
 
+// scope: primary
 export const tenantBrandings = pgTable(
   'TenantBranding',
   {

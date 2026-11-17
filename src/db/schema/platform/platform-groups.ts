@@ -12,6 +12,7 @@ import {
 import { platformRoles } from './platform-roles';
 import { platformStaff } from './platform-staff';
 
+// scope: primary
 export const platformUserGroups = pgTable(
   'PlatformUserGroup',
   {
@@ -25,6 +26,7 @@ export const platformUserGroups = pgTable(
   (table) => [uniqueIndex('PlatformUserGroup_key_idx').on(table.key)],
 );
 
+// scope: primary
 export const platformUserGroupMembers = pgTable(
   'PlatformUserGroupMember',
   {
@@ -42,6 +44,7 @@ export const platformUserGroupMembers = pgTable(
   ],
 );
 
+// scope: primary
 export const platformUserGroupRoles = pgTable(
   'PlatformUserGroupRole',
   {

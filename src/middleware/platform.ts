@@ -116,7 +116,9 @@ export async function requirePlatformAuth(
  * Server-Side Platform Permission Check:
  * Enforces deny-by-default authorization for protected platform operations.
  */
-export function requirePlatformPermission(requiredPermission: string): RequestHandler {
+export function requirePlatformPermission(
+  requiredPermission: string | string[],
+): RequestHandler {
   return (req: Request, _res: Response, next: NextFunction): void => {
     if (!req.staff) {
       return next(AppError.unauthorized('Platform staff authentication required'));
@@ -124,11 +126,16 @@ export function requirePlatformPermission(requiredPermission: string): RequestHa
 
     const isSuperAdmin = req.staff.roleKey === 'SUPER_ADMIN';
     const hasWildcard = req.staff.permissions?.includes('*') ?? false;
-    const hasPermission = req.staff.permissions?.includes(requiredPermission) ?? false;
+    const hasPermission = Array.isArray(requiredPermission)
+      ? requiredPermission.some((perm) => req.staff?.permissions?.includes(perm))
+      : req.staff.permissions?.includes(requiredPermission) ?? false;
 
     if (!isSuperAdmin && !hasWildcard && !hasPermission) {
+      const needed = Array.isArray(requiredPermission)
+        ? requiredPermission.join(' or ')
+        : requiredPermission;
       return next(
-        AppError.forbidden(`Missing required platform permission: ${requiredPermission}`),
+        AppError.forbidden(`Missing required platform permission: ${needed}`),
       );
     }
 

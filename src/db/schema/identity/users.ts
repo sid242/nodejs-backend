@@ -12,15 +12,17 @@ import {
 
 import { userStatusEnum } from '../enums';
 
+// scope: primary
 export const users = pgTable(
   'User',
   {
     id: uuid('id').defaultRandom().primaryKey(),
     email: text('email').notNull(),
-    passwordHash: text('passwordHash').notNull(),
+    passwordHash: text('passwordHash'),
     name: text('name').notNull(),
     avatarUrl: text('avatarUrl'),
     status: userStatusEnum('status').notNull().default('PENDING_VERIFICATION'),
+    authMethod: text('authMethod').notNull().default('PASSWORD'),
 
     // Verification details
     emailVerifiedAt: timestamp('emailVerifiedAt', { precision: 3, mode: 'date' }),

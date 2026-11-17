@@ -1,31 +1,47 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
 
-import { db } from '@/config/db';
 import {
-  NewTenantScimToken,
-  NewTenantSsoConfig,
-  TenantScimToken,
+  assertTenantScope,
+  currentTenantCtx,
+  primaryDbHandle,
+  tenantDb,
+} from '@/db/tenancy/context';
+import {
+  type NewTenantScimToken,
+  type NewTenantSsoConfig,
+  type TenantScimToken,
   tenantScimTokens,
-  TenantSsoConfig,
+  type TenantSsoConfig,
   tenantSsoConfigs,
 } from '@/db/schema/index';
 
 export class SsoRepository {
   async findConfigByTenantId(tenantId: string): Promise<TenantSsoConfig | null> {
-    const [config] = await db
+    assertTenantScope(tenantId);
+    const [config] = await tenantDb()
       .select()
       .from(tenantSsoConfigs)
       .where(eq(tenantSsoConfigs.tenantId, tenantId))
       .limit(1);
 
-    return config ?? null;
+    if (config) return config;
+
+    // Fallback to primary registry if tenant context was not yet bound to dedicated
+    const [primaryConfig] = await primaryDbHandle()
+      .select()
+      .from(tenantSsoConfigs)
+      .where(eq(tenantSsoConfigs.tenantId, tenantId))
+      .limit(1);
+
+    return primaryConfig ?? null;
   }
 
   async findActiveConfigByDomain(domain: string): Promise<TenantSsoConfig | null> {
     const normalized = domain?.trim()?.toLowerCase();
     if (!normalized) return null;
 
-    const [config] = await db
+    // Domain lookup occurs pre-login on primary registry
+    const [config] = await primaryDbHandle()
       .select()
       .from(tenantSsoConfigs)
       .where(
@@ -43,7 +59,9 @@ export class SsoRepository {
     tenantId: string,
     data: Partial<NewTenantSsoConfig>,
   ): Promise<TenantSsoConfig> {
-    const [config] = await db
+    assertTenantScope(tenantId);
+    const targetDb = tenantDb();
+    const [config] = await targetDb
       .insert(tenantSsoConfigs)
       .values({
         tenantId,
@@ -58,16 +76,35 @@ export class SsoRepository {
       })
       .returning();
 
+    // If dedicated, also maintain primary registry record for domain lookup pre-login
+    if (targetDb !== primaryDbHandle()) {
+      await primaryDbHandle()
+        .insert(tenantSsoConfigs)
+        .values({
+          tenantId,
+          ...data,
+        })
+        .onConflictDoUpdate({
+          target: tenantSsoConfigs.tenantId,
+          set: {
+            ...data,
+            updatedAt: new Date(),
+          },
+        });
+    }
+
     return config!;
   }
 
   async createScimToken(data: NewTenantScimToken): Promise<TenantScimToken> {
-    const [token] = await db.insert(tenantScimTokens).values(data).returning();
+    assertTenantScope(data.tenantId);
+    const [token] = await tenantDb().insert(tenantScimTokens).values(data).returning();
     return token!;
   }
 
   async findScimTokenByHash(tokenHash: string): Promise<TenantScimToken | null> {
-    const [token] = await db
+    const target = currentTenantCtx()?.tenantId ? tenantDb() : primaryDbHandle();
+    const [token] = await target
       .select()
       .from(tenantScimTokens)
       .where(eq(tenantScimTokens.tokenHash, tokenHash))
@@ -76,23 +113,62 @@ export class SsoRepository {
     return token ?? null;
   }
 
+  async findScimTokenById(tenantId: string, id: string): Promise<TenantScimToken | null> {
+    assertTenantScope(tenantId);
+    const [token] = await tenantDb()
+      .select()
+      .from(tenantScimTokens)
+      .where(and(eq(tenantScimTokens.tenantId, tenantId), eq(tenantScimTokens.id, id)))
+      .limit(1);
+    return token ?? null;
+  }
+
   async listScimTokens(tenantId: string): Promise<TenantScimToken[]> {
-    return db
+    assertTenantScope(tenantId);
+    return tenantDb()
       .select()
       .from(tenantScimTokens)
       .where(eq(tenantScimTokens.tenantId, tenantId))
       .orderBy(desc(tenantScimTokens.createdAt));
   }
 
-  async updateScimTokenLastUsed(id: string): Promise<void> {
-    await db
+  async updateScimTokenLastUsed(id: string, ip?: string): Promise<void> {
+    const target = currentTenantCtx()?.tenantId ? tenantDb() : primaryDbHandle();
+    const payload: Record<string, any> = { lastUsedAt: new Date() };
+    if (ip) {
+      payload.lastUsedIp = ip;
+    }
+    await target
       .update(tenantScimTokens)
-      .set({ lastUsedAt: new Date() })
+      .set(payload)
       .where(eq(tenantScimTokens.id, id));
   }
 
+  async rotateScimToken(
+    tenantId: string,
+    id: string,
+    tokenHash: string,
+    tokenPrefix: string,
+    expiresAt: Date | null,
+  ): Promise<TenantScimToken | null> {
+    assertTenantScope(tenantId);
+    const [rotated] = await tenantDb()
+      .update(tenantScimTokens)
+      .set({
+        tokenHash,
+        tokenPrefix,
+        expiresAt,
+        status: 'ACTIVE',
+        updatedAt: new Date(),
+      })
+      .where(and(eq(tenantScimTokens.tenantId, tenantId), eq(tenantScimTokens.id, id)))
+      .returning();
+    return rotated ?? null;
+  }
+
   async revokeScimToken(tenantId: string, id: string): Promise<boolean> {
-    const result = await db
+    assertTenantScope(tenantId);
+    const result = await tenantDb()
       .update(tenantScimTokens)
       .set({ status: 'REVOKED', updatedAt: new Date() })
       .where(and(eq(tenantScimTokens.tenantId, tenantId), eq(tenantScimTokens.id, id)))

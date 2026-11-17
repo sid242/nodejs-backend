@@ -15,6 +15,7 @@ import { cache } from '@/lib/cache';
 import { checkTenantDbHealth, closeDedicatedPool, getDedicatedPoolStats } from '@/lib/db-manager';
 import { AppError } from '@/lib/errors';
 import { provisionDedicatedDatabase } from '@/lib/provision-db';
+import { getSecretStore } from '@/lib/secrets';
 import * as authRepo from '@/modules/auth/auth.repository';
 import { createMagicLinkToken, issueSupportToken } from '@/modules/auth/tokens';
 import * as billingService from '@/modules/billing/billing.service';
@@ -22,7 +23,7 @@ import { rbacRepo } from '@/modules/rbac/rbac.repository';
 import * as rbacService from '@/modules/rbac/rbac.service';
 import { buildPlatformUrl, buildTenantUrl } from '@/modules/tenants/tenant-url.service';
 import { tenantsRepo } from '@/modules/tenants/tenants.repository';
-import { emailQueue } from '@/queues/index';
+import { dbOpsQueue, emailQueue } from '@/queues/index';
 
 import { createPlatformTwoFactorChallenge } from './platform-2fa.service';
 import {
@@ -890,6 +891,17 @@ export async function startSupportSession(
     }
   }
 
+  if (
+    (data.scope === 'FULL_ADMIN' || data.scope === 'FULL') &&
+    !data.tenantConsent &&
+    !data.approvedByStaffId &&
+    actorCtx.roleKey !== PLATFORM_ROLES.SUPER_ADMIN
+  ) {
+    throw AppError.forbidden(
+      'FULL_ADMIN support session scope requires verified tenant consent or secondary staff approval (four-eyes principle).',
+    );
+  }
+
   const durationMinutes = Math.min(120, Math.max(5, data.durationMinutes ?? 30));
   const expiresAt = new Date(Date.now() + durationMinutes * 60 * 1000);
 
@@ -912,7 +924,7 @@ export async function startSupportSession(
       staffId: session.staffId,
       tenantId: session.tenantId,
       mode: session.mode as 'TENANT_SCOPED' | 'AS_MEMBER',
-      scope: session.scope as 'READ_ONLY' | 'FULL',
+      scope: session.scope as 'READ_ONLY' | 'ASSIST' | 'FULL' | 'FULL_ADMIN',
       targetUserId: session.targetUserId,
     },
     durationMinutes,
@@ -1206,8 +1218,15 @@ export async function provisionTenant(
         connectionUrl: data.databaseConfig?.connectionUrl,
       });
 
+      let databaseSecretRef: string | null = null;
+      if (data.databaseConfig?.connectionUrl) {
+        const secretStore = getSecretStore();
+        databaseSecretRef = await secretStore.put('db-connection-url', data.databaseConfig.connectionUrl, tenant.id);
+      }
+
       await tenantsRepo.updateTenant(tenant.id, {
         databaseKey: dbResult.databaseKey,
+        databaseSecretRef,
         metadata: {
           ...(tenant.metadata as Record<string, unknown> | null),
           databaseName: dbResult.databaseName,
@@ -1411,6 +1430,7 @@ export async function retryTenantProvisioning(
       const dbResult = await provisionDedicatedDatabase(tenant.id, {
         customDatabaseKey: tenant.databaseKey || undefined,
       });
+
       await tenantsRepo.updateTenant(tenant.id, {
         databaseKey: dbResult.databaseKey,
         metadata: {
@@ -1771,6 +1791,10 @@ export async function migrateTenantToDedicated(
     );
   }
 
+  const maintenanceKey = `tenant:${tenant.id}:maintenance`;
+  // Step 0: Put tenant in maintenance mode during data sync (mutations return 503)
+  await redis.set(maintenanceKey, '1', 'EX', 1800);
+
   try {
     const defaultSanitizedId = tenant.id.replace(/-/g, '_');
     const databaseName = options?.customDatabaseName?.trim() || `tenant_${defaultSanitizedId}`;
@@ -1916,22 +1940,42 @@ export async function migrateTenantToDedicated(
         await dedicatedDb.insert(schema.files).values(fileRecords).onConflictDoNothing();
         recordsMigrated.files = fileRecords.length;
       }
+
+      // 2i. Verify row counts before switchover
+      if (recordsMigrated.members > 0) {
+        const [cnt] = await dedicatedDb
+          .select({ count: sql<number>`count(*)::int` })
+          .from(schema.tenantMembers)
+          .where(eq(schema.tenantMembers.tenantId, tenant.id));
+        if (Number(cnt?.count ?? 0) < recordsMigrated.members) {
+          throw AppError.internal('Migration verification failed: member count mismatch in dedicated database');
+        }
+      }
     } finally {
       await dedicatedClient.end({ timeout: 5 }).catch(() => {});
     }
 
-    // Step 3: Atomically update central tenant registry in primary database
+    // Step 3: Securely store database credentials in SecretStore (never in raw metadata)
+    let databaseSecretRef = tenant.databaseSecretRef;
+    if (options?.connectionUrl) {
+      const secretStore = getSecretStore();
+      databaseSecretRef = await secretStore.put('db-connection-url', options.connectionUrl, tenant.id);
+    }
+
+    const currentMetadata = { ...(tenant.metadata as Record<string, unknown> | null) };
+    delete (currentMetadata as any).connectionUrl;
+
     const [updatedTenant] = await db
       .update(schema.tenants)
       .set({
         databaseMode: 'dedicated',
         databaseKey: dbResult.databaseKey,
+        databaseSecretRef,
         metadata: {
-          ...(tenant.metadata as Record<string, unknown> | null),
+          ...currentMetadata,
           databaseName: dbResult.databaseName,
           poolLimit: dbResult.poolLimit,
           schemaVersion: dbResult.schemaVersion,
-          connectionUrl: options?.connectionUrl ? options.connectionUrl : undefined,
           migratedToDedicatedAt: new Date().toISOString(),
           migratedByStaffId: actorStaffId,
         },
@@ -1942,7 +1986,10 @@ export async function migrateTenantToDedicated(
     // Invalidate any active pool in cache
     await closeDedicatedPool(dbResult.databaseKey);
 
-    // Step 4: Record immutable platform audit entry
+    // Step 4: Lift maintenance mode
+    await redis.del(maintenanceKey).catch(() => {});
+
+    // Step 5: Record immutable platform audit entry
     await platformRepo.logPlatformAction({
       actorStaffId,
       action: 'tenant.database_migrated',
@@ -1966,6 +2013,7 @@ export async function migrateTenantToDedicated(
       recordsMigrated,
     };
   } finally {
+    await redis.del(maintenanceKey).catch(() => {});
     await redis.del(lockKey).catch(() => {});
   }
 }
@@ -2113,237 +2161,194 @@ export async function executeTenantDatabaseOperation(
     };
   }
 
+  // 2. Map high-level action to async background job kind
+  type DbOpKind =
+    | 'PROVISION'
+    | 'MIGRATE_SCHEMA'
+    | 'SWITCH_TO_DEDICATED'
+    | 'ROLLBACK_TO_SHARED'
+    | 'BACKUP'
+    | 'RESTORE'
+    | 'VERIFY';
+
+  let kind: DbOpKind;
   if (action === 'MIGRATE') {
-    const lockKey = `lock:tenant-db-migration:${tenantId}`;
-    const acquired = await redis.set(lockKey, actorStaffId, 'EX', 300, 'NX');
-    if (!acquired) {
-      throw AppError.conflict(
-        'A migration operation is already in progress for this tenant database',
-      );
-    }
-
-    try {
-      if (tenant.databaseMode === 'shared') {
-        const result = await migrateTenantToDedicated(
-          actorStaffId,
-          tenantId,
-          {
-            customDatabaseName: data.customDatabaseName,
-            poolLimit: data.poolLimit,
-            connectionUrl: data.connectionUrl,
-          },
-          requestId,
-        );
-
-        if (data.maintenanceWindow || data.targetVersion) {
-          await db
-            .update(schema.tenants)
-            .set({
-              schemaVersion: data.targetVersion || tenant.schemaVersion,
-              metadata: {
-                ...((result.tenant?.metadata as Record<string, unknown> | null) ?? {}),
-                maintenanceWindow: data.maintenanceWindow,
-                migrationReason: data.reason,
-              },
-            })
-            .where(eq(schema.tenants.id, tenantId));
-        }
-
-        return {
-          action: 'MIGRATE',
-          tenantId,
-          status: 'SUCCESS',
-          strategy: 'dedicated',
-          databaseName: result.databaseName,
-          databaseKey: result.databaseKey,
-          schemaVersion: data.targetVersion || tenant.schemaVersion,
-        };
-      } else {
-        // Already dedicated: update target schema version & record migration
-        const newVersion = data.targetVersion || '1.1.0';
-        await db
-          .update(schema.tenants)
-          .set({
-            schemaVersion: newVersion,
-            metadata: {
-              ...(tenant.metadata as Record<string, unknown> | null),
-              lastMigrationAt: new Date().toISOString(),
-              migrationStatus: 'UP_TO_DATE',
-              maintenanceWindow: data.maintenanceWindow,
-              migrationReason: data.reason,
-            },
-          })
-          .where(eq(schema.tenants.id, tenantId));
-
-        await platformRepo.logPlatformAction({
-          actorStaffId,
-          action: 'tenant.database_migrated',
-          targetType: 'tenant',
-          targetId: tenantId,
-          tenantId,
-          metadata: {
-            reason: data.reason,
-            schemaVersion: newVersion,
-            strategy: 'dedicated',
-            maintenanceWindow: data.maintenanceWindow,
-          },
-          requestId,
-        });
-
-        return {
-          action: 'MIGRATE',
-          tenantId,
-          status: 'SUCCESS',
-          strategy: 'dedicated',
-          schemaVersion: newVersion,
-          migratedAt: new Date().toISOString(),
-        };
-      }
-    } finally {
-      await redis.del(lockKey).catch(() => {});
-    }
+    kind = tenant.databaseMode === 'shared' ? 'SWITCH_TO_DEDICATED' : 'MIGRATE_SCHEMA';
+  } else if (action === 'PROVISION' || action === 'RETRY_PROVISIONING') {
+    kind = tenant.databaseMode === 'shared' ? 'SWITCH_TO_DEDICATED' : 'PROVISION';
+  } else if (action === 'ROLLBACK') {
+    kind = 'ROLLBACK_TO_SHARED';
+  } else if (action === 'BACKUP') {
+    kind = 'BACKUP';
+  } else if (action === 'RESTORE') {
+    kind = 'RESTORE';
+  } else if (action === 'VERIFY') {
+    kind = 'VERIFY';
+  } else {
+    throw AppError.badRequest(`Unsupported database operation action: ${action}`);
   }
 
-  if (action === 'ROLLBACK') {
-    if (!data.backupConfirmed) {
-      throw AppError.badRequest('Rollback requires explicit backup confirmation');
-    }
-    const result = await rollbackTenantToShared(actorStaffId, tenantId, requestId);
-    return {
-      action: 'ROLLBACK',
-      tenantId,
-      status: 'SUCCESS',
-      strategy: 'shared',
-      rolledBackAt: result.rolledBackAt,
-    };
+  // 3. For rollback or restore without backup confirmation, fail fast
+  if ((action === 'ROLLBACK' || action === 'RESTORE') && !data.backupConfirmed) {
+    throw AppError.badRequest(`${action} requires explicit backup confirmation`);
   }
 
-  if (action === 'RETRY_PROVISIONING') {
-    const result = await retryTenantProvisioning(actorStaffId, tenantId, data.reason, requestId);
-    return {
-      action: 'RETRY_PROVISIONING',
-      tenantId,
-      provisioningStatus: result.tenant?.provisioningStatus ?? 'ACTIVE',
-    };
+  // 4. Create persistent audit tracking record in primary database
+  const opRecord = await platformRepo.createTenantDbOperation({
+    tenantId,
+    kind,
+    status: 'QUEUED',
+    requestedByStaffId: actorStaffId,
+    approvedByStaffId: data.approvedByStaffId,
+    reason: data.reason,
+    params: {
+      action,
+      customDatabaseName: data.customDatabaseName,
+      poolLimit: data.poolLimit,
+      connectionUrl: data.connectionUrl,
+      targetVersion: data.targetVersion,
+      maintenanceWindow: data.maintenanceWindow,
+      backupConfirmed: data.backupConfirmed,
+      discardDedicatedData: data.discardDedicatedData,
+    },
+    progress: { currentStep: 'QUEUED', percent: 0 },
+  });
+
+  if (!opRecord) {
+    throw AppError.internal('Failed to record database operation in platform registry');
   }
 
-  if (action === 'PROVISION') {
-    if (tenant.provisioningStatus === 'FAILED') {
-      const result = await retryTenantProvisioning(actorStaffId, tenantId, data.reason, requestId);
-      return {
-        action: 'PROVISION',
-        tenantId,
-        provisioningStatus: result.tenant?.provisioningStatus ?? 'ACTIVE',
-      };
-    }
-    if (tenant.databaseMode === 'shared') {
-      const result = await migrateTenantToDedicated(
-        actorStaffId,
-        tenantId,
-        {
-          customDatabaseName: data.customDatabaseName,
-          poolLimit: data.poolLimit,
-          connectionUrl: data.connectionUrl,
-        },
-        requestId,
-      );
-      return {
-        action: 'PROVISION',
-        tenantId,
-        strategy: 'dedicated',
-        databaseName: result.databaseName,
-      };
-    }
-    return {
-      action: 'PROVISION',
+  // 5. Enqueue background BullMQ job
+  await dbOpsQueue.add(
+    `db-op:${kind}:${tenantId}`,
+    {
+      operationId: opRecord.id,
       tenantId,
-      status: 'ACTIVE',
-      strategy: tenant.databaseMode,
-    };
-  }
-
-  if (action === 'BACKUP') {
-    const backupId = `bkp_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
-    const nowIso = new Date().toISOString();
-    await db
-      .update(schema.tenants)
-      .set({
-        metadata: {
-          ...(tenant.metadata as Record<string, unknown> | null),
-          lastBackupId: backupId,
-          lastBackupAt: nowIso,
-          lastBackupReason: data.reason,
-        },
-      })
-      .where(eq(schema.tenants.id, tenantId));
-
-    await platformRepo.logPlatformAction({
-      actorStaffId,
-      action: 'tenant.database_backup',
-      targetType: 'tenant',
-      targetId: tenantId,
-      tenantId,
-      metadata: {
-        backupId,
-        reason: data.reason,
-        databaseMode: tenant.databaseMode,
+      kind,
+      requestedByStaffId: actorStaffId,
+      approvedByStaffId: data.approvedByStaffId,
+      reason: data.reason,
+      params: {
+        customDatabaseName: data.customDatabaseName,
+        poolLimit: data.poolLimit,
+        connectionUrl: data.connectionUrl,
+        targetVersion: data.targetVersion,
+        maintenanceWindow: data.maintenanceWindow,
+        backupConfirmed: data.backupConfirmed,
+        discardDedicatedData: data.discardDedicatedData,
       },
       requestId,
-    });
+    },
+    {
+      jobId: `db-op-${opRecord.id}`,
+    },
+  );
 
-    return {
-      action: 'BACKUP',
-      tenantId,
-      backupId,
-      backedUpAt: nowIso,
-    };
-  }
+  // 6. Record platform audit trail
+  await platformRepo.logPlatformAction({
+    actorStaffId,
+    action: 'tenant.database_operation_enqueued',
+    targetType: 'database_operation',
+    targetId: opRecord.id,
+    tenantId,
+    metadata: {
+      action,
+      kind,
+      reason: data.reason,
+      operationId: opRecord.id,
+      databaseMode: tenant.databaseMode,
+    },
+    requestId,
+  });
 
-  if (action === 'RESTORE') {
-    if (!data.backupConfirmed) {
-      throw AppError.badRequest('Restore requires explicit backup confirmation');
-    }
-    if (tenant.databaseKey) {
-      await closeDedicatedPool(tenant.databaseKey);
-    }
-    const health = await checkTenantDbHealth(tenantId);
-    const restoredAt = new Date().toISOString();
-
-    await db
-      .update(schema.tenants)
-      .set({
-        metadata: {
-          ...(tenant.metadata as Record<string, unknown> | null),
-          lastRestoredAt: restoredAt,
-          lastRestoreReason: data.reason,
-          lastHealthCheckStatus: health.healthy ? 'HEALTHY' : 'UNHEALTHY',
-          lastHealthCheckAt: restoredAt,
-        },
-      })
-      .where(eq(schema.tenants.id, tenantId));
-
-    await platformRepo.logPlatformAction({
-      actorStaffId,
-      action: 'tenant.database_restore',
-      targetType: 'tenant',
-      targetId: tenantId,
-      tenantId,
-      metadata: {
-        reason: data.reason,
-        restoredAt,
-        healthy: health.healthy,
-      },
-      requestId,
-    });
-
-    return {
-      action: 'RESTORE',
-      tenantId,
-      status: 'SUCCESS',
-      restoredAt,
-      healthy: health.healthy,
-    };
-  }
-
-  throw AppError.badRequest(`Unsupported database operation: ${action}`);
+  return {
+    action,
+    operationId: opRecord.id,
+    kind,
+    status: 'QUEUED',
+    tenantId,
+    requestedAt: opRecord.createdAt,
+    message: `Database operation ${action} (${kind}) enqueued successfully. Monitor progress at /api/v1/platform/database-operations/history/${opRecord.id}`,
+  };
 }
+
+export async function getTenantDbOperation(operationId: string) {
+  const op = await platformRepo.getTenantDbOperationById(operationId);
+  if (!op) throw AppError.notFound('Database operation record not found');
+  return op;
+}
+
+export async function listTenantDbOperations(tenantId: string) {
+  return platformRepo.listTenantDbOperations(tenantId);
+}
+
+export async function approveTenantDbOperation(
+  operationId: string,
+  approverStaffId: string,
+  reason: string,
+  requestId?: string,
+) {
+  const op = await platformRepo.getTenantDbOperationById(operationId);
+  if (!op) throw AppError.notFound('Database operation not found');
+
+  if (op.requestedByStaffId === approverStaffId) {
+    throw AppError.forbidden(
+      'Four-eyes approval violation: Approver cannot be the same staff member who requested the operation',
+    );
+  }
+
+  if (op.approvedByStaffId) {
+    throw AppError.conflict('Operation has already been approved');
+  }
+
+  if (op.status !== 'QUEUED') {
+    throw AppError.conflict(`Cannot approve operation with status ${op.status}`);
+  }
+
+  const updated = await platformRepo.updateTenantDbOperation(operationId, {
+    approvedByStaffId: approverStaffId,
+  });
+
+  await platformRepo.logPlatformAction({
+    actorStaffId: approverStaffId,
+    action: 'tenant.database_operation_approved',
+    targetType: 'database_operation',
+    targetId: operationId,
+    tenantId: op.tenantId,
+    metadata: { reason, operationKind: op.kind },
+    requestId,
+  });
+
+  return updated;
+}
+
+export async function cancelTenantDbOperation(
+  operationId: string,
+  staffId: string,
+  requestId?: string,
+) {
+  const op = await platformRepo.getTenantDbOperationById(operationId);
+  if (!op) throw AppError.notFound('Database operation not found');
+
+  if (op.status !== 'QUEUED') {
+    throw AppError.conflict(`Cannot cancel operation with status ${op.status}`);
+  }
+
+  const updated = await platformRepo.updateTenantDbOperation(operationId, {
+    status: 'CANCELLED',
+    finishedAt: new Date(),
+    error: 'Operation cancelled by platform staff operator',
+  });
+
+  await platformRepo.logPlatformAction({
+    actorStaffId: staffId,
+    action: 'tenant.database_operation_cancelled',
+    targetType: 'database_operation',
+    targetId: operationId,
+    tenantId: op.tenantId,
+    requestId,
+  });
+
+  return updated;
+}
+

@@ -1,7 +1,12 @@
 node_modules
-.env
+dist
 .git
 .github
+.env*
 test
 coverage
-*.md
+docs
+scratch
+*.zip
+*.tar.gz
+antigravity-gap-pack

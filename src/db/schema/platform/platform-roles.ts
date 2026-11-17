@@ -9,6 +9,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
+// scope: primary
 export const platformRoles = pgTable(
   'PlatformRole',
   {
@@ -33,6 +34,7 @@ export const platformRoles = pgTable(
 export type PlatformRole = typeof platformRoles.$inferSelect;
 export type NewPlatformRole = typeof platformRoles.$inferInsert;
 
+// scope: primary
 export const platformPermissions = pgTable(
   'PlatformPermission',
   {
@@ -53,6 +55,7 @@ export const platformPermissions = pgTable(
 export type PlatformPermission = typeof platformPermissions.$inferSelect;
 export type NewPlatformPermission = typeof platformPermissions.$inferInsert;
 
+// scope: primary
 export const platformRolePermissions = pgTable(
   'PlatformRolePermission',
   {

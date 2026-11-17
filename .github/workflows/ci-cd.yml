@@ -19,14 +19,50 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgrespassword
+          POSTGRES_DB: app_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 24, cache: npm }
       - run: npm ci
+      - run: npm run typecheck
       - run: npm run db:check
       - run: npm run lint
+      - run: npm run build
       - run: npm test
+        env:
+          DATABASE_URL: postgresql://postgres:postgrespassword@localhost:5432/app_test
+          REDIS_URL: redis://localhost:6379
+          JWT_ACCESS_SECRET: test_jwt_access_secret_for_ci_pipeline_32chars!
+          JWT_REFRESH_SECRET: test_jwt_refresh_secret_for_ci_pipeline_32chars!
+          JWT_PLATFORM_SECRET: test_jwt_platform_secret_for_ci_pipeline_32chars!
+          JWT_SUPPORT_SECRET: test_jwt_support_secret_for_ci_pipeline_32chars!
+          ENCRYPTION_KEY: test_encryption_key_for_ci_pipeline_32chars!
+          BFF_SHARED_SECRET: test_bff_shared_secret_for_ci_pipeline_32chars!
+          INTERNAL_API_SECRET: test_internal_api_secret_for_ci_pipeline_32chars!
+          NODE_ENV: test
 
   deploy:
     needs: test
@@ -67,7 +103,7 @@ jobs:
           image: ${{ steps.image.outputs.image }}
 
       # Migrations run ONCE as a one-off task, never on container start (avoids N replicas racing).
-      - name: Run DB migrations
+      - name: Run DB migrations (fleet all tenants)
         run: |
           TD_ARN=$(aws ecs register-task-definition \
             --cli-input-json file://${{ steps.td-api.outputs.task-definition }} \
@@ -75,7 +111,7 @@ jobs:
           TASK_ARN=$(aws ecs run-task --cluster "$ECS_CLUSTER" --launch-type FARGATE \
             --task-definition "$TD_ARN" \
             --network-configuration "awsvpcConfiguration={subnets=[${{ vars.PRIVATE_SUBNETS }}],securityGroups=[${{ vars.APP_SECURITY_GROUP }}],assignPublicIp=DISABLED}" \
-            --overrides '{"containerOverrides":[{"name":"api","command":["node","src/db/migrate.js"]}]}' \
+            --overrides '{"containerOverrides":[{"name":"api","command":["node","dist/db/migrate-all.js"]}]}' \
             --query 'tasks[0].taskArn' --output text)
           aws ecs wait tasks-stopped --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN"
           CODE=$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN" \

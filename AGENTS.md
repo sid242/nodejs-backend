@@ -126,7 +126,21 @@ Every new business domain should be placed in `src/modules/<domain>/`:
 - Migration commands:
   - `npm run db:generate`: Generate SQL migration files in `drizzle/` after schema changes.
   - `npm run db:check`: Check for schema consistency/conflicts.
-  - `npm run db:migrate`: Apply pending migrations to PostgreSQL.
+  - `npm run db:migrate`: Apply pending migrations to PostgreSQL primary cluster.
+  - `npm run db:migrate:all`: Apply pending migrations to primary cluster and all dedicated tenant databases.
+- **Backward-Compatible Migrations Pattern (Expand → Deploy → Contract)**:
+  - All database schema migrations must remain strictly non-breaking and backward-compatible with running API replicas.
+  - **Phase 1 (Expand)**: Add nullable columns, new tables, or new views. Run `npm run db:migrate:all` before rolling out new application tasks.
+  - **Phase 2 (Deploy)**: Roll out new backend API code that reads from/writes to the new schema structures.
+  - **Phase 3 (Contract)**: In a subsequent release (never the same release!), drop or rename legacy columns once all replicas and workers are upgraded.
+  - Never drop or rename an active column in the same migration where code changes are deployed.
+- **New Tenant Table Checklist**:
+  - Whenever a new tenant-scoped table is created:
+    1. Include `"tenantId"` foreign key column referencing `Tenant(id)`.
+    2. Add `// scope: tenant` comment above the table definition.
+    3. Add table to `TENANT_TABLES` in `src/db/tenancy/tenant-tables.ts` in topological dependency order.
+    4. Generate and apply strict PostgreSQL Row-Level Security (RLS) DDL using `generateTenantRlsDdl(tableName)`.
+    5. Ensure all repository queries route via `tenantDb()`.
 
 ### 3.4 Caching Strategy
 
@@ -182,4 +196,37 @@ Every new business domain should be placed in `src/modules/<domain>/`:
 | `npm run format`       | Format files with Prettier                                          |
 | `npm run db:generate`  | Generate Drizzle migrations from schema changes                     |
 | `npm run db:migrate`   | Execute pending Drizzle migrations                                  |
+| `npm run db:migrate:all` | Execute pending Drizzle migrations across primary and dedicated tenant DBs |
 | `docker compose up -d` | Start local Postgres, Redis, and MinIO containers                   |
+
+---
+
+## 5. Definition of Done (DoD) & Quality Checklist
+
+Before submitting or rolling out any backend or frontend modification:
+
+1. **Automated Testing at the Right Layer**:
+   - Pure logic, transformations, and DTO contracts covered by unit tests (`test/*.test.ts` or `test/unit/*`).
+   - Tenant isolation, routing, and database triggers covered by integration tests (`test/integration/*`).
+   - Run `npm test` and `npm run test:integration` cleanly.
+2. **Expand-Contract Non-Breaking Schema Invariant**:
+   - New database migrations must only add nullable columns, new tables, or new views.
+   - Never drop or rename active database columns in the same release as code deployment.
+   - Run `npm run db:check` and verify `_journal.json` consistency.
+3. **New Tenant Table Requirements**:
+   - Include `"tenantId"` foreign key column referencing `Tenant(id)`.
+   - Add `// scope: tenant` comment header above the table definition.
+   - Register table in `TENANT_TABLES` (`src/db/tenancy/tenant-tables.ts`) in topological dependency order.
+   - Apply PostgreSQL Row-Level Security (RLS) DDL with `generateTenantRlsDdl(tableName)`.
+   - All repository queries MUST route via `tenantDb()`.
+4. **New API Route Requirements**:
+   - Explicit rate limiter attached (e.g. `ssoLimiter`, `internalLimiter`, `authLimiter`, `resolveLimiter`).
+   - Authentication and RBAC guards (`requireAuth`, `requireTenant`, `requirePermission(...)`).
+   - Sensitive mutations record an event in the compliance audit trail via `auditService.logSecurityEvent(...)`.
+   - Documented in OpenAPI specification (`src/docs/routes/...`).
+5. **New Secret & Sensitive Field Requirements**:
+   - Master envelope encryption (`v1:{keyId}:{iv}:{tag}:{data}`) using HKDF domain-specific context.
+   - Added to redaction list in Pino structured logger (`src/config/logger.ts`) and Sentry scrubber.
+6. **Static Analysis & Build Verification**:
+   - Backend: `npm run typecheck` and `npm run build` pass with 0 errors.
+   - Frontend: `npm run typecheck`, `npm run lint:hrefs`, and `npm test` pass with 0 errors.

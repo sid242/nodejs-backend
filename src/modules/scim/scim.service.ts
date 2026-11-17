@@ -1,12 +1,15 @@
-import { and, count, eq, isNull } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
 
-import { db } from '@/config/db';
-import { tenantMembers, users } from '@/db/schema/index';
-import { AppError } from '@/lib/errors';
-import * as authRepo from '@/modules/auth/auth.repository';
+import { REDIS_PREFIXES } from '@/constants/index';
+import { cache } from '@/lib/cache';
+import * as auditRepo from '@/modules/audit/audit.repository';
+import * as billingService from '@/modules/billing/billing.service';
+import { revokeAllUserTokens } from '@/modules/auth/tokens';
 import { groupsRepo } from '@/modules/groups/groups.repository';
-import * as tenantsRepo from '@/modules/tenants/tenants.repository';
-import { ScimCreateUserDto, ScimPatchUserDto, ScimQueryDto } from './scim.dto';
+import { ssoRepo } from '@/modules/sso/sso.repository';
+import { emitToUser } from '@/sockets/emitter';
+import { ScimCreateUserDto, ScimError, ScimPatchUserDto, ScimQueryDto } from './scim.dto';
+import { scimRepo } from './scim.repository';
 
 export class ScimService {
   getServiceProviderConfig() {
@@ -15,10 +18,10 @@ export class ScimService {
       documentationUri: 'https://docs.saas-platform.com/scim',
       patch: { supported: true },
       bulk: { supported: false, maxOperations: 0, maxPayloadSize: 0 },
-      filter: { supported: true, maxResults: 100 },
+      filter: { supported: true, maxResults: 200 },
       changePassword: { supported: false },
       sort: { supported: false },
-      etag: { supported: false },
+      etag: { supported: true },
       authenticationSchemes: [
         {
           name: 'OAuth Bearer Token',
@@ -59,6 +62,7 @@ export class ScimService {
           { name: 'name', type: 'complex', multiValued: false, required: false },
           { name: 'emails', type: 'complex', multiValued: true, required: false },
           { name: 'active', type: 'boolean', multiValued: false, required: false },
+          { name: 'externalId', type: 'string', multiValued: false, required: false },
         ],
         meta: {
           location: '/api/v1/scim/v2/Schemas/urn:ietf:params:scim:schemas:core:2.0:User',
@@ -82,11 +86,60 @@ export class ScimService {
     };
   }
 
+  getResourceTypes() {
+    return {
+      schemas: ['urn:ietf:params:scim:api:messages:2.0:ListResponse'],
+      totalResults: 2,
+      itemsPerPage: 2,
+      startIndex: 1,
+      Resources: [
+        this.getResourceTypeById('User'),
+        this.getResourceTypeById('Group'),
+      ],
+    };
+  }
+
+  getResourceTypeById(id: string) {
+    if (id.toLowerCase() === 'user') {
+      return {
+        schemas: ['urn:ietf:params:scim:schemas:core:2.0:ResourceType'],
+        id: 'User',
+        name: 'User',
+        endpoint: '/Users',
+        description: 'User Account',
+        schema: 'urn:ietf:params:scim:schemas:core:2.0:User',
+        meta: {
+          location: '/api/v1/scim/v2/ResourceTypes/User',
+          resourceType: 'ResourceType',
+        },
+      };
+    }
+
+    return {
+      schemas: ['urn:ietf:params:scim:schemas:core:2.0:ResourceType'],
+      id: 'Group',
+      name: 'Group',
+      endpoint: '/Groups',
+      description: 'Group',
+      schema: 'urn:ietf:params:scim:schemas:core:2.0:Group',
+      meta: {
+        location: '/api/v1/scim/v2/ResourceTypes/Group',
+        resourceType: 'ResourceType',
+      },
+    };
+  }
+
   private formatScimUser(user: any, membership: any) {
     const isActive = membership?.status === 'ACTIVE';
     const parts = (user?.name || '').split(' ');
     const firstName = parts[0] || '';
     const lastName = parts.slice(1).join(' ') || '';
+
+    const lastModified = membership?.updatedAt || user?.updatedAt || new Date();
+    const versionHash = createHash('sha256')
+      .update(`${membership?.id}:${lastModified.getTime()}:${membership?.status}`)
+      .digest('hex')
+      .slice(0, 16);
 
     return {
       schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'],
@@ -106,54 +159,156 @@ export class ScimService {
         },
       ],
       active: isActive,
+      externalId: membership?.externalId ?? undefined,
       roles: membership?.role ? [{ value: membership.role }] : [],
       meta: {
         resourceType: 'User',
         created: user.createdAt,
-        lastModified: membership?.updatedAt || user.updatedAt,
+        lastModified,
         location: `/api/v1/scim/v2/Users/${user.id}`,
+        version: `W/"${versionHash}"`,
       },
     };
   }
 
+  private async revokeUserSessions(userId: string, tenantId: string, reason: string) {
+    await Promise.allSettled([
+      revokeAllUserTokens(userId),
+      cache.del(`${REDIS_PREFIXES.USER_CACHE}${userId}`),
+    ]);
+
+    try {
+      emitToUser(userId, 'session:revoked', {
+        tenantId,
+        reason,
+      });
+    } catch {
+      /* ignore socket emitter errors in offline tests */
+    }
+  }
+
   async listUsers(tenantId: string, query: ScimQueryDto) {
+    await billingService.assertQuota(tenantId, 'sso.scim');
+
     let emailFilter: string | undefined;
+    let externalIdFilter: string | undefined;
+    let idFilter: string | undefined;
 
     if (query.filter) {
-      const match = query.filter.match(/userName\s+eq\s+["']?([^"']+)["']?/i);
-      if (match?.[1]) {
-        emailFilter = match[1].trim().toLowerCase();
+      const emailMatch = query.filter.match(/userName\s+eq\s+["']?([^"']+)["']?/i);
+      if (emailMatch?.[1]) {
+        emailFilter = emailMatch[1].trim().toLowerCase();
+      }
+
+      const extMatch = query.filter.match(/externalId\s+eq\s+["']?([^"']+)["']?/i);
+      if (extMatch?.[1]) {
+        externalIdFilter = extMatch[1].trim();
+      }
+
+      const idMatch = query.filter.match(/id\s+eq\s+["']?([^"']+)["']?/i);
+      if (idMatch?.[1]) {
+        idFilter = idMatch[1].trim();
       }
     }
 
-    const conditions = [
-      eq(tenantMembers.tenantId, tenantId),
-      isNull(tenantMembers.deletedAt),
-    ];
+    // 1. If filtering by email directly, resolve identity first
     if (emailFilter) {
-      conditions.push(eq(users.email, emailFilter));
+      const user = await scimRepo.findUserByEmail(emailFilter);
+      if (!user) {
+        return {
+          schemas: ['urn:ietf:params:scim:api:messages:2.0:ListResponse'],
+          totalResults: 0,
+          startIndex: query.startIndex,
+          itemsPerPage: 0,
+          Resources: [],
+        };
+      }
+
+      const member = await scimRepo.findMemberByUserId(tenantId, user.id);
+      if (!member) {
+        return {
+          schemas: ['urn:ietf:params:scim:api:messages:2.0:ListResponse'],
+          totalResults: 0,
+          startIndex: query.startIndex,
+          itemsPerPage: 0,
+          Resources: [],
+        };
+      }
+
+      const resource = this.formatScimUser(user, member);
+      return {
+        schemas: ['urn:ietf:params:scim:api:messages:2.0:ListResponse'],
+        totalResults: 1,
+        startIndex: query.startIndex,
+        itemsPerPage: 1,
+        Resources: [resource],
+      };
     }
 
-    const [totalRow] = await db
-      .select({ count: count() })
-      .from(tenantMembers)
-      .innerJoin(users, eq(tenantMembers.userId, users.id))
-      .where(and(...conditions));
+    // 2. If filtering by externalId
+    if (externalIdFilter) {
+      const member = await scimRepo.findMemberByExternalId(tenantId, externalIdFilter);
+      if (!member) {
+        return {
+          schemas: ['urn:ietf:params:scim:api:messages:2.0:ListResponse'],
+          totalResults: 0,
+          startIndex: query.startIndex,
+          itemsPerPage: 0,
+          Resources: [],
+        };
+      }
 
-    const total = Number(totalRow?.count ?? 0);
+      const user = await scimRepo.findUserById(member.userId);
+      const resource = user ? [this.formatScimUser(user, member)] : [];
+      return {
+        schemas: ['urn:ietf:params:scim:api:messages:2.0:ListResponse'],
+        totalResults: resource.length,
+        startIndex: query.startIndex,
+        itemsPerPage: resource.length,
+        Resources: resource,
+      };
+    }
 
-    const rows = await db
-      .select({
-        member: tenantMembers,
-        user: users,
+    // 3. If filtering by ID
+    if (idFilter) {
+      const member = await scimRepo.findMemberByUserId(tenantId, idFilter);
+      if (!member) {
+        return {
+          schemas: ['urn:ietf:params:scim:api:messages:2.0:ListResponse'],
+          totalResults: 0,
+          startIndex: query.startIndex,
+          itemsPerPage: 0,
+          Resources: [],
+        };
+      }
+
+      const user = await scimRepo.findUserById(member.userId);
+      const resource = user ? [this.formatScimUser(user, member)] : [];
+      return {
+        schemas: ['urn:ietf:params:scim:api:messages:2.0:ListResponse'],
+        totalResults: resource.length,
+        startIndex: query.startIndex,
+        itemsPerPage: resource.length,
+        Resources: resource,
+      };
+    }
+
+    // 4. General paginated listing
+    const { total, members } = await scimRepo.listMembers(tenantId, {
+      startIndex: query.startIndex,
+      count: Math.min(query.count, 200),
+    });
+
+    const userIds = members.map((m) => m.userId);
+    const userRecords = await scimRepo.findUsersByIds(userIds);
+    const userMap = new Map<string, any>(userRecords.map((u) => [u.id, u]));
+
+    const resources = members
+      .map((m) => {
+        const u = userMap.get(m.userId);
+        return u ? this.formatScimUser(u, m) : null;
       })
-      .from(tenantMembers)
-      .innerJoin(users, eq(tenantMembers.userId, users.id))
-      .where(and(...conditions))
-      .limit(query.count)
-      .offset(Math.max(0, query.startIndex - 1));
-
-    const resources = rows.map((r) => this.formatScimUser(r.user, r.member));
+      .filter(Boolean);
 
     return {
       schemas: ['urn:ietf:params:scim:api:messages:2.0:ListResponse'],
@@ -165,69 +320,105 @@ export class ScimService {
   }
 
   async getUser(tenantId: string, userId: string) {
-    const membership = await tenantsRepo.findTenantMember(tenantId, userId);
+    await billingService.assertQuota(tenantId, 'sso.scim');
+
+    const membership = await scimRepo.findMemberByUserId(tenantId, userId);
     if (!membership) {
-      throw AppError.notFound(`User ${userId} not found in this workspace`);
+      throw new ScimError(404, `User ${userId} not found in workspace`);
     }
 
-    const user = await authRepo.findById(userId);
+    const user = await scimRepo.findUserById(userId);
     if (!user) {
-      throw AppError.notFound(`User ${userId} record not found`);
+      throw new ScimError(404, `User ${userId} record not found`);
     }
 
     return this.formatScimUser(user, membership);
   }
 
   async createUser(tenantId: string, payload: ScimCreateUserDto) {
+    await billingService.assertQuota(tenantId, 'sso.scim');
+
     const email = (payload.userName || payload.emails?.[0]?.value)?.trim()?.toLowerCase();
     if (!email) {
-      throw AppError.badRequest('Valid email/userName is required');
+      throw new ScimError(400, 'Valid email/userName is required', 'invalidValue');
+    }
+
+    // Enforce Tenant Domain Verification Policy
+    const ssoConfig = await ssoRepo.findConfigByTenantId(tenantId);
+    if (ssoConfig?.allowedDomains && ssoConfig.allowedDomains.length > 0) {
+      const emailDomain = email.split('@')[1]?.toLowerCase();
+      if (!emailDomain || !ssoConfig.allowedDomains.includes(emailDomain)) {
+        throw new ScimError(
+          403,
+          `User email domain @${emailDomain} is not authorized for workspace domain policy`,
+          'invalidValue',
+        );
+      }
     }
 
     const displayName =
       payload.displayName ||
       `${payload.name?.givenName || ''} ${payload.name?.familyName || ''}`.trim() ||
+      email.split('@')[0] ||
       'SCIM User';
 
-    let user = await authRepo.findByEmail(email);
-    if (!user) {
-      const created = await authRepo.createUser({
-        email,
-        passwordHash: 'SCIM_MANAGED_ACCOUNT_NO_PASSWORD',
-        name: displayName,
-      });
-      if (payload.active) {
-        await db.update(users).set({ status: 'ACTIVE' }).where(eq(users.id, created.id));
+    let user = await scimRepo.findUserByEmail(email);
+
+    if (user) {
+      // Check if user is already a member of this tenant -> RFC 7644 409 uniqueness conflict
+      const existingMembership = await scimRepo.findMemberByUserId(tenantId, user.id);
+      if (existingMembership) {
+        throw new ScimError(
+          409,
+          `User with userName ${email} already exists in this workspace`,
+          'uniqueness',
+        );
       }
-      user = await authRepo.findById(created.id);
     }
+
+    // Assert workspace member limit quota
+    await billingService.enforceLimit(tenantId, 'maxMembers');
 
     if (!user) {
-      throw AppError.internal('Failed to provision SCIM user');
-    }
-
-    let membership = await tenantsRepo.findTenantMember(tenantId, user.id);
-    if (membership) {
-      await tenantsRepo.updateTenantMemberStatus(
-        membership.id,
-        payload.active ? 'ACTIVE' : 'SUSPENDED',
-      );
-      membership = await tenantsRepo.findTenantMember(tenantId, user.id);
-    } else {
-      membership = await tenantsRepo.addTenantMember({
-        tenantId,
-        userId: user.id,
-        status: payload.active ? 'ACTIVE' : 'SUSPENDED',
+      // Create user identity with unguessable null passwordHash and authMethod SCIM
+      user = await scimRepo.createManagedUser({
+        email,
+        name: displayName,
+        authMethod: 'SCIM',
+        status: payload.active ? 'ACTIVE' : 'PENDING_VERIFICATION',
       });
     }
+
+    const targetStatus = payload.active ? 'ACTIVE' : 'SUSPENDED';
+    const membership = await scimRepo.createMember({
+      tenantId,
+      userId: user.id,
+      status: targetStatus,
+      externalId: payload.externalId,
+    });
+
+    await auditRepo.createAuditLog({
+      tenantId,
+      userId: user.id,
+      action: 'SCIM_USER_PROVISIONED',
+      entityType: 'USER',
+      entityId: user.id,
+      metadata: {
+        email,
+        externalId: payload.externalId,
+        status: targetStatus,
+      },
+    });
 
     return this.formatScimUser(user, membership);
   }
 
   async updateUser(tenantId: string, userId: string, payload: ScimCreateUserDto) {
-    let membership = await tenantsRepo.findTenantMember(tenantId, userId);
+    await billingService.assertQuota(tenantId, 'sso.scim');
+
+    const membership = await scimRepo.findMemberByUserId(tenantId, userId);
     if (!membership) {
-      throw AppError.notFound(`User ${userId} not found in workspace`);
+      throw new ScimError(404, `User ${userId} not found in workspace`);
     }
 
     const displayName =
@@ -235,31 +426,45 @@ export class ScimService {
       `${payload.name?.givenName || ''} ${payload.name?.familyName || ''}`.trim();
 
     if (displayName) {
-      await db
-        .update(users)
-        .set({ name: displayName, updatedAt: new Date() })
-        .where(eq(users.id, userId));
+      await scimRepo.updateUserDisplayName(userId, displayName);
     }
 
-    await tenantsRepo.updateTenantMemberStatus(
-      membership.id,
-      payload.active ? 'ACTIVE' : 'SUSPENDED',
-    );
+    const newStatus = payload.active ? 'ACTIVE' : 'SUSPENDED';
+    const statusChanged = membership.status !== newStatus;
 
-    const user = await authRepo.findById(userId);
-    membership = await tenantsRepo.findTenantMember(tenantId, userId);
+    const updatedMembership = await scimRepo.updateMember(tenantId, membership.id, {
+      status: newStatus,
+      externalId: payload.externalId !== undefined ? payload.externalId : membership.externalId,
+      tokenVersion: statusChanged ? (membership.tokenVersion ?? 1) + 1 : membership.tokenVersion,
+      statusChangedAt: statusChanged ? new Date() : membership.statusChangedAt,
+    });
 
-    return this.formatScimUser(user, membership);
+    if (statusChanged && newStatus === 'SUSPENDED') {
+      await this.revokeUserSessions(userId, tenantId, 'SCIM_DEACTIVATED');
+      await auditRepo.createAuditLog({
+        tenantId,
+        userId,
+        action: 'SCIM_USER_DEACTIVATED',
+        entityType: 'USER',
+        entityId: userId,
+      });
+    }
+
+    const user = await scimRepo.findUserById(userId);
+    return this.formatScimUser(user, updatedMembership);
   }
 
   async patchUser(tenantId: string, userId: string, payload: ScimPatchUserDto) {
-    let membership = await tenantsRepo.findTenantMember(tenantId, userId);
+    await billingService.assertQuota(tenantId, 'sso.scim');
+
+    const membership = await scimRepo.findMemberByUserId(tenantId, userId);
     if (!membership) {
-      throw AppError.notFound(`User ${userId} not found in workspace`);
+      throw new ScimError(404, `User ${userId} not found in workspace`);
     }
 
     let newStatus = membership.status;
     let newDisplayName: string | undefined;
+    let newExternalId: string | undefined;
 
     for (const op of payload.Operations) {
       const opType = op.op?.toLowerCase();
@@ -268,51 +473,86 @@ export class ScimService {
 
         if (path === 'active') {
           newStatus = op.value === true || op.value === 'true' ? 'ACTIVE' : 'SUSPENDED';
+        } else if (path === 'externalid') {
+          newExternalId = String(op.value ?? '');
+        } else if (path === 'displayname' || path === 'name.formatted') {
+          newDisplayName = String(op.value ?? '');
         } else if (op.value && typeof op.value === 'object') {
           if (op.value.active !== undefined) {
             newStatus = op.value.active ? 'ACTIVE' : 'SUSPENDED';
           }
+          if (op.value.externalId !== undefined) {
+            newExternalId = String(op.value.externalId ?? '');
+          }
           if (op.value.displayName) {
             newDisplayName = String(op.value.displayName);
+          } else if (op.value.name?.formatted) {
+            newDisplayName = String(op.value.name.formatted);
           }
-        } else if (path === 'displayname') {
-          newDisplayName = String(op.value);
+        }
+      } else if (opType === 'remove') {
+        const path = op.path?.toLowerCase();
+        if (path === 'externalid') {
+          newExternalId = '';
         }
       }
     }
 
     if (newDisplayName) {
-      await db
-        .update(users)
-        .set({ name: newDisplayName, updatedAt: new Date() })
-        .where(eq(users.id, userId));
+      await scimRepo.updateUserDisplayName(userId, newDisplayName);
     }
 
-    if (newStatus !== membership.status) {
-      await tenantsRepo.updateTenantMemberStatus(membership.id, newStatus);
+    const statusChanged = membership.status !== newStatus;
+    const updatedMembership = await scimRepo.updateMember(tenantId, membership.id, {
+      status: newStatus,
+      externalId: newExternalId !== undefined ? (newExternalId || null) : membership.externalId,
+      tokenVersion: statusChanged ? (membership.tokenVersion ?? 1) + 1 : membership.tokenVersion,
+      statusChangedAt: statusChanged ? new Date() : membership.statusChangedAt,
+    });
+
+    if (statusChanged && newStatus === 'SUSPENDED') {
+      await this.revokeUserSessions(userId, tenantId, 'SCIM_DEACTIVATED');
+      await auditRepo.createAuditLog({
+        tenantId,
+        userId,
+        action: 'SCIM_USER_DEACTIVATED',
+        entityType: 'USER',
+        entityId: userId,
+      });
     }
 
-    const user = await authRepo.findById(userId);
-    membership = await tenantsRepo.findTenantMember(tenantId, userId);
-
-    return this.formatScimUser(user, membership);
+    const user = await scimRepo.findUserById(userId);
+    return this.formatScimUser(user, updatedMembership);
   }
 
   async deleteUser(tenantId: string, userId: string) {
-    const membership = await tenantsRepo.findTenantMember(tenantId, userId);
+    await billingService.assertQuota(tenantId, 'sso.scim');
+
+    const membership = await scimRepo.findMemberByUserId(tenantId, userId);
     if (!membership) {
-      throw AppError.notFound(`User ${userId} not found in workspace`);
+      throw new ScimError(404, `User ${userId} not found in workspace`);
     }
 
-    await tenantsRepo.removeTenantMember(tenantId, membership.id);
+    await scimRepo.removeMember(tenantId, membership.id);
+    await this.revokeUserSessions(userId, tenantId, 'SCIM_DELETED');
+
+    await auditRepo.createAuditLog({
+      tenantId,
+      userId,
+      action: 'SCIM_USER_DELETED',
+      entityType: 'USER',
+      entityId: userId,
+    });
   }
 
   async listGroups(tenantId: string, query: ScimQueryDto) {
+    await billingService.assertQuota(tenantId, 'sso.scim');
+
     const groups = await groupsRepo.listGroups({
       scope: 'TENANT',
       tenantId,
-      page: Math.floor(query.startIndex / query.count) + 1,
-      limit: query.count,
+      page: Math.floor(query.startIndex / Math.min(query.count, 200)) + 1,
+      limit: Math.min(query.count, 200),
     });
 
     const resources = groups.items.map((g: any) => ({
@@ -337,9 +577,11 @@ export class ScimService {
   }
 
   async getGroup(tenantId: string, groupId: string) {
+    await billingService.assertQuota(tenantId, 'sso.scim');
+
     const group = await groupsRepo.findGroupById(groupId, 'TENANT');
     if (!group || group.tenantId !== tenantId) {
-      throw AppError.notFound(`Group ${groupId} not found`);
+      throw new ScimError(404, `Group ${groupId} not found`);
     }
 
     const members = await groupsRepo.listTenantGroupMembers(groupId, tenantId, 1, 100);

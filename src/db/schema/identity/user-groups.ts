@@ -13,6 +13,7 @@ import { platformStaff } from '../platform/platform-staff';
 import { tenants } from '../tenancy/tenants';
 import { users } from './users';
 
+// scope: tenant
 export const userGroups = pgTable(
   'UserGroup',
   {
@@ -49,6 +50,7 @@ export const userGroups = pgTable(
 export type UserGroup = typeof userGroups.$inferSelect;
 export type NewUserGroup = typeof userGroups.$inferInsert;
 
+// scope: tenant
 export const userGroupMembers = pgTable(
   'UserGroupMember',
   {

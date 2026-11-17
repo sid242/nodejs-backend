@@ -3,6 +3,7 @@ import 'express';
 export interface AuthenticatedUser {
   id: string;
   status?: string;
+  authMethod?: string;
 }
 
 export interface AuthenticatedStaff {
@@ -41,7 +42,7 @@ export interface PlatformSupportSessionContext {
   staffId: string;
   tenantId: string;
   mode: 'TENANT_SCOPED' | 'AS_MEMBER';
-  scope: 'READ_ONLY' | 'FULL';
+  scope: 'READ_ONLY' | 'ASSIST' | 'FULL' | 'FULL_ADMIN';
   targetUserId?: string | null;
   targetMemberId?: string | null;
   reason?: string;
@@ -75,6 +76,8 @@ declare global {
       tenantId?: string;
       membership?: TenantMembershipContext;
       permissions?: string[];
+      authMethod?: string;
+      tokenIat?: number;
       actorContext?: import('@/modules/pbac/pbac.types').ActorContext;
       db?: import('@/config/db').Database;
       valid?: ValidatedRequestData;

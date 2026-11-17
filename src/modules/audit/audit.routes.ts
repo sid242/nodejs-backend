@@ -16,6 +16,13 @@ tenantAuditRouter.get(
   controller.getTenantAuditLogs,
 );
 
+// Tamper-Evidence Cryptographic Chain Verification
+tenantAuditRouter.get(
+  '/verify',
+  requirePermission('audit:read'),
+  controller.verifyTenantAuditChain,
+);
+
 // Compliance Export (Streamed CSV / JSON)
 tenantAuditRouter.get(
   '/export',

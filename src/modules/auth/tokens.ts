@@ -22,6 +22,7 @@ export interface AccessTokenPayload extends JwtPayload {
   sub?: string;
   typ?: string;
   aud?: string | string[];
+  authMethod?: string;
 }
 
 export interface SupportTokenPayload extends JwtPayload {
@@ -30,7 +31,7 @@ export interface SupportTokenPayload extends JwtPayload {
   staffId: string;
   tenantId: string;
   mode: 'TENANT_SCOPED' | 'AS_MEMBER';
-  scope: 'READ_ONLY' | 'FULL';
+  scope: 'READ_ONLY' | 'ASSIST' | 'FULL' | 'FULL_ADMIN';
   sub?: string;
 }
 
@@ -48,7 +49,7 @@ export function issueSupportToken(
     staffId: string;
     tenantId: string;
     mode: 'TENANT_SCOPED' | 'AS_MEMBER';
-    scope: 'READ_ONLY' | 'FULL';
+    scope: 'READ_ONLY' | 'ASSIST' | 'FULL' | 'FULL_ADMIN';
     targetUserId?: string | null;
   },
   durationMinutes = 30,
@@ -108,32 +109,39 @@ export function issueImpersonationToken(
   return { accessToken, expiresInSeconds: ttlSeconds };
 }
 
-const signAccessToken = (user: TokenUser): string =>
-  jwt.sign({ typ: 'USER' }, env.JWT_ACCESS_SECRET, {
+const signAccessToken = (user: TokenUser, authMethod = 'PASSWORD'): string =>
+  jwt.sign({ typ: 'USER', authMethod }, env.JWT_ACCESS_SECRET, {
     subject: user.id,
     audience: 'customer-api',
     expiresIn: env.JWT_ACCESS_TTL as jwt.SignOptions['expiresIn'],
   });
 
 /** Short-lived stateless access token + long-lived refresh token tracked in Redis (revocable). */
-export async function issueTokens(user: TokenUser): Promise<AuthTokens> {
+export async function issueTokens(user: TokenUser, authMethod = 'PASSWORD'): Promise<AuthTokens> {
   const jti = randomUUID();
-  const refreshToken = jwt.sign({}, env.JWT_REFRESH_SECRET, {
+  const refreshToken = jwt.sign({ authMethod }, env.JWT_REFRESH_SECRET, {
     subject: user.id,
     jwtid: jti,
     expiresIn: env.JWT_REFRESH_TTL_SECONDS,
   });
   await redis.set(refreshKey(user.id, jti), '1', 'EX', env.JWT_REFRESH_TTL_SECONDS);
-  return { accessToken: signAccessToken(user), refreshToken };
+  return { accessToken: signAccessToken(user, authMethod), refreshToken };
 }
 
 /** One-time use: deleting the key makes replaying an old refresh token fail. */
 export async function consumeRefreshToken(token: string): Promise<string> {
+  const details = await consumeRefreshTokenDetails(token);
+  return details.userId;
+}
+
+export async function consumeRefreshTokenDetails(
+  token: string,
+): Promise<{ userId: string; authMethod: string }> {
   const payload = jwt.verify(token, env.JWT_REFRESH_SECRET) as JwtPayload;
   if (!payload.sub || !payload.jti) throw AppError.unauthorized('Invalid refresh token');
   const deleted = await redis.del(refreshKey(payload.sub, payload.jti));
   if (!deleted) throw AppError.unauthorized('Refresh token revoked or already used');
-  return payload.sub;
+  return { userId: payload.sub, authMethod: (payload as any).authMethod || 'PASSWORD' };
 }
 
 export async function revokeRefreshToken(token: string): Promise<void> {

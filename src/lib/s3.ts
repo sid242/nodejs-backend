@@ -2,9 +2,11 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  PutObjectCommand,
   S3Client,
   type DeleteObjectCommandOutput,
   type HeadObjectCommandOutput,
+  type PutObjectCommandOutput,
 } from '@aws-sdk/client-s3';
 import { createPresignedPost, type PresignedPost } from '@aws-sdk/s3-presigned-post';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -79,3 +81,19 @@ export const headObject = (key: string): Promise<HeadObjectCommandOutput> =>
 
 export const deleteObject = (key: string): Promise<DeleteObjectCommandOutput> =>
   s3.send(new DeleteObjectCommand({ Bucket, Key: key }));
+
+export const putObject = (
+  key: string,
+  body: Buffer | Uint8Array | string,
+  contentType = 'application/json',
+  metadata?: Record<string, string>,
+): Promise<PutObjectCommandOutput> =>
+  s3.send(
+    new PutObjectCommand({
+      Bucket,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+      Metadata: metadata,
+    }),
+  );

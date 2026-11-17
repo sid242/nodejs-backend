@@ -20,6 +20,7 @@ import { roles } from './rbac';
 
 export const policyEffectEnum = pgEnum('policy_effect', ['allow', 'deny']);
 
+// scope: primary
 export const policies = pgTable(
   'Policy',
   {
@@ -55,6 +56,7 @@ export type Policy = typeof policies.$inferSelect;
 export type NewPolicy = typeof policies.$inferInsert;
 export type PolicyEffect = (typeof policyEffectEnum.enumValues)[number];
 
+// scope: primary
 export const rolePolicies = pgTable(
   'RolePolicy',
   {
@@ -78,6 +80,7 @@ export const rolePolicies = pgTable(
 export type RolePolicy = typeof rolePolicies.$inferSelect;
 export type NewRolePolicy = typeof rolePolicies.$inferInsert;
 
+// scope: primary
 export const platformRolePolicies = pgTable(
   'PlatformRolePolicy',
   {

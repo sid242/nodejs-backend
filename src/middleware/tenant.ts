@@ -2,24 +2,44 @@ import crypto from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 
 import { env } from '@/config/env';
+import { logger } from '@/config/logger';
+import { redis } from '@/config/redis';
+import { getLatestSchemaTag, isSchemaVersionCurrent } from '@/db/schema-version';
+import { runWithTenantDb } from '@/db/tenancy/context';
 import { getTenantDb } from '@/db/tenancy/tenant-db';
 import { AppError } from '@/lib/errors';
 import * as platformRepo from '@/modules/platform/platform.repository';
 import { resolveUserPermissions, SYSTEM_ROLES } from '@/modules/rbac/rbac.service';
 import * as tenantsRepo from '@/modules/tenants/tenants.repository';
 import * as usersRepo from '@/modules/users/users.repository';
+import { ssoRepo } from '@/modules/sso/sso.repository';
+
+function safeCompareSecrets(input: string, expected?: string): boolean {
+  if (!expected || !input) return false;
+  try {
+    const hashA = crypto.createHash('sha256').update(input).digest();
+    const hashB = crypto.createHash('sha256').update(expected).digest();
+    return crypto.timingSafeEqual(hashA, hashB);
+  } catch {
+    return false;
+  }
+}
 
 export function hasValidBffSecret(req: Request): boolean {
   const secretHeader = req.headers?.['x-bff-secret'];
   const raw = Array.isArray(secretHeader) ? secretHeader[0] : secretHeader;
   if (!raw || typeof raw !== 'string') return false;
-  const expected = env.BFF_SHARED_SECRET;
-  if (!expected || raw.length !== expected.length) return false;
-  try {
-    return crypto.timingSafeEqual(Buffer.from(raw), Buffer.from(expected));
-  } catch {
-    return false;
+
+  // Accept active secret or previous secret during key rollover
+  if (safeCompareSecrets(raw, env.BFF_SHARED_SECRET)) {
+    return true;
   }
+
+  if (env.BFF_SHARED_SECRET_PREVIOUS && safeCompareSecrets(raw, env.BFF_SHARED_SECRET_PREVIOUS)) {
+    return true;
+  }
+
+  return false;
 }
 
 export async function resolveTenantContext(
@@ -85,6 +105,39 @@ export async function resolveTenantContext(
 
     if (tenant.status !== 'ACTIVE' && tenant.status !== 'TRIALING') {
       return next(AppError.forbidden(`Tenant is currently ${tenant.status.toLowerCase()}`));
+    }
+
+    // Maintenance window check: during database switchover / migrations, block mutation writes
+    const isMaintenance = await redis.get(`tenant:${tenant.id}:maintenance`);
+    if (isMaintenance && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+      return next(
+        AppError.serviceUnavailable(
+          'Tenant organization is undergoing database maintenance. Write operations are temporarily disabled.',
+          { code: 'TENANT_MAINTENANCE', retryAfter: 30 },
+        ),
+      );
+    }
+
+    // Schema version check for dedicated database tenants
+    if (tenant.databaseMode === 'dedicated' && !isSchemaVersionCurrent(tenant.schemaVersion)) {
+      logger.error(
+        {
+          tenantId: tenant.id,
+          tenantSchemaVersion: tenant.schemaVersion,
+          latestSchemaTag: getLatestSchemaTag(),
+        },
+        'Dedicated tenant database is outdated and requires schema migration',
+      );
+      return next(
+        AppError.serviceUnavailable(
+          'Tenant database is running on an outdated schema and requires platform migration.',
+          {
+            code: 'TENANT_DB_OUTDATED',
+            requiredVersion: getLatestSchemaTag(),
+            currentVersion: tenant.schemaVersion,
+          },
+        ),
+      );
     }
 
     // 3. Check for an active, audited support delegation session
@@ -158,6 +211,43 @@ export async function resolveTenantContext(
       );
     }
 
+    // 4b. Mandatory SSO enforcement check for existing user sessions
+    if (member && req.user?.id) {
+      const ssoConfig = await ssoRepo.findConfigByTenantId(tenant.id);
+      if (ssoConfig?.status === 'ACTIVE' && ssoConfig?.enforceSso) {
+        const resolved = await resolveUserPermissions(tenant.id, req.user.id);
+        const isOwner = resolved.roles.some((r) => r.toUpperCase() === SYSTEM_ROLES.OWNER);
+
+        if (member.ssoBypass && isOwner) {
+          // Break-glass owner allowed
+        } else {
+          const enforcedAt = ssoConfig.updatedAt ? new Date(ssoConfig.updatedAt).getTime() : 0;
+          const now = Date.now();
+          const isPastGracePeriod = now - enforcedAt > 24 * 60 * 60 * 1000;
+          const tokenIat = (req.tokenIat ?? 0) * 1000;
+          const authMethod = req.authMethod || req.user?.authMethod || 'PASSWORD';
+
+          if (authMethod === 'PASSWORD' || (tokenIat > 0 && tokenIat < enforcedAt)) {
+            if (isPastGracePeriod) {
+              return next(
+                new AppError(
+                  403,
+                  'Single Sign-On is required for this workspace. Please re-authenticate via SSO.',
+                  'SSO_REQUIRED',
+                  {
+                    ssoRequired: true,
+                    ssoLoginUrl: `/api/v1/auth/sso/initiate?tenantId=${tenant.id}`,
+                    tenantId: tenant.id,
+                    tenantSlug: tenant.slug,
+                  },
+                ),
+              );
+            }
+          }
+        }
+      }
+    }
+
     // 5. Resolve permissions
     let effectivePermissions: string[] = [];
     let roles: string[] = [];
@@ -203,6 +293,14 @@ export async function resolveTenantContext(
 
     req.permissions = effectivePermissions;
     next();
+    return runWithTenantDb(
+      {
+        tenantId: tenant.id,
+        db: req.db,
+        databaseMode: (tenant as any).databaseMode ?? 'shared',
+      },
+      () => next(),
+    );
   } catch (error) {
     next(error);
   }

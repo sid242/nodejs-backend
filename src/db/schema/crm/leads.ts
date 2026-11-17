@@ -21,6 +21,7 @@ export const leadStatusEnum = pgEnum('lead_status', [
   'lost',
 ]);
 
+// scope: tenant
 export const leads = pgTable(
   'Lead',
   {

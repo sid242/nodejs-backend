@@ -12,6 +12,7 @@ import {
   publicPlatformStaff,
   subscriptions,
   tenantBrandings,
+  tenantDbOperations,
   tenantMembers,
   tenants,
   users,
@@ -21,6 +22,7 @@ import {
   type NewPlatformSupportSession,
   type NewSubscription,
   type NewTenant,
+  type NewTenantDbOperation,
   type PlatformPermission,
   type PlatformRole,
   type PlatformStaff,
@@ -1025,4 +1027,45 @@ export async function listTenantDatabasesPaginated(filters?: ListTenantDatabases
     page,
     limit,
   };
+}
+
+export async function createTenantDbOperation(data: NewTenantDbOperation) {
+  const [record] = await db
+    .insert(tenantDbOperations)
+    .values(data)
+    .returning();
+  return record;
+}
+
+export async function getTenantDbOperationById(id: string) {
+  const [record] = await db
+    .select()
+    .from(tenantDbOperations)
+    .where(eq(tenantDbOperations.id, id))
+    .limit(1);
+  return record ?? null;
+}
+
+export async function listTenantDbOperations(tenantId: string, limit = 20) {
+  return db
+    .select()
+    .from(tenantDbOperations)
+    .where(eq(tenantDbOperations.tenantId, tenantId))
+    .orderBy(desc(tenantDbOperations.createdAt))
+    .limit(limit);
+}
+
+export async function updateTenantDbOperation(
+  id: string,
+  updates: Partial<NewTenantDbOperation>,
+) {
+  const [record] = await db
+    .update(tenantDbOperations)
+    .set({
+      ...updates,
+      updatedAt: new Date(),
+    })
+    .where(eq(tenantDbOperations.id, id))
+    .returning();
+  return record;
 }

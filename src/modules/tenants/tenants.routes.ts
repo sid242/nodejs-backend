@@ -1,7 +1,7 @@
 import { Router } from 'express';
 
 import { optionalAuth, requireAuth } from '@/middleware/auth';
-import { authLimiter } from '@/middleware/rate-limit';
+import { authLimiter, resolveLimiter } from '@/middleware/rate-limit';
 import { requirePermission } from '@/middleware/rbac';
 import { blockInSupportSession, requireSupportOrUser } from '@/middleware/support';
 import { requireTenant } from '@/middleware/tenant';
@@ -22,6 +22,7 @@ const router: Router = Router();
 // Public resolution endpoint (supports ?slug=... or ?domain=... or Host header)
 router.get(
   '/public/resolve',
+  resolveLimiter,
   validate({ query: dto.resolvePublicTenantDto }),
   controller.resolvePublicTenant,
 );
@@ -29,6 +30,7 @@ router.get(
 // Real-time debounced availability checks
 router.get(
   '/check-slug',
+  resolveLimiter,
   validate({ query: dto.checkSlugQueryDto }),
   controller.checkTenantSlugAvailability,
 );

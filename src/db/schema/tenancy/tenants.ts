@@ -3,6 +3,7 @@ import { boolean, index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } fr
 
 import { tenantStatusEnum } from '../enums';
 
+// scope: primary
 export const tenants = pgTable(
   'Tenant',
   {

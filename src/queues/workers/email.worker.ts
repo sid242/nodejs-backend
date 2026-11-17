@@ -1,7 +1,9 @@
 import type { Job } from 'bullmq';
 
 import { logger } from '@/config/logger';
+import { runWithTenantDb } from '@/db/tenancy/context';
 import { cache } from '@/lib/cache';
+import { getTenantDb } from '@/lib/db-manager';
 import { sendEmail } from '@/lib/mailer';
 import * as tenantBrandingRepo from '@/modules/tenants/tenant-branding.repository';
 import {
@@ -41,76 +43,85 @@ async function resolveJobBranding(
 
 // Throwing => BullMQ retries with the backoff defined on the queue.
 export async function processEmail(job: Job): Promise<void> {
-  const branding = await resolveJobBranding(job?.data?.tenantId, job?.data?.branding);
-  const data = { ...job?.data, branding };
+  const executeWork = async () => {
+    const branding = await resolveJobBranding(job?.data?.tenantId, job?.data?.branding);
+    const data = { ...job?.data, branding };
 
-  switch (job?.name) {
-    case 'welcome': {
-      const { subject, html } = renderWelcomeEmail(data);
-      return sendEmail({
-        to: job?.data?.to,
-        subject,
-        html,
-        tenantId: job?.data?.tenantId,
-        fromName: branding?.companyName,
-        replyTo: branding?.supportEmail || undefined,
-      });
+    switch (job?.name) {
+      case 'welcome': {
+        const { subject, html } = renderWelcomeEmail(data);
+        return sendEmail({
+          to: job?.data?.to,
+          subject,
+          html,
+          tenantId: job?.data?.tenantId,
+          fromName: branding?.companyName,
+          replyTo: branding?.supportEmail || undefined,
+        });
+      }
+      case 'password-reset': {
+        const { subject, html } = renderPasswordResetEmail(data);
+        return sendEmail({
+          to: job?.data?.to,
+          subject,
+          html,
+          tenantId: job?.data?.tenantId,
+          fromName: branding?.companyName,
+          replyTo: branding?.supportEmail || undefined,
+        });
+      }
+      case 'verify-email': {
+        const { subject, html } = renderVerifyEmail(data);
+        return sendEmail({
+          to: job?.data?.to,
+          subject,
+          html,
+          tenantId: job?.data?.tenantId,
+          fromName: branding?.companyName,
+          replyTo: branding?.supportEmail || undefined,
+        });
+      }
+      case 'magic-link': {
+        const { subject, html } = renderMagicLinkEmail(data);
+        return sendEmail({
+          to: job?.data?.to,
+          subject,
+          html,
+          tenantId: job?.data?.tenantId,
+          fromName: branding?.companyName,
+          replyTo: branding?.supportEmail || undefined,
+        });
+      }
+      case 'tenant-invite': {
+        const { subject, html } = renderTenantInviteEmail(data);
+        return sendEmail({
+          to: job?.data?.to,
+          subject,
+          html,
+          tenantId: job?.data?.tenantId,
+          fromName: branding?.companyName,
+          replyTo: branding?.supportEmail || undefined,
+        });
+      }
+      case 'staff-credentials': {
+        const { subject, html } = renderStaffCredentialsEmail(data);
+        return sendEmail({
+          to: job?.data?.to,
+          subject,
+          html,
+          fromName: branding?.companyName,
+          replyTo: branding?.supportEmail || undefined,
+        });
+      }
+      default:
+        throw new Error(`Unknown email job: ${job?.name}`);
     }
-    case 'password-reset': {
-      const { subject, html } = renderPasswordResetEmail(data);
-      return sendEmail({
-        to: job?.data?.to,
-        subject,
-        html,
-        tenantId: job?.data?.tenantId,
-        fromName: branding?.companyName,
-        replyTo: branding?.supportEmail || undefined,
-      });
-    }
-    case 'verify-email': {
-      const { subject, html } = renderVerifyEmail(data);
-      return sendEmail({
-        to: job?.data?.to,
-        subject,
-        html,
-        tenantId: job?.data?.tenantId,
-        fromName: branding?.companyName,
-        replyTo: branding?.supportEmail || undefined,
-      });
-    }
-    case 'magic-link': {
-      const { subject, html } = renderMagicLinkEmail(data);
-      return sendEmail({
-        to: job?.data?.to,
-        subject,
-        html,
-        tenantId: job?.data?.tenantId,
-        fromName: branding?.companyName,
-        replyTo: branding?.supportEmail || undefined,
-      });
-    }
-    case 'tenant-invite': {
-      const { subject, html } = renderTenantInviteEmail(data);
-      return sendEmail({
-        to: job?.data?.to,
-        subject,
-        html,
-        tenantId: job?.data?.tenantId,
-        fromName: branding?.companyName,
-        replyTo: branding?.supportEmail || undefined,
-      });
-    }
-    case 'staff-credentials': {
-      const { subject, html } = renderStaffCredentialsEmail(data);
-      return sendEmail({
-        to: job?.data?.to,
-        subject,
-        html,
-        fromName: branding?.companyName,
-        replyTo: branding?.supportEmail || undefined,
-      });
-    }
-    default:
-      throw new Error(`Unknown email job: ${job?.name}`);
+  };
+
+  if (job?.data?.tenantId) {
+    const targetDb = await getTenantDb(job.data.tenantId);
+    return runWithTenantDb({ tenantId: job.data.tenantId, db: targetDb }, executeWork);
   }
+
+  return executeWork();
 }

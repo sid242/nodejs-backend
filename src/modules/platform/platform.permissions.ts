@@ -50,6 +50,9 @@ export const PLATFORM_PERMISSIONS = {
   // Audit Logs & Diagnostics
   AUDIT_READ: 'platform_audit:read',
   HEALTH_READ: 'system_health:read',
+
+  // Database Operations Control Plane
+  DATABASE_OPERATE: 'database:operate',
 } as const;
 
 export type PlatformPermissionKey =
@@ -219,6 +222,14 @@ export const PLATFORM_PERMISSION_CATALOGUE: PlatformPermissionDefinition[] = [
       'Inspect operational health checks, BullMQ queue status, and container diagnostics',
     resource: 'system_health',
     action: 'read',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.DATABASE_OPERATE,
+    name: 'Operate Tenant Databases',
+    description:
+      'Execute high-impact database operations: provisioning, migrations, switchovers, rollbacks, and restores',
+    resource: 'database',
+    action: 'operate',
   },
   {
     key: PLATFORM_PERMISSIONS.USERS_READ,

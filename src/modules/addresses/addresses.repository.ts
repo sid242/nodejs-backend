@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull } from 'drizzle-orm';
 
-import { db, type DbExecutor } from '@/config/db';
+import type { DbExecutor } from '@/config/db';
+import { assertTenantScope, primaryDbHandle, tenantDb } from '@/db/tenancy/context';
 import { addresses, type Address, type NewAddress } from '@/db/schema/index';
 
 export interface OwnerScope {
@@ -9,10 +10,28 @@ export interface OwnerScope {
   tenantId?: string | null;
 }
 
+function resolveAddressExecutor(
+  scope?: OwnerScope,
+  tenantId?: string | null,
+  executor?: DbExecutor,
+): DbExecutor {
+  if (executor) return executor;
+  const tid = scope?.tenantId ?? tenantId;
+  if (tid) {
+    assertTenantScope(tid);
+    return tenantDb();
+  }
+  if (scope?.ownerType === 'TENANT' || scope?.ownerType === 'MEMBER') {
+    return tenantDb();
+  }
+  return primaryDbHandle();
+}
+
 export async function findManyByOwner(
   scope: OwnerScope,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<Address[]> {
+  const exec = resolveAddressExecutor(scope, undefined, executor);
   const conditions = [
     eq(addresses.ownerType, scope.ownerType),
     eq(addresses.ownerId, scope.ownerId),
@@ -25,7 +44,7 @@ export async function findManyByOwner(
     conditions.push(isNull(addresses.tenantId));
   }
 
-  return executor
+  return exec
     .select()
     .from(addresses)
     .where(and(...conditions))
@@ -35,8 +54,9 @@ export async function findManyByOwner(
 export async function findById(
   id: string,
   scope: OwnerScope,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<Address | null> {
+  const exec = resolveAddressExecutor(scope, undefined, executor);
   const conditions = [
     eq(addresses.id, id),
     eq(addresses.ownerType, scope.ownerType),
@@ -50,7 +70,7 @@ export async function findById(
     conditions.push(isNull(addresses.tenantId));
   }
 
-  const [record] = await executor
+  const [record] = await exec
     .select()
     .from(addresses)
     .where(and(...conditions))
@@ -61,9 +81,10 @@ export async function findById(
 
 export async function createAddress(
   data: NewAddress,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<Address> {
-  const [created] = await executor.insert(addresses).values(data).returning();
+  const exec = resolveAddressExecutor(undefined, data.tenantId, executor);
+  const [created] = await exec.insert(addresses).values(data).returning();
   if (!created) {
     throw new Error('Failed to insert address');
   }
@@ -73,9 +94,10 @@ export async function createAddress(
 export async function updateAddress(
   id: string,
   data: Partial<NewAddress>,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<Address | null> {
-  const [updated] = await executor
+  const exec = resolveAddressExecutor(undefined, data.tenantId, executor);
+  const [updated] = await exec
     .update(addresses)
     .set({
       ...data,
@@ -90,8 +112,9 @@ export async function updateAddress(
 export async function clearDefaultForOwnerAndType(
   scope: OwnerScope,
   type: string,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<void> {
+  const exec = resolveAddressExecutor(scope, undefined, executor);
   const conditions = [
     eq(addresses.ownerType, scope.ownerType),
     eq(addresses.ownerId, scope.ownerId),
@@ -106,7 +129,7 @@ export async function clearDefaultForOwnerAndType(
     conditions.push(isNull(addresses.tenantId));
   }
 
-  await executor
+  await exec
     .update(addresses)
     .set({ isDefault: false, updatedAt: new Date() })
     .where(and(...conditions));
@@ -114,9 +137,10 @@ export async function clearDefaultForOwnerAndType(
 
 export async function softDeleteAddress(
   id: string,
-  executor: DbExecutor = db,
+  executor?: DbExecutor,
 ): Promise<Address | null> {
-  const [deleted] = await executor
+  const exec = executor ?? tenantDb();
+  const [deleted] = await exec
     .update(addresses)
     .set({ deletedAt: new Date(), updatedAt: new Date(), isDefault: false })
     .where(eq(addresses.id, id))

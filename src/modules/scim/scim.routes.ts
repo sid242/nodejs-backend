@@ -1,14 +1,18 @@
 import { Router } from 'express';
 
+import { scimLimiter } from '@/middleware/rate-limit';
 import { validate } from '@/middleware/validate';
 import {
   createUser,
   deleteUser,
   getGroup,
+  getResourceTypeById,
+  getResourceTypes,
   getSchemaById,
   getSchemas,
   getServiceProviderConfig,
   getUser,
+  handleScimErrors,
   listGroups,
   listUsers,
   patchUser,
@@ -19,10 +23,15 @@ import { requireScimAuth } from './scim.middleware';
 
 export const scimRouter = Router();
 
+// Rate limit all SCIM endpoints (100 req/min, burst protection)
+scimRouter.use(scimLimiter);
+
 // Public discovery endpoints conforming to SCIM 2.0 specs
 scimRouter.get('/ServiceProviderConfig', getServiceProviderConfig);
 scimRouter.get('/Schemas', getSchemas);
 scimRouter.get('/Schemas/:id', getSchemaById);
+scimRouter.get('/ResourceTypes', getResourceTypes);
+scimRouter.get('/ResourceTypes/:id', getResourceTypeById);
 
 // Protected resource endpoints requiring SCIM Bearer token
 scimRouter.use(requireScimAuth);
@@ -39,3 +48,5 @@ scimRouter.delete('/Users/:id', deleteUser);
 scimRouter.get('/Groups', validate({ query: scimQueryDto }), listGroups);
 scimRouter.get('/Groups/:id', getGroup);
 
+// Mount RFC 7644 error handler
+scimRouter.use(handleScimErrors);

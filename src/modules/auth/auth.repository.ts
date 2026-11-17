@@ -5,7 +5,7 @@ import { publicUser, users, type PublicUser, type User } from '@/db/schema/index
 
 export interface CreateUserData {
   email: string;
-  passwordHash: string;
+  passwordHash?: string | null;
   name: string;
 }
 

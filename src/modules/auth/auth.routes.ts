@@ -5,7 +5,7 @@ import { env } from '@/config/env';
 import { ACCESS_TOKEN_COOKIE, AUTH_HEADERS, PLATFORM_STAFF_TOKEN_COOKIE } from '@/constants/index';
 import { AppError } from '@/lib/errors';
 import { optionalAuth, requireAuth } from '@/middleware/auth';
-import { authLimiter } from '@/middleware/rate-limit';
+import { authLimiter, handoffRedeemLimiter } from '@/middleware/rate-limit';
 import { blockInSupportSession } from '@/middleware/support';
 import { validate } from '@/middleware/validate';
 import * as controller from '@/modules/auth/auth.controller';
@@ -31,6 +31,12 @@ import {
 import { verifyAccessToken } from '@/modules/auth/tokens';
 
 const router = Router();
+router.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
+});
 router.use(authLimiter);
 
 async function requireCallerAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
@@ -151,7 +157,12 @@ router.post(
   validate({ body: createHandoffDto }),
   controller.createHandoff,
 );
-router.post('/handoff/redeem', validate({ body: redeemHandoffDto }), controller.redeemHandoff);
+router.post(
+  '/handoff/redeem',
+  handoffRedeemLimiter,
+  validate({ body: redeemHandoffDto }),
+  controller.redeemHandoff,
+);
 
 // --- Impersonation ---
 router.post(

@@ -41,7 +41,7 @@ cp .env.example .env            # set the two JWT secrets (32+ chars)
 npm install                     # install dependencies (Node >= 24)
 docker compose up -d            # start local Postgres, Redis, and MinIO (S3)
 npm run db:generate             # generate Drizzle migrations from schema
-npm run db:migrate              # apply database migrations
+npm run db:migrate:all         # apply database migrations across primary and tenant DBs
 npm run db:seed                 # (optional) seed default system roles & permissions
 npm run dev                     # run API server in watch mode (terminal 1)
 npm run dev:worker              # run background workers in watch mode (terminal 2)
@@ -167,7 +167,8 @@ curl -X POST http://localhost:3000/api/v1/auth/stop-impersonate \
 | `npm run lint:fix`    | Fix linting errors automatically                                    |
 | `npm run format`      | Format codebase using Prettier                                      |
 | `npm run db:generate` | Generate SQL migrations from Drizzle schemas                        |
-| `npm run db:migrate`  | Execute pending database migrations                                 |
+| `npm run db:migrate`  | Execute pending database migrations on primary DB                   |
+| `npm run db:migrate:all` | Execute pending database migrations across primary and dedicated tenant DBs |
 | `npm run db:seed`     | Seed default system permissions and roles                           |
 
 ---

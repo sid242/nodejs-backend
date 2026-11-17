@@ -5,6 +5,7 @@ import { plans } from './plans';
 
 export type EntitlementType = 'INTEGER' | 'BOOLEAN' | 'STRING';
 
+// scope: primary
 export const entitlementDefinitions = pgTable(
   'EntitlementDefinition',
   {
@@ -27,6 +28,7 @@ export const entitlementDefinitions = pgTable(
   ],
 );
 
+// scope: primary
 export const planEntitlements = pgTable(
   'PlanEntitlement',
   {
@@ -49,6 +51,7 @@ export const planEntitlements = pgTable(
   ],
 );
 
+// scope: primary
 export const tenantEntitlementOverrides = pgTable(
   'TenantEntitlementOverride',
   {
@@ -73,6 +76,7 @@ export const tenantEntitlementOverrides = pgTable(
   ],
 );
 
+// scope: primary
 export const tenantUsageRecords = pgTable(
   'TenantUsageRecord',
   {
@@ -92,6 +96,7 @@ export const tenantUsageRecords = pgTable(
   ],
 );
 
+// scope: primary
 export const billingWebhooks = pgTable(
   'BillingWebhook',
   {

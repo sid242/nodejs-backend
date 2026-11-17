@@ -12,7 +12,13 @@ import {
   sql,
 } from 'drizzle-orm';
 
-import { db } from '@/config/db';
+import type { DbExecutor } from '@/config/db';
+import {
+  assertTenantScope,
+  currentTenantCtx,
+  primaryDbHandle,
+  tenantDb,
+} from '@/db/tenancy/context';
 import {
   appModules,
   permissions,
@@ -41,8 +47,9 @@ export interface ModuleWithPermissions extends AppModule {
 }
 
 export async function findAllModulesWithPermissions(): Promise<ModuleWithPermissions[]> {
-  const modulesList = await db.select().from(appModules).orderBy(asc(appModules.sortOrder));
-  const permissionsList = await db.select().from(permissions).orderBy(asc(permissions.name));
+  const primaryDb = primaryDbHandle();
+  const modulesList = await primaryDb.select().from(appModules).orderBy(asc(appModules.sortOrder));
+  const permissionsList = await primaryDb.select().from(permissions).orderBy(asc(permissions.name));
 
   const permsByModule = new Map<string, Permission[]>();
   for (const perm of permissionsList) {
@@ -58,17 +65,17 @@ export async function findAllModulesWithPermissions(): Promise<ModuleWithPermiss
 }
 
 export async function findModuleById(id: string): Promise<AppModule | null> {
-  const [record] = await db.select().from(appModules).where(eq(appModules.id, id)).limit(1);
+  const [record] = await primaryDbHandle().select().from(appModules).where(eq(appModules.id, id)).limit(1);
   return record ?? null;
 }
 
 export async function findModuleByKey(key: string): Promise<AppModule | null> {
-  const [record] = await db.select().from(appModules).where(eq(appModules.key, key)).limit(1);
+  const [record] = await primaryDbHandle().select().from(appModules).where(eq(appModules.key, key)).limit(1);
   return record ?? null;
 }
 
 export async function createModule(data: NewAppModule): Promise<AppModule> {
-  const [record] = await db.insert(appModules).values(data).returning();
+  const [record] = await primaryDbHandle().insert(appModules).values(data).returning();
   return record!;
 }
 
@@ -76,7 +83,7 @@ export async function updateModule(
   id: string,
   data: Partial<NewAppModule>,
 ): Promise<AppModule | null> {
-  const [record] = await db
+  const [record] = await primaryDbHandle()
     .update(appModules)
     .set({ ...data, updatedAt: new Date() })
     .where(eq(appModules.id, id))
@@ -85,14 +92,15 @@ export async function updateModule(
 }
 
 export async function deleteModule(id: string): Promise<boolean> {
-  const [deleted] = await db.delete(appModules).where(eq(appModules.id, id)).returning();
+  const [deleted] = await primaryDbHandle().delete(appModules).where(eq(appModules.id, id)).returning();
   return !!deleted;
 }
 
 export async function syncSystemModules(definitions: DomainModuleDefinition[]): Promise<void> {
+  const primaryDb = primaryDbHandle();
   for (const def of definitions) {
     // 1. Upsert AppModule
-    const [moduleRecord] = await db
+    const [moduleRecord] = await primaryDb
       .insert(appModules)
       .values({
         key: def.key,
@@ -126,7 +134,7 @@ export async function syncSystemModules(definitions: DomainModuleDefinition[]): 
       const isSystem = perm.isSystem ?? true;
       const isAssignable = perm.isAssignable ?? true;
 
-      await db
+      await primaryDb
         .insert(permissions)
         .values({
           moduleId: moduleRecord.id,
@@ -161,21 +169,21 @@ export async function syncSystemModules(definitions: DomainModuleDefinition[]): 
 }
 
 export async function findAllPermissions(): Promise<Permission[]> {
-  return db.select().from(permissions).orderBy(asc(permissions.name));
+  return primaryDbHandle().select().from(permissions).orderBy(asc(permissions.name));
 }
 
 export async function findPermissionByKey(key: string): Promise<Permission | null> {
-  const [record] = await db.select().from(permissions).where(eq(permissions.key, key)).limit(1);
+  const [record] = await primaryDbHandle().select().from(permissions).where(eq(permissions.key, key)).limit(1);
   return record ?? null;
 }
 
 export async function findPermissionById(id: string): Promise<Permission | null> {
-  const [record] = await db.select().from(permissions).where(eq(permissions.id, id)).limit(1);
+  const [record] = await primaryDbHandle().select().from(permissions).where(eq(permissions.id, id)).limit(1);
   return record ?? null;
 }
 
 export async function findPermissionsByModuleId(moduleId: string): Promise<Permission[]> {
-  return db
+  return primaryDbHandle()
     .select()
     .from(permissions)
     .where(eq(permissions.moduleId, moduleId))
@@ -183,41 +191,53 @@ export async function findPermissionsByModuleId(moduleId: string): Promise<Permi
 }
 
 export async function createPermission(data: NewPermission): Promise<Permission> {
-  const [record] = await db.insert(permissions).values(data).returning();
+  const [record] = await primaryDbHandle().insert(permissions).values(data).returning();
   return record!;
 }
 
 export async function createPermissionsBatch(data: NewPermission[]): Promise<Permission[]> {
   if (data.length === 0) return [];
-  return db.insert(permissions).values(data).returning();
+  return primaryDbHandle().insert(permissions).values(data).returning();
 }
 
 export async function updatePermission(
   id: string,
   data: Partial<NewPermission>,
 ): Promise<Permission | null> {
-  const [record] = await db.update(permissions).set(data).where(eq(permissions.id, id)).returning();
+  const [record] = await primaryDbHandle().update(permissions).set(data).where(eq(permissions.id, id)).returning();
   return record ?? null;
 }
 
 export async function deletePermission(id: string): Promise<boolean> {
-  const [deleted] = await db.delete(permissions).where(eq(permissions.id, id)).returning();
+  const [deleted] = await primaryDbHandle().delete(permissions).where(eq(permissions.id, id)).returning();
   return !!deleted;
 }
 
 export async function findRolesByTenant(tenantId?: string | null): Promise<RoleRecord[]> {
   if (tenantId) {
-    // Return both tenant-specific roles AND global system roles (where tenantId is null)
-    return db
+    assertTenantScope(tenantId);
+    const globalRoles = await primaryDbHandle()
       .select()
       .from(roles)
-      .where(or(eq(roles.tenantId, tenantId), isNull(roles.tenantId)));
+      .where(isNull(roles.tenantId));
+
+    const customRoles = await tenantDb()
+      .select()
+      .from(roles)
+      .where(eq(roles.tenantId, tenantId));
+
+    return [...globalRoles, ...customRoles];
   }
-  return db.select().from(roles).where(isNull(roles.tenantId));
+  return primaryDbHandle().select().from(roles).where(isNull(roles.tenantId));
 }
 
 export async function findRoleById(id: string): Promise<RoleRecord | null> {
-  const [record] = await db.select().from(roles).where(eq(roles.id, id)).limit(1);
+  const ctx = currentTenantCtx();
+  if (ctx?.tenantId) {
+    const [record] = await tenantDb().select().from(roles).where(eq(roles.id, id)).limit(1);
+    if (record) return record;
+  }
+  const [record] = await primaryDbHandle().select().from(roles).where(eq(roles.id, id)).limit(1);
   return record ?? null;
 }
 
@@ -225,22 +245,26 @@ export async function findRoleByCode(
   code: string,
   tenantId?: string | null,
 ): Promise<RoleRecord | null> {
-  const conditions = [eq(roles.code, code)];
   if (tenantId) {
-    conditions.push(or(eq(roles.tenantId, tenantId), isNull(roles.tenantId))!);
-  } else {
-    conditions.push(isNull(roles.tenantId));
+    assertTenantScope(tenantId);
+    const [record] = await tenantDb()
+      .select()
+      .from(roles)
+      .where(and(eq(roles.code, code), eq(roles.tenantId, tenantId)))
+      .limit(1);
+    if (record) return record;
   }
-  const [record] = await db
+  const [record] = await primaryDbHandle()
     .select()
     .from(roles)
-    .where(and(...conditions))
+    .where(and(eq(roles.code, code), isNull(roles.tenantId)))
     .limit(1);
   return record ?? null;
 }
 
 export async function createRole(data: NewRoleRecord): Promise<RoleRecord> {
-  const [record] = await db.insert(roles).values(data).returning();
+  const target = data.tenantId ? (assertTenantScope(data.tenantId), tenantDb()) : primaryDbHandle();
+  const [record] = await target.insert(roles).values(data).returning();
   return record!;
 }
 
@@ -248,31 +272,57 @@ export async function updateRole(
   id: string,
   data: { name?: string; description?: string; isActive?: boolean },
 ): Promise<RoleRecord | null> {
-  const [record] = await db
+  const ctx = currentTenantCtx();
+  const target = ctx?.tenantId ? tenantDb() : primaryDbHandle();
+  const [record] = await target
     .update(roles)
     .set({ ...data, updatedAt: new Date() })
     .where(eq(roles.id, id))
     .returning();
-  return record ?? null;
+  if (record) return record;
+  if (ctx?.tenantId) {
+    const [globalRec] = await primaryDbHandle()
+      .update(roles)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(roles.id, id))
+      .returning();
+    return globalRec ?? null;
+  }
+  return null;
 }
 
 export async function deleteRole(id: string): Promise<boolean> {
-  const [deleted] = await db.delete(roles).where(eq(roles.id, id)).returning();
+  const ctx = currentTenantCtx();
+  const target = ctx?.tenantId ? tenantDb() : primaryDbHandle();
+  const [deleted] = await target.delete(roles).where(eq(roles.id, id)).returning();
   return !!deleted;
 }
 
 export async function getRolePermissionKeys(roleId: string): Promise<string[]> {
-  const rows = await db
+  const ctx = currentTenantCtx();
+  const target = ctx?.tenantId ? tenantDb() : primaryDbHandle();
+  const rows = await target
     .select({ key: permissions.key })
     .from(rolePermissions)
     .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
     .where(eq(rolePermissions.roleId, roleId));
 
+  if (rows.length === 0 && ctx?.tenantId) {
+    const primaryRows = await primaryDbHandle()
+      .select({ key: permissions.key })
+      .from(rolePermissions)
+      .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
+      .where(eq(rolePermissions.roleId, roleId));
+    return primaryRows.map((r) => r.key);
+  }
+
   return rows.map((r) => r.key);
 }
 
 export async function setRolePermissions(roleId: string, permissionIds: string[]): Promise<void> {
-  await db.transaction(async (tx) => {
+  const ctx = currentTenantCtx();
+  const target = ctx?.tenantId ? tenantDb() : primaryDbHandle();
+  await target.transaction(async (tx) => {
     await tx.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
     if (permissionIds.length > 0) {
       await tx.insert(rolePermissions).values(
@@ -291,28 +341,32 @@ export async function assignRoleToMember(
   tenantId?: string,
 ): Promise<void> {
   let resolvedTenantId = tenantId;
+  const target = tenantDb();
   if (!resolvedTenantId) {
-    const [member] = await db
+    const [member] = await target
       .select({ tenantId: tenantMembers.tenantId })
       .from(tenantMembers)
       .where(eq(tenantMembers.id, memberId))
       .limit(1);
     resolvedTenantId = member?.tenantId;
   }
-  await db
+  if (resolvedTenantId) {
+    assertTenantScope(resolvedTenantId);
+  }
+  await target
     .insert(tenantMemberRoles)
     .values({ memberId, roleId, tenantId: resolvedTenantId })
     .onConflictDoNothing();
 }
 
 export async function removeRoleFromMember(memberId: string, roleId: string): Promise<void> {
-  await db
+  await tenantDb()
     .delete(tenantMemberRoles)
     .where(and(eq(tenantMemberRoles.memberId, memberId), eq(tenantMemberRoles.roleId, roleId)));
 }
 
 export async function getMemberRoles(memberId: string): Promise<RoleRecord[]> {
-  return db
+  return tenantDb()
     .select({
       id: roles.id,
       tenantId: roles.tenantId,
@@ -335,7 +389,8 @@ export async function getMemberRoles(memberId: string): Promise<RoleRecord[]> {
  * Used to block deleting roles that are still in active use.
  */
 export async function countMembersAssignedToRole(roleId: string): Promise<number> {
-  const [result] = await db
+  const target = currentTenantCtx()?.tenantId ? tenantDb() : primaryDbHandle();
+  const [result] = await target
     .select({ count: sql<number>`count(*)::int` })
     .from(tenantMemberRoles)
     .where(eq(tenantMemberRoles.roleId, roleId));
@@ -346,7 +401,8 @@ export async function countMembersAssignedToRole(roleId: string): Promise<number
  * Counts how many groups currently hold a specific role.
  */
 export async function countGroupsAssignedToRole(roleId: string): Promise<number> {
-  const [result] = await db
+  const target = currentTenantCtx()?.tenantId ? tenantDb() : primaryDbHandle();
+  const [result] = await target
     .select({ count: sql<number>`count(*)::int` })
     .from(userGroupRoles)
     .where(eq(userGroupRoles.roleId, roleId));
@@ -385,6 +441,11 @@ export async function listRolesWithFilters(
   const page = Math.max(1, filters?.page ?? 1);
   const limit = Math.max(1, Math.min(100, filters?.limit ?? 20));
   const offset = (page - 1) * limit;
+
+  if (tenantId) {
+    assertTenantScope(tenantId);
+  }
+  const exec = tenantId ? tenantDb() : primaryDbHandle();
 
   const conditions: any[] = [];
 
@@ -445,7 +506,7 @@ export async function listRolesWithFilters(
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   // Total count query
-  const [countResult] = await db
+  const [countResult] = await exec
     .select({ count: sql<number>`count(*)::int` })
     .from(roles)
     .where(whereClause);
@@ -463,7 +524,7 @@ export async function listRolesWithFilters(
   const orderFn = filters?.sortOrder === 'asc' ? asc : desc;
 
   // Select roles with counts
-  const rolesRows = await db
+  const rolesRows = await exec
     .select({
       id: roles.id,
       tenantId: roles.tenantId,
@@ -488,7 +549,7 @@ export async function listRolesWithFilters(
   const roleIds = rolesRows.map((r) => r.id);
   const permsByRole = new Map<string, string[]>();
   if (roleIds.length > 0) {
-    const rolePermRows = await db
+    const rolePermRows = await exec
       .select({
         roleId: rolePermissions.roleId,
         permissionKey: permissions.key,
@@ -525,7 +586,8 @@ export async function listRolesWithFilters(
  * Used to enforce the Last-Owner invariant and protect against tenant orphaning.
  */
 export async function countTenantOwners(tenantId: string): Promise<number> {
-  const [result] = await db
+  assertTenantScope(tenantId);
+  const [result] = await tenantDb()
     .select({ count: sql<number>`count(distinct ${tenantMembers.id})::int` })
     .from(tenantMembers)
     .innerJoin(tenantMemberRoles, eq(tenantMembers.id, tenantMemberRoles.memberId))
@@ -558,7 +620,10 @@ export async function getEffectivePermissions(
   tenantId: string,
   userId: string,
 ): Promise<EffectivePermissionsResult> {
-  const [member] = await db
+  assertTenantScope(tenantId);
+  const exec = tenantDb();
+
+  const [member] = await exec
     .select()
     .from(tenantMembers)
     .where(
@@ -578,7 +643,7 @@ export async function getEffectivePermissions(
   const directRoles = await getMemberRoles(member.id);
 
   // 2. Active roles inherited through active tenant user groups
-  const groupRoles = await db
+  const groupRoles = await exec
     .select({
       id: roles.id,
       tenantId: roles.tenantId,
@@ -625,7 +690,7 @@ export async function getEffectivePermissions(
   const roleNames = Array.from(new Set(allAssignedRoles.map((r) => r.name)));
 
   // Filter out permissions belonging to modules that have been explicitly disabled for this tenant
-  const disabledModules = await db
+  const disabledModules = await exec
     .select({ moduleId: tenantModules.moduleId })
     .from(tenantModules)
     .where(and(eq(tenantModules.tenantId, tenantId), eq(tenantModules.isEnabled, false)));
@@ -639,7 +704,7 @@ export async function getEffectivePermissions(
         )
       : inArray(rolePermissions.roleId, roleIds);
 
-  const perms = await db
+  const perms = await exec
     .selectDistinct({ key: permissions.key })
     .from(rolePermissions)
     .innerJoin(permissions, eq(rolePermissions.permissionId, permissions.id))
@@ -661,7 +726,8 @@ export async function setTenantModuleEnabled(
   moduleId: string,
   isEnabled: boolean,
 ): Promise<void> {
-  await db
+  assertTenantScope(tenantId);
+  await tenantDb()
     .insert(tenantModules)
     .values({ tenantId, moduleId, isEnabled })
     .onConflictDoUpdate({
@@ -681,8 +747,9 @@ export async function getTenantModules(tenantId: string): Promise<
     isEnabled: boolean;
   }>
 > {
-  const allModules = await db.select().from(appModules).orderBy(asc(appModules.sortOrder));
-  const overrides = await db
+  assertTenantScope(tenantId);
+  const allModules = await primaryDbHandle().select().from(appModules).orderBy(asc(appModules.sortOrder));
+  const overrides = await tenantDb()
     .select()
     .from(tenantModules)
     .where(eq(tenantModules.tenantId, tenantId));
@@ -703,11 +770,19 @@ export async function getTenantModules(tenantId: string): Promise<
 export async function findDisabledTenantModules(
   tenantId: string,
 ): Promise<Array<{ id: string; key: string }>> {
-  return db
-    .select({ id: appModules.id, key: appModules.key })
+  assertTenantScope(tenantId);
+  const disabledModules = await tenantDb()
+    .select({ moduleId: tenantModules.moduleId })
     .from(tenantModules)
-    .innerJoin(appModules, eq(tenantModules.moduleId, appModules.id))
     .where(and(eq(tenantModules.tenantId, tenantId), eq(tenantModules.isEnabled, false)));
+
+  const moduleIds = disabledModules.map((d) => d.moduleId);
+  if (moduleIds.length === 0) return [];
+
+  return primaryDbHandle()
+    .select({ id: appModules.id, key: appModules.key })
+    .from(appModules)
+    .where(inArray(appModules.id, moduleIds));
 }
 
 export const rbacRepo = {

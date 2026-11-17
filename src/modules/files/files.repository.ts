@@ -1,14 +1,15 @@
-
 import { and, desc, eq } from 'drizzle-orm';
 
-import { db, type DbExecutor } from '@/config/db';
+import type { DbExecutor } from '@/config/db';
+import { assertTenantScope, tenantDb } from '@/db/tenancy/context';
 import { files, type FileRecord, type NewFileRecord } from '@/db/schema/index';
 
 export async function findById(
   id: string,
   tenantId?: string,
-  executor: DbExecutor = db,
+  executor: DbExecutor = tenantDb(),
 ): Promise<FileRecord | null> {
+  assertTenantScope(tenantId);
   const conditions = [eq(files.id, id)];
   if (tenantId) {
     conditions.push(eq(files.tenantId, tenantId));
@@ -23,8 +24,9 @@ export async function findById(
 
 export async function createFile(
   { key, filename, contentType, ownerId, tenantId }: NewFileRecord,
-  executor: DbExecutor = db,
+  executor: DbExecutor = tenantDb(),
 ): Promise<FileRecord> {
+  assertTenantScope(tenantId);
   const [file] = await executor
     .insert(files)
     .values({ key, filename, contentType, ownerId, tenantId })
@@ -41,8 +43,9 @@ export async function updateStatusAndSize(
   id: string,
   { status, size }: UpdateStatusAndSizeOptions,
   tenantId?: string,
-  executor: DbExecutor = db,
+  executor: DbExecutor = tenantDb(),
 ): Promise<FileRecord | null> {
+  assertTenantScope(tenantId);
   const conditions = [eq(files.id, id)];
   if (tenantId) {
     conditions.push(eq(files.tenantId, tenantId));
@@ -58,7 +61,7 @@ export async function updateStatusAndSize(
 export async function findByOwnerId(
   ownerId: string,
   limit = 100,
-  executor: DbExecutor = db,
+  executor: DbExecutor = tenantDb(),
 ): Promise<FileRecord[]> {
   return executor
     .select()
@@ -68,15 +71,19 @@ export async function findByOwnerId(
     .limit(limit);
 }
 
-export async function findAll(limit = 100, executor: DbExecutor = db): Promise<FileRecord[]> {
+export async function findAll(
+  limit = 100,
+  executor: DbExecutor = tenantDb(),
+): Promise<FileRecord[]> {
   return executor.select().from(files).orderBy(desc(files.createdAt)).limit(limit);
 }
 
 export async function findByTenantId(
   tenantId: string,
   limit = 100,
-  executor: DbExecutor = db,
+  executor: DbExecutor = tenantDb(),
 ): Promise<FileRecord[]> {
+  assertTenantScope(tenantId);
   return executor
     .select()
     .from(files)
@@ -85,6 +92,15 @@ export async function findByTenantId(
     .limit(limit);
 }
 
-export async function deleteById(id: string, executor: DbExecutor = db): Promise<void> {
-  await executor.delete(files).where(eq(files.id, id));
+export async function deleteById(
+  id: string,
+  tenantId?: string,
+  executor: DbExecutor = tenantDb(),
+): Promise<void> {
+  assertTenantScope(tenantId);
+  const conditions = [eq(files.id, id)];
+  if (tenantId) {
+    conditions.push(eq(files.tenantId, tenantId));
+  }
+  await executor.delete(files).where(and(...conditions));
 }

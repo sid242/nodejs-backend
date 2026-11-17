@@ -5,8 +5,10 @@ import postgres from 'postgres';
 import { db as primaryDb, type Database } from '@/config/db';
 import { env } from '@/config/env';
 import { logger } from '@/config/logger';
+import { createRedis, redis } from '@/config/redis';
 import * as schema from '@/db/schema/index';
 import { AppError } from '@/lib/errors';
+import { getSecretStore } from '@/lib/secrets';
 
 export interface DedicatedPoolEntry {
   client: ReturnType<typeof postgres>;
@@ -45,8 +47,9 @@ export interface DedicatedPoolStats {
 
 // Bounded dedicated connection pools cache
 const dedicatedPools = new Map<string, DedicatedPoolEntry>();
-const MAX_DEDICATED_POOLS = 20;
+const MAX_DEDICATED_POOLS = env.DEDICATED_POOL_MAX_TENANTS;
 let maxDedicatedPoolsLimit = MAX_DEDICATED_POOLS;
+const DEDICATED_POOL_SIZE = env.DEDICATED_POOL_SIZE;
 
 /**
  * Returns a Drizzle database instance for the specified tenant context.
@@ -115,17 +118,33 @@ export async function getTenantDb(tenantOrId?: TenantRoutingInput): Promise<Data
     const dedicatedDbName =
       (metadata?.databaseName as string) ||
       `tenant_${tenant.id.replace(/-/g, '_')}`;
-    const baseConnectionUrl = (metadata?.connectionUrl as string) || env.DATABASE_URL;
+
+    let baseConnectionUrl: string | null = null;
+    if (tenant.databaseSecretRef) {
+      const secretStore = getSecretStore();
+      baseConnectionUrl = await secretStore.get(tenant.databaseSecretRef);
+    }
+
+    if (!baseConnectionUrl) {
+      baseConnectionUrl = (metadata?.connectionUrl as string) || env.DATABASE_URL;
+    }
 
     // In production, credentials would be resolved from AWS Secrets Manager using tenant.databaseSecretRef.
     const dedicatedClient = postgres(baseConnectionUrl, {
       database: dedicatedDbName,
-      max: Math.min(env.DB_POOL_MAX, 5),
+      max: DEDICATED_POOL_SIZE,
       idle_timeout: 30,
       connect_timeout: 5,
     });
 
     const dedicatedDrizzle = drizzle({ client: dedicatedClient, schema }) as unknown as Database;
+
+    // Fast probe to verify database connectivity before caching pool
+    await dedicatedClient`SELECT 1`.catch((probeErr) => {
+      logger.warn({ probeErr, tenantId: tenant.id }, 'Initial connectivity check to dedicated tenant database failed');
+      throw probeErr;
+    });
+
     dedicatedPools.set(poolKey, {
       client: dedicatedClient,
       drizzle: dedicatedDrizzle,
@@ -140,9 +159,16 @@ export async function getTenantDb(tenantOrId?: TenantRoutingInput): Promise<Data
   } catch (err: unknown) {
     logger.error(
       { err, tenantId: tenant.id },
-      'Failed to initialize dedicated database connection',
+      'Failed to initialize or connect to dedicated tenant database',
     );
-    throw AppError.internal('Unable to establish connection to dedicated tenant database');
+    // Explicit 503 Service Unavailable — NEVER fall back to primary shared database for dedicated tenants
+    throw AppError.serviceUnavailable(
+      'The dedicated database for this workspace is currently unavailable. Please try again shortly.',
+      {
+        code: 'TENANT_DB_UNAVAILABLE',
+        tenantId: tenant.id,
+      },
+    );
   }
 }
 
@@ -222,19 +248,76 @@ export function getDedicatedPoolStats(): DedicatedPoolStats {
   };
 }
 
+const INVALIDATION_CHANNEL = 'tenant-db:invalidate';
+let subscriberClient: ReturnType<typeof createRedis> | null = null;
+
+/**
+ * Publishes an invalidation event across the cluster to evict a tenant database pool on all API replicas.
+ */
+export async function publishTenantDbInvalidation(
+  databaseKey: string,
+  tenantId?: string,
+): Promise<void> {
+  try {
+    await redis.publish(INVALIDATION_CHANNEL, JSON.stringify({ databaseKey, tenantId }));
+  } catch (err) {
+    logger.warn({ err, databaseKey }, 'Failed to publish tenant-db invalidation');
+  }
+}
+
+/**
+ * Subscribes to cluster-wide database pool invalidation notifications via Redis pub/sub.
+ */
+export function initTenantDbInvalidationSubscriber(): void {
+  if (subscriberClient) return;
+  if (process.env.NODE_ENV === 'test') return;
+  try {
+    subscriberClient = createRedis('tenant-db-sub');
+    subscriberClient.subscribe(INVALIDATION_CHANNEL, (err) => {
+      if (err) {
+        logger.error({ err }, 'Failed to subscribe to tenant-db:invalidate channel');
+      }
+    });
+    subscriberClient.on('message', async (channel, message) => {
+      if (channel === INVALIDATION_CHANNEL) {
+        try {
+          const { databaseKey } = JSON.parse(message);
+          if (databaseKey) {
+            await closeDedicatedPool(databaseKey, false);
+          }
+        } catch {
+          // Ignore malformed message
+        }
+      }
+    });
+  } catch (err) {
+    logger.error({ err }, 'Failed to initialize tenant db invalidation subscriber');
+  }
+}
+
 /**
  * Closes and evicts a specific dedicated database pool from cache.
+ * If broadcast is true, notifies all other cluster instances via Redis pub/sub.
  */
-export async function closeDedicatedPool(poolKey: string): Promise<boolean> {
+export async function closeDedicatedPool(
+  poolKey: string,
+  broadcast = true,
+): Promise<boolean> {
   const entry = dedicatedPools.get(poolKey);
-  if (!entry) return false;
-  try {
-    await entry.client.end({ timeout: 5 });
-  } catch (err: unknown) {
-    logger.warn({ err, poolKey }, 'Error closing dedicated pool');
+  if (entry) {
+    try {
+      await entry.client.end({ timeout: 5 });
+    } catch (err: unknown) {
+      logger.warn({ err, poolKey }, 'Error closing dedicated pool');
+    }
+    dedicatedPools.delete(poolKey);
   }
-  dedicatedPools.delete(poolKey);
-  return true;
+
+  if (broadcast) {
+    await publishTenantDbInvalidation(poolKey);
+  }
+
+  return Boolean(entry);
 }
 
 /**
@@ -253,6 +336,10 @@ export function resetMaxDedicatedPoolsForTesting(): void {
 
 /** Gracefully drain all dedicated connection pools upon server shutdown. */
 export async function drainDedicatedPools(): Promise<void> {
+  if (subscriberClient) {
+    subscriberClient.disconnect();
+    subscriberClient = null;
+  }
   const promises = [...dedicatedPools.values()].map((entry) =>
     entry.client.end({ timeout: 5 }).catch(() => {}),
   );

@@ -15,7 +15,9 @@
       "name": "worker",
       "image": "PLACEHOLDER",
       "essential": true,
-      "stopTimeout": 60,
+      "user": "node",
+      "readonlyRootFilesystem": false,
+      "stopTimeout": 120,
       "environment": [
         {
           "name": "NODE_ENV",
@@ -40,6 +42,10 @@
         {
           "name": "WORKER_CONCURRENCY",
           "value": "10"
+        },
+        {
+          "name": "DB_POOL_MAX",
+          "value": "10"
         }
       ],
       "secrets": [
@@ -58,6 +64,26 @@
         {
           "name": "JWT_REFRESH_SECRET",
           "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:app/prod/JWT_REFRESH_SECRET"
+        },
+        {
+          "name": "JWT_PLATFORM_SECRET",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:app/prod/JWT_PLATFORM_SECRET"
+        },
+        {
+          "name": "JWT_SUPPORT_SECRET",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:app/prod/JWT_SUPPORT_SECRET"
+        },
+        {
+          "name": "ENCRYPTION_KEY",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:app/prod/ENCRYPTION_KEY"
+        },
+        {
+          "name": "BFF_SHARED_SECRET",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:app/prod/BFF_SHARED_SECRET"
+        },
+        {
+          "name": "INTERNAL_API_SECRET",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:app/prod/INTERNAL_API_SECRET"
         }
       ],
       "logConfiguration": {
@@ -68,7 +94,7 @@
           "awslogs-stream-prefix": "worker"
         }
       },
-      "command": ["node", "src/worker.js"]
+      "command": ["node", "dist/worker.js"]
     }
   ]
 }

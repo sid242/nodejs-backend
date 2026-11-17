@@ -15,7 +15,9 @@ import healthRoutes from '@/modules/health/health.routes';
 import internalRoutes from '@/modules/internal/internal.routes';
 import { metricsMiddleware, metricsRouter } from '@/observability/metrics';
 import { bullBoardRouter } from '@/queues/bull-board';
+import { auditSupportActions } from '@/middleware/support';
 import apiRoutes from '@/routes';
+import { ssoAuthRouter } from '@/modules/sso/sso.routes';
 
 export function createApp(): Express {
   const app = express();
@@ -49,9 +51,12 @@ export function createApp(): Express {
       },
     }),
   );
+  app.use(express.urlencoded({ extended: true, limit: '1mb' }));
   app.use(cookieParser());
+  app.use(auditSupportActions);
 
   app.use('/api/v1', globalLimiter, apiRoutes);
+  app.use('/sso', globalLimiter, ssoAuthRouter);
 
   app.use(notFound);
   app.use(errorHandler);

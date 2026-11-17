@@ -3,6 +3,7 @@ import { index, integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-o
 import { outboxStatusEnum } from '../enums';
 import { tenants } from '../tenancy/tenants';
 
+// scope: tenant
 export const outboxEvents = pgTable(
   'OutboxEvent',
   {

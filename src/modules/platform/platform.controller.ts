@@ -309,6 +309,13 @@ export const queryAuditLogs = asyncHandler(async (req: Request, res: Response) =
   AppResponse.ok(result).send(res);
 });
 
+export const verifyPlatformTenantAuditChain = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.params.tenantId as string;
+  const { verifyAuditChain } = await import('@/modules/audit/audit.service');
+  const result = await verifyAuditChain(tenantId);
+  AppResponse.ok(result, 'Audit log cryptographic chain verification completed').send(res);
+});
+
 // ==========================================
 // 5. Tenant Oversight & Provisioning Handlers
 // ==========================================
@@ -456,5 +463,34 @@ export const executeTenantDatabaseOperation = asyncHandler(async (req: Request, 
     req.valid?.body,
     req.id ? String(req.id) : undefined,
   );
-  AppResponse.ok(result, 'Tenant database operation executed successfully').send(res);
+  AppResponse.ok(result, 'Tenant database operation initiated successfully').send(res);
+});
+
+export const getTenantDbOperation = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.getTenantDbOperation(req.params.opId as string);
+  AppResponse.ok(result, 'Database operation retrieved successfully').send(res);
+});
+
+export const listTenantDbOperations = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.listTenantDbOperations(req.params.id as string);
+  AppResponse.ok(result, 'Tenant database operations retrieved successfully').send(res);
+});
+
+export const approveTenantDbOperation = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.approveTenantDbOperation(
+    req.params.opId as string,
+    req.staff!.id,
+    req.valid?.body?.reason ?? 'Approved by operator',
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.ok(result, 'Database operation approved successfully').send(res);
+});
+
+export const cancelTenantDbOperation = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.cancelTenantDbOperation(
+    req.params.opId as string,
+    req.staff!.id,
+    req.id ? String(req.id) : undefined,
+  );
+  AppResponse.ok(result, 'Database operation cancelled successfully').send(res);
 });

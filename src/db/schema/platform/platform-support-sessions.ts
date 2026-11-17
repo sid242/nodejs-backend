@@ -9,6 +9,7 @@ import { tenantMembers, tenants } from '../tenancy/index';
 import { users } from '../identity/users';
 import { platformStaff } from './platform-staff';
 
+// scope: primary
 export const platformSupportSessions = pgTable(
   'PlatformSupportSession',
   {

@@ -1,6 +1,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
 import { ACCESS_TOKEN_COOKIE, AUTH_HEADERS } from '@/constants/index';
+import { runWithTenantDb } from '@/db/tenancy/context';
 import { getTenantDb } from '@/db/tenancy/tenant-db';
 import { AppError } from '@/lib/errors';
 import { logSecurityEvent } from '@/modules/audit/audit.service';
@@ -9,21 +10,129 @@ import * as platformRepo from '@/modules/platform/platform.repository';
 import { resolveUserPermissions, SYSTEM_ROLES } from '@/modules/rbac/rbac.service';
 import * as tenantsRepo from '@/modules/tenants/tenants.repository';
 
-export const SUPPORT_TENANT_PERMISSIONS = [
-  'tenants:read',
-  'tenants:update',
-  'members:read',
-  'roles:read',
-  'files:read',
-  'files:upload',
-  'files:delete',
-  'email_templates:read',
-  'email_templates:manage',
-  'branding:read',
-  'branding:update',
-  'audit:read',
-  'billing:read',
-] as const;
+export const SUPPORT_SCOPE_PRESETS = {
+  READ_ONLY: [
+    'tenants:read',
+    'members:read',
+    'roles:read',
+    'files:read',
+    'email_templates:read',
+    'branding:read',
+    'audit:read',
+    'billing:read',
+    'groups:read',
+    'addresses:read',
+  ],
+  ASSIST: [
+    'tenants:read',
+    'members:read',
+    'roles:read',
+    'files:read',
+    'files:upload',
+    'email_templates:read',
+    'email_templates:manage',
+    'branding:read',
+    'branding:update',
+    'audit:read',
+    'billing:read',
+    'groups:read',
+    'addresses:read',
+  ],
+  FULL_ADMIN: [
+    'tenants:read',
+    'tenants:update',
+    'members:read',
+    'roles:read',
+    'files:read',
+    'files:upload',
+    'files:delete',
+    'email_templates:read',
+    'email_templates:manage',
+    'branding:read',
+    'branding:update',
+    'audit:read',
+    'billing:read',
+    'groups:read',
+    'addresses:read',
+    'addresses:manage',
+  ],
+  FULL: [
+    'tenants:read',
+    'tenants:update',
+    'members:read',
+    'roles:read',
+    'files:read',
+    'files:upload',
+    'files:delete',
+    'email_templates:read',
+    'email_templates:manage',
+    'branding:read',
+    'branding:update',
+    'audit:read',
+    'billing:read',
+    'groups:read',
+    'addresses:read',
+    'addresses:manage',
+  ],
+} as const;
+
+export const SUPPORT_TENANT_PERMISSIONS = SUPPORT_SCOPE_PRESETS.FULL_ADMIN;
+
+/**
+ * Enforces strict boundaries on support tokens:
+ * Prohibits accessing authentication credentials/2FA, billing writes, SSO/SCIM,
+ * member/role mutations, and database operations.
+ */
+export function isSupportDeniedRoute(req: Request): boolean {
+  const path = (req.originalUrl || req.baseUrl + req.path || '').toLowerCase();
+  const method = req.method.toUpperCase();
+
+  // 1. Auth credential & session operations
+  if (
+    path.includes('/auth/password') ||
+    path.includes('/auth/change-password') ||
+    path.includes('/auth/reset-password') ||
+    path.includes('/auth/2fa') ||
+    path.includes('/auth/two-factor')
+  ) {
+    return true;
+  }
+
+  // 2. Billing writes (invoices, subscriptions, plans)
+  if (
+    (path.includes('/billing') || path.includes('/invoices') || path.includes('/subscriptions')) &&
+    !['GET', 'HEAD', 'OPTIONS'].includes(method)
+  ) {
+    return true;
+  }
+
+  // 3. SSO and SCIM tokens & configuration
+  if (path.includes('/sso') || path.includes('/scim')) {
+    return true;
+  }
+
+  // 4. Member / Role mutations
+  if (
+    (path.includes('/members') || path.includes('/roles')) &&
+    !['GET', 'HEAD', 'OPTIONS'].includes(method)
+  ) {
+    return true;
+  }
+
+  // 5. Database operations (switchover, migrations, backups)
+  if (
+    path.includes('/db-ops') ||
+    path.includes('/database') ||
+    path.includes('/operations') ||
+    path.includes('/migrate') ||
+    path.includes('/db/') ||
+    path.endsWith('/db')
+  ) {
+    return true;
+  }
+
+  return false;
+}
 
 export async function requireSupportOrUser(
   req: Request,
@@ -88,12 +197,33 @@ export async function requireSupportOrUser(
       staffId: session.staffId,
       tenantId: session.tenantId,
       mode: session.mode as 'TENANT_SCOPED' | 'AS_MEMBER',
-      scope: session.scope as 'READ_ONLY' | 'FULL',
+      scope: session.scope as 'READ_ONLY' | 'ASSIST' | 'FULL' | 'FULL_ADMIN',
       targetUserId: session.targetUserId,
       targetMemberId: session.targetMemberId,
       reason: session.reason,
       expiresAt: session.expiresAt,
     };
+
+    // Strict deny-list check for all support sessions
+    if (isSupportDeniedRoute(req)) {
+      return next(
+        AppError.forbidden(
+          'Support tokens are strictly prohibited from accessing authentication credentials, billing mutations, SSO/SCIM, member/role mutations, and database operations.',
+        ),
+      );
+    }
+
+    // File deletion guard: only FULL_ADMIN / FULL may delete files
+    if (
+      req.method === 'DELETE' &&
+      (req.originalUrl || req.path).toLowerCase().includes('/files') &&
+      session.scope !== 'FULL_ADMIN' &&
+      session.scope !== 'FULL'
+    ) {
+      return next(
+        AppError.forbidden('File deletion is restricted to FULL_ADMIN support sessions.'),
+      );
+    }
 
     req.tenant = {
       id: tenant.id,
@@ -124,32 +254,36 @@ export async function requireSupportOrUser(
       );
     }
 
-    // Resolve effective permissions based on mode & scope
+    // If session is ASSIST, mutations are strictly restricted to branding, email templates, and uploading files
+    if (session.scope === 'ASSIST') {
+      const isMutation = req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS';
+      const path = (req.originalUrl || req.path).toLowerCase();
+      const isAssistRoute =
+        path.includes('/branding') ||
+        path.includes('/email-templates') ||
+        (path.includes('/files') && req.method === 'POST');
+
+      if (isMutation && !isAssistRoute) {
+        return next(
+          AppError.forbidden(
+            'ASSIST support session scope only allows modifying branding, email templates, and uploading files.',
+          ),
+        );
+      }
+    }
+
+    // Resolve effective permissions based on preset mapped to session scope
+    const scopeKey = (session.scope as keyof typeof SUPPORT_SCOPE_PRESETS) || 'READ_ONLY';
+    const allowedPerms: readonly string[] =
+      SUPPORT_SCOPE_PRESETS[scopeKey] ?? SUPPORT_SCOPE_PRESETS.READ_ONLY;
+
     if (session.mode === 'AS_MEMBER' && session.targetUserId) {
       const resolved = await resolveUserPermissions(tenant.id, session.targetUserId);
       const isOwner = resolved.roles.some((r) => r.toUpperCase() === SYSTEM_ROLES.OWNER);
-      let perms = isOwner ? ['*'] : resolved.permissions;
+      const targetPerms = isOwner ? [...allowedPerms] : resolved.permissions;
 
-      if (session.scope === 'READ_ONLY') {
-        if (isOwner) {
-          perms = [
-            'tenants:read',
-            'members:read',
-            'roles:read',
-            'files:read',
-            'email_templates:read',
-            'branding:read',
-            'audit:read',
-            'billing:read',
-          ];
-        } else {
-          perms = perms.filter(
-            (p) => p.endsWith(':read') || p.endsWith(':list') || p.endsWith(':view'),
-          );
-        }
-      }
-
-      req.permissions = perms;
+      // Intersect target permissions with scope preset
+      req.permissions = targetPerms.filter((p) => allowedPerms.includes(p));
       req.membership = {
         id: session.targetMemberId ?? '',
         status: 'ACTIVE',
@@ -158,21 +292,7 @@ export async function requireSupportOrUser(
       req.user = { id: session.targetUserId, status: 'ACTIVE' };
     } else {
       // TENANT_SCOPED mode
-      if (session.scope === 'READ_ONLY') {
-        req.permissions = [
-          'tenants:read',
-          'members:read',
-          'roles:read',
-          'files:read',
-          'email_templates:read',
-          'branding:read',
-          'audit:read',
-          'billing:read',
-        ];
-      } else {
-        req.permissions = [...SUPPORT_TENANT_PERMISSIONS];
-      }
-
+      req.permissions = [...allowedPerms];
       req.membership = {
         id: '',
         status: 'ACTIVE',
@@ -180,7 +300,14 @@ export async function requireSupportOrUser(
       };
     }
 
-    return next();
+    return runWithTenantDb(
+      {
+        tenantId: tenant.id,
+        db: req.db,
+        databaseMode: (tenant as any).databaseMode ?? 'shared',
+      },
+      () => next(),
+    );
   } catch {
     // If not a valid support token, continue to try standard user access token
   }

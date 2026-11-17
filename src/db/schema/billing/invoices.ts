@@ -13,6 +13,7 @@ import { plans } from './plans';
 import { subscriptions } from './subscriptions';
 import { tenants } from '../tenancy/tenants';
 
+// scope: primary
 export const invoices = pgTable(
   'Invoice',
   {

@@ -5,13 +5,14 @@ import { closeDb } from '@/config/db';
 import { env } from '@/config/env';
 import { logger } from '@/config/logger';
 import { closeRedisClients } from '@/config/redis';
-import { drainDedicatedPools } from '@/lib/db-manager';
+import { drainDedicatedPools, initTenantDbInvalidationSubscriber } from '@/lib/db-manager';
 import { state } from '@/lib/state';
 import { initSentry } from '@/observability/sentry';
 import { closeQueues } from '@/queues/index';
 import { initSocket } from '@/sockets/index';
 
 initSentry();
+initTenantDbInvalidationSubscriber();
 
 const server = http.createServer(createApp());
 const sockets = initSocket(server);

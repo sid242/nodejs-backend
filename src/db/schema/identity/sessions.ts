@@ -2,6 +2,7 @@ import { boolean, index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-c
 
 import { users } from './users';
 
+// scope: primary
 export const sessions = pgTable(
   'Session',
   {

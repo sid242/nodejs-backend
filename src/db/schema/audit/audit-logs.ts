@@ -4,6 +4,7 @@ import { actorTypeEnum } from '../enums';
 import { users } from '../identity/users';
 import { tenants } from '../tenancy/index';
 
+// scope: tenant
 export const auditLogs = pgTable(
   'AuditLog',
   {
@@ -13,6 +14,8 @@ export const auditLogs = pgTable(
     actorType: actorTypeEnum('actorType').notNull().default('USER'),
     actorUserId: uuid('actorUserId').references(() => users.id, { onDelete: 'set null' }),
     effectiveUserId: uuid('effectiveUserId').references(() => users.id, { onDelete: 'set null' }),
+    actorEmail: text('actorEmail'),
+    actorName: text('actorName'),
     actorStaffId: uuid('actorStaffId'),
     supportSessionId: uuid('supportSessionId'),
     action: text('action').notNull(),
@@ -30,11 +33,19 @@ export const auditLogs = pgTable(
     metadata: jsonb('metadata'),
     metadataBefore: jsonb('metadataBefore'),
     metadataAfter: jsonb('metadataAfter'),
+    prevHash: text('prevHash'),
+    rowHash: text('rowHash'),
     createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
     index('AuditLog_tenantId_createdAt_idx').on(table.tenantId, table.createdAt),
     index('AuditLog_tenantId_action_idx').on(table.tenantId, table.action),
+    index('AuditLog_tenantId_action_createdAt_idx').on(
+      table.tenantId,
+      table.action,
+      table.createdAt,
+    ),
+    index('AuditLog_rowHash_idx').on(table.rowHash),
     index('AuditLog_tenantId_userId_createdAt_idx').on(
       table.tenantId,
       table.userId,

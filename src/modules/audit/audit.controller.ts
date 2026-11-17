@@ -73,3 +73,9 @@ export const simulateAccess = asyncHandler(async (req: Request, res: Response) =
   const simulation = await accessService.simulateAccess(tenantId, body);
   AppResponse.ok(simulation).send(res);
 });
+
+export const verifyTenantAuditChain = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenant!.id;
+  const result = await auditService.verifyAuditChain(tenantId);
+  AppResponse.ok(result, 'Audit chain cryptographic verification completed').send(res);
+});

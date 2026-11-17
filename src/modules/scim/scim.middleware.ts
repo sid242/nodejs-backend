@@ -1,6 +1,9 @@
 import { createHash } from 'node:crypto';
 import { NextFunction, Request, Response } from 'express';
 
+import { logger } from '@/config/logger';
+import { runWithTenantDb } from '@/db/tenancy/context';
+import { getTenantDb } from '@/db/tenancy/tenant-db';
 import { ssoRepo } from '@/modules/sso/sso.repository';
 
 export async function requireScimAuth(
@@ -42,11 +45,58 @@ export async function requireScimAuth(
     return;
   }
 
-  // Update last used timestamp in background
-  ssoRepo.updateScimTokenLastUsed(tokenRecord.id).catch(() => {});
+  const clientIp = (req.ip || req.socket.remoteAddress || '').replace(/^.*:/, '');
 
-  // Attach tenant context
+  // IP Allow-List Enforcement
+  const allowedIps = (tokenRecord as any).allowedIps as string[] | undefined;
+  if (allowedIps && allowedIps.length > 0) {
+    const isAllowed = allowedIps.some((allowed) => allowed.trim() === clientIp);
+    if (!isAllowed) {
+      logger.warn(
+        { tokenId: tokenRecord.id, tenantId: tokenRecord.tenantId, clientIp, allowedIps },
+        'SCIM request rejected: client IP not in allow-list',
+      );
+      res.status(403).json({
+        schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
+        status: '403',
+        detail: `Client IP ${clientIp} is not authorized for this SCIM bearer token`,
+      });
+      return;
+    }
+  }
+
+  // Detect IP change and audit
+  if (tokenRecord.lastUsedAt && (tokenRecord as any).lastUsedIp && (tokenRecord as any).lastUsedIp !== clientIp) {
+    logger.info(
+      { tokenId: tokenRecord.id, tenantId: tokenRecord.tenantId, oldIp: (tokenRecord as any).lastUsedIp, newIp: clientIp },
+      'SCIM bearer token used from new IP address',
+    );
+  }
+
+  // Update last used timestamp and IP in background
+  ssoRepo.updateScimTokenLastUsed(tokenRecord.id, clientIp).catch(() => {});
+
+  // Attach tenant context strictly from verified token
   req.tenantId = tokenRecord.tenantId;
-  next();
+
+  // Resolve tenant database connection
+  try {
+    const tenantDbHandle = await getTenantDb({
+      id: tokenRecord.tenantId,
+      databaseMode: 'shared',
+    });
+    req.db = tenantDbHandle;
+
+    return runWithTenantDb(
+      {
+        tenantId: tokenRecord.tenantId,
+        db: tenantDbHandle,
+        databaseMode: 'shared',
+      },
+      () => next(),
+    );
+  } catch (err) {
+    next(err);
+  }
 }
 

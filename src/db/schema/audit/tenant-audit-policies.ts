@@ -4,6 +4,7 @@ import { boolean, index, integer, pgTable, text, timestamp, uuid } from 'drizzle
 import { users } from '../identity/users';
 import { tenants } from '../tenancy/tenants';
 
+// scope: tenant
 export const tenantAuditPolicies = pgTable(
   'TenantAuditPolicy',
   {

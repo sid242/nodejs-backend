@@ -7,6 +7,7 @@ import { roles } from '../access/rbac';
 import { users } from '../identity/users';
 import { tenants } from './tenants';
 
+// scope: tenant
 export const tenantInvitations = pgTable(
   'TenantInvitation',
   {

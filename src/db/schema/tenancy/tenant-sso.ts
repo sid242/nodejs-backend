@@ -20,6 +20,7 @@ export const scimTokenStatusEnum = pgEnum('scim_token_status', ['ACTIVE', 'REVOK
 /**
  * Tenant Enterprise SSO Configuration (SAML 2.0 / OIDC)
  */
+// scope: tenant
 export const tenantSsoConfigs = pgTable(
   'tenant_sso_configs',
   {
@@ -56,6 +57,7 @@ export const tenantSsoConfigs = pgTable(
 /**
  * Tenant SCIM 2.0 Bearer Tokens
  */
+// scope: tenant
 export const tenantScimTokens = pgTable(
   'tenant_scim_tokens',
   {
@@ -67,7 +69,12 @@ export const tenantScimTokens = pgTable(
     tokenHash: text('token_hash').notNull().unique(),
     tokenPrefix: text('token_prefix').notNull(),
     status: scimTokenStatusEnum('status').notNull().default('ACTIVE'),
+    allowedIps: text('allowed_ips')
+      .array()
+      .notNull()
+      .default([]),
     lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    lastUsedIp: text('last_used_ip'),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     createdByUserId: uuid('created_by_user_id').references(() => users.id, {
       onDelete: 'set null',

@@ -253,6 +253,55 @@
       "when": 1794855114395,
       "tag": "0035_magical_nomad",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1794899708438,
+      "tag": "0036_thick_changeling",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1794900192899,
+      "tag": "0037_luxuriant_butterfly",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1794907889751,
+      "tag": "0038_strict_rls_isolation",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1794910000000,
+      "tag": "0039_scim_and_user_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1794911000000,
+      "tag": "0040_sso_enforcement",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1794912000000,
+      "tag": "0041_support_scopes",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1794913000000,
+      "tag": "0042_audit_immutability_and_chaining",
+      "breakpoints": true
     }
   ]
 }

@@ -209,6 +209,12 @@ router.get(
   controller.queryAuditLogs,
 );
 
+router.get(
+  '/audit-logs/verify/:tenantId',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.AUDIT_READ),
+  controller.verifyPlatformTenantAuditChain,
+);
+
 // ==========================================
 // 5. Tenant Oversight & Provisioning
 // ==========================================
@@ -305,9 +311,37 @@ router.get(
 
 router.post(
   '/database-operations/:id/execute',
-  requirePlatformPermission(PLATFORM_PERMISSIONS.TENANTS_MANAGE),
+  requirePlatformPermission([
+    PLATFORM_PERMISSIONS.TENANTS_MANAGE,
+    PLATFORM_PERMISSIONS.DATABASE_OPERATE,
+  ]),
   validate({ body: dto.executeTenantDatabaseOperationDto }),
   controller.executeTenantDatabaseOperation,
+);
+
+router.get(
+  '/database-operations/history/:opId',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.HEALTH_READ),
+  controller.getTenantDbOperation,
+);
+
+router.get(
+  '/tenants/:id/database-operations',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.HEALTH_READ),
+  controller.listTenantDbOperations,
+);
+
+router.post(
+  '/database-operations/history/:opId/approve',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.DATABASE_OPERATE),
+  validate({ body: dto.approveTenantDatabaseOperationDto }),
+  controller.approveTenantDbOperation,
+);
+
+router.post(
+  '/database-operations/history/:opId/cancel',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.DATABASE_OPERATE),
+  controller.cancelTenantDbOperation,
 );
 
 router.post(

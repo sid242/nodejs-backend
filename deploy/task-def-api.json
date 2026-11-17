@@ -12,7 +12,9 @@
       "name": "api",
       "image": "PLACEHOLDER",
       "essential": true,
-      "stopTimeout": 30,
+      "user": "node",
+      "readonlyRootFilesystem": false,
+      "stopTimeout": 60,
       "portMappings": [{ "containerPort": 3000 }],
       "environment": [
         { "name": "NODE_ENV", "value": "production" },
@@ -20,7 +22,11 @@
         { "name": "AWS_REGION", "value": "ap-south-1" },
         { "name": "S3_BUCKET", "value": "my-app-prod-uploads" },
         { "name": "SES_FROM_EMAIL", "value": "no-reply@example.com" },
-        { "name": "CORS_ORIGINS", "value": "https://app.example.com" }
+        { "name": "CORS_ORIGINS", "value": "https://app.example.com" },
+        { "name": "APP_BASE_DOMAIN", "value": "example.com" },
+        { "name": "APP_PROTOCOL", "value": "https" },
+        { "name": "PLATFORM_HOST", "value": "app.example.com" },
+        { "name": "DB_POOL_MAX", "value": "10" }
       ],
       "secrets": [
         {
@@ -38,6 +44,26 @@
         {
           "name": "JWT_REFRESH_SECRET",
           "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:app/prod/JWT_REFRESH_SECRET"
+        },
+        {
+          "name": "JWT_PLATFORM_SECRET",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:app/prod/JWT_PLATFORM_SECRET"
+        },
+        {
+          "name": "JWT_SUPPORT_SECRET",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:app/prod/JWT_SUPPORT_SECRET"
+        },
+        {
+          "name": "ENCRYPTION_KEY",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:app/prod/ENCRYPTION_KEY"
+        },
+        {
+          "name": "BFF_SHARED_SECRET",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:app/prod/BFF_SHARED_SECRET"
+        },
+        {
+          "name": "INTERNAL_API_SECRET",
+          "valueFrom": "arn:aws:secretsmanager:ap-south-1:ACCOUNT_ID:secret:app/prod/INTERNAL_API_SECRET"
         },
         {
           "name": "BULL_BOARD_PASSWORD",

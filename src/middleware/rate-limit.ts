@@ -3,7 +3,9 @@ import rateLimit from 'express-rate-limit';
 import { RedisStore } from 'rate-limit-redis';
 
 import { env } from '@/config/env';
+import { logger } from '@/config/logger';
 import { redis } from '@/config/redis';
+import { logSecurityEvent } from '@/modules/audit/audit.service';
 
 export interface RateLimiterOptions {
   name: string;
@@ -38,9 +40,11 @@ const make = ({
         const rawEmail =
           typeof req.body?.email === 'string'
             ? req.body.email
-            : typeof req.body?.identifier === 'string'
-              ? req.body.identifier
-              : '';
+            : typeof req.query?.email === 'string'
+              ? req.query.email
+              : typeof req.body?.identifier === 'string'
+                ? req.body.identifier
+                : '';
         const email = rawEmail.trim().toLowerCase();
         const ip = req.ip || 'anonymous';
         return email ? `${ip}:${email}` : ip;
@@ -71,14 +75,43 @@ const make = ({
       sendCommand: (...args: string[]) => (redis as any).call(...args),
       prefix: `rl:${name}:`,
     }),
-    handler: (req: Request, res: Response) =>
+    handler: (req: Request, res: Response) => {
+      const retryAfter = Math.ceil((windowMs ?? 60_000) / 1000);
+      res.setHeader('Retry-After', retryAfter);
+
+      logger.warn(
+        {
+          limiter: name,
+          ip: req.ip,
+          path: req.originalUrl || req.path,
+          method: req.method,
+          tenantId: req.tenant?.id,
+          userId: req.user?.id,
+        },
+        'Rate limit exceeded',
+      );
+
+      void logSecurityEvent({
+        tenantId: req.tenant?.id ?? null,
+        userId: req.user?.id ?? null,
+        action: 'SECURITY.RATE_LIMIT_EXCEEDED',
+        entityType: 'RateLimiter',
+        metadata: {
+          limiter: name,
+          ip: req.ip,
+          path: req.originalUrl || req.path,
+          method: req.method,
+        },
+      }).catch(() => {});
+
       res.status(429).json({
         error: {
           code: 'RATE_LIMITED',
           message: 'Too many requests, please slow down and try again later.',
         },
         requestId: req.id,
-      }),
+      });
+    },
   });
 
 export const globalLimiter = make({ name: 'global', limit: env.RATE_LIMIT_MAX });
@@ -102,3 +135,63 @@ export const geoLimiter = make({ name: 'geo', limit: 180, byUser: true });
 
 // Address mutations
 export const addressLimiter = make({ name: 'addresses', limit: 60, byUser: true });
+
+// SSO discovery, initiate, lookup, and ACS callbacks
+export const ssoLimiter = make({
+  name: 'sso',
+  limit: 20,
+  windowMs: 60_000,
+  compositeAuth: true,
+});
+
+// Single-use authentication handoff token redemption
+export const handoffRedeemLimiter = make({
+  name: 'handoff',
+  limit: 10,
+  windowMs: 60_000,
+});
+
+// Public tenant resolution (slug / custom domain checks)
+export const resolveLimiter = make({
+  name: 'resolve',
+  limit: 60,
+  windowMs: 60_000,
+});
+
+// Caddy / internal reverse-proxy TLS verification ask queries
+export const internalLimiter = make({
+  name: 'internal',
+  limit: 60,
+  windowMs: 60_000,
+});
+
+// Public membership tiers & pricing catalog queries
+export const billingPublicLimiter = make({
+  name: 'billing-public',
+  limit: 30,
+  windowMs: 60_000,
+});
+
+// SCIM 2.0 directory sync rate limiter (RFC 7644 compliant 429 response)
+export const scimLimiter = rateLimit({
+  windowMs: 60_000,
+  limit: 100,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  passOnStoreError: true,
+  store: new RedisStore({
+    sendCommand: ((...args: string[]) => (redis as any).call(...args)) as any,
+    prefix: 'rl:scim:',
+  }),
+  keyGenerator: (req: Request) => {
+    return req.tenantId ? `t:${req.tenantId}` : `ip:${req.ip || 'anonymous'}`;
+  },
+  handler: (_req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'application/scim+json; charset=utf-8');
+    res.status(429).json({
+      schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
+      status: '429',
+      detail: 'Too many requests. SCIM rate limit exceeded (100 req/min). Please retry after cooldown.',
+    });
+  },
+});

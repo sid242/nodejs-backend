@@ -1,9 +1,10 @@
-import { index, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { membershipStatusEnum } from '../enums';
 import { users } from '../identity/users';
 import { tenants } from './tenants';
 
+// scope: tenant
 export const tenantMembers = pgTable(
   'TenantMember',
   {
@@ -15,6 +16,12 @@ export const tenantMembers = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     status: membershipStatusEnum('status').notNull().default('ACTIVE'),
+
+    // SCIM 2.0 & Identity synchronization
+    externalId: text('externalId'),
+    tokenVersion: integer('tokenVersion').notNull().default(1),
+    statusChangedAt: timestamp('statusChangedAt', { precision: 3, mode: 'date' }),
+    ssoBypass: boolean('ssoBypass').notNull().default(false),
 
     // Tenant-specific member metadata (isolated from global identity)
     memberCode: text('memberCode'),
@@ -42,6 +49,7 @@ export const tenantMembers = pgTable(
       table.status,
       table.createdAt,
     ),
+    index('TenantMember_tenantId_externalId_idx').on(table.tenantId, table.externalId),
     index('TenantMember_memberCode_idx').on(table.memberCode),
     index('TenantMember_department_idx').on(table.department),
     index('TenantMember_deletedAt_idx').on(table.deletedAt),

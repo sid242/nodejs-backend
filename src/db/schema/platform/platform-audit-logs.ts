@@ -3,6 +3,7 @@ import { index, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-cor
 import { tenants } from '../tenancy/index';
 import { platformStaff } from './platform-staff';
 
+// scope: primary
 export const platformAuditLogs = pgTable(
   'PlatformAuditLog',
   {
@@ -10,6 +11,8 @@ export const platformAuditLogs = pgTable(
     actorStaffId: uuid('actorStaffId').references(() => platformStaff.id, {
       onDelete: 'set null',
     }),
+    actorEmail: text('actorEmail'),
+    actorName: text('actorName'),
     action: text('action').notNull(),
     targetType: text('targetType').notNull(), // e.g. 'staff', 'role', 'tenant', 'billing'
     targetId: text('targetId'),
@@ -19,6 +22,8 @@ export const platformAuditLogs = pgTable(
     requestId: text('requestId'),
     ipAddress: text('ipAddress'),
     userAgent: text('userAgent'),
+    prevHash: text('prevHash'),
+    rowHash: text('rowHash'),
     createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [

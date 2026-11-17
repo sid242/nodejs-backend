@@ -5,6 +5,7 @@ import { logger } from '@/config/logger';
 import { createRedis } from '@/config/redis';
 import { captureJobException } from '@/observability/sentry';
 import { maintenanceQueue, QUEUES } from '@/queues/index';
+import { processDbOperation } from '@/queues/workers/db-ops.worker';
 import { processEmail } from '@/queues/workers/email.worker';
 import { processFile } from '@/queues/workers/file.worker';
 import { processMaintenance } from '@/queues/workers/maintenance.worker';
@@ -63,6 +64,9 @@ export function startWorkers(): Worker[] {
     createWorker(QUEUES.MAINTENANCE, processMaintenance, {
       concurrency: env.MAINTENANCE_WORKER_CONCURRENCY,
     }),
+    createWorker(QUEUES.DB_OPS, processDbOperation as Processor, {
+      concurrency: 2,
+    }),
   ];
 }
 
@@ -72,6 +76,12 @@ export async function registerSchedulers(): Promise<void> {
     'cleanup-pending-files',
     { pattern: '0 * * * *' }, // hourly
     { name: 'cleanup-pending-files' },
+  );
+
+  await maintenanceQueue.upsertJobScheduler(
+    'cleanup-stale-db-operations',
+    { pattern: '*/15 * * * *' }, // every 15 minutes
+    { name: 'cleanup-stale-db-operations' },
   );
 
   await maintenanceQueue.upsertJobScheduler(
@@ -90,5 +100,23 @@ export async function registerSchedulers(): Promise<void> {
     'domain-reverify-weekly',
     { pattern: '0 3 * * 0' }, // weekly Sunday at 03:00
     { name: 'domain-reverify' },
+  );
+
+  await maintenanceQueue.upsertJobScheduler(
+    'process-outbox-events-interval',
+    { pattern: '*/1 * * * *' }, // every minute
+    { name: 'process-outbox-events' },
+  );
+
+  await maintenanceQueue.upsertJobScheduler(
+    'audit-retention-purge-daily',
+    { pattern: '0 2 * * *' }, // daily at 02:00 UTC
+    { name: 'audit-retention-purge' },
+  );
+
+  await maintenanceQueue.upsertJobScheduler(
+    'verify-audit-chains-nightly',
+    { pattern: '0 3 * * *' }, // nightly at 03:00 UTC
+    { name: 'verify-audit-chains' },
   );
 }

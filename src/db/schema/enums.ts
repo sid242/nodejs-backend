@@ -63,7 +63,9 @@ export const supportSessionModeEnum = pgEnum('SupportSessionMode', [
 
 export const supportSessionScopeEnum = pgEnum('SupportSessionScope', [
   'READ_ONLY',
+  'ASSIST',
   'FULL',
+  'FULL_ADMIN',
 ]);
 
 export const tenantDatabaseModeEnum = pgEnum('TenantDatabaseMode', ['shared', 'dedicated']);
