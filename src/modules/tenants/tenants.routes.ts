@@ -158,6 +158,15 @@ router.delete(
   controller.removeMember,
 );
 
+router.post(
+  '/:tenantId/members/:memberId/offboard',
+  requireAuth,
+  requireTenant,
+  requirePermission('members:delete'),
+  validate({ body: dto.offboardMemberDto }),
+  controller.offboardMember,
+);
+
 router.patch(
   '/:tenantId/members/:memberId/role',
   requireAuth,

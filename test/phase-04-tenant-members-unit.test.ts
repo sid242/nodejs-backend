@@ -5,6 +5,7 @@ import {
   addMemberDto,
   bulkInviteMembersDto,
   listMembersQueryDto,
+  offboardMemberDto,
   updateMemberDto,
   updateMemberStatusDto,
 } from '@/modules/tenants/tenants.dto';
@@ -212,6 +213,37 @@ describe('Phase 04: Tenant Members & Invitations Unit Tests', () => {
       assert.ok(fields.includes('joinedAt'));
       assert.ok(fields.includes('invitedAt'));
       assert.ok(fields.includes('lastLoginAt'));
+      assert.ok(fields.includes('managerMemberId'));
+      assert.ok(fields.includes('location'));
+      assert.ok(fields.includes('employmentType'));
+      assert.ok(fields.includes('workEmail'));
+      assert.ok(fields.includes('offboardedAt'));
+      assert.ok(fields.includes('reassignedToMemberId'));
+    });
+  });
+
+  describe('7. offboardMemberDto validation', () => {
+    it('validates empty offboard body as valid', () => {
+      const parsed = offboardMemberDto.parse({});
+      assert.equal(parsed.reassignToMemberId, undefined);
+      assert.equal(parsed.reason, undefined);
+    });
+
+    it('validates valid reassignment target uuid and reason', () => {
+      const parsed = offboardMemberDto.parse({
+        reassignToMemberId: '123e4567-e89b-12d3-a456-426614174000',
+        reason: 'Employee resigned voluntarily',
+      });
+      assert.equal(parsed.reassignToMemberId, '123e4567-e89b-12d3-a456-426614174000');
+      assert.equal(parsed.reason, 'Employee resigned voluntarily');
+    });
+
+    it('rejects invalid uuid for reassignToMemberId', () => {
+      assert.throws(() => {
+        offboardMemberDto.parse({
+          reassignToMemberId: 'invalid-not-uuid',
+        });
+      });
     });
   });
 });

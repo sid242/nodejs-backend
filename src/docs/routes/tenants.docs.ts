@@ -2,7 +2,7 @@ import type { OpenAPIRegistry } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
 
 import { bearerAuth, errorResponse, successResponse } from '@/docs/helpers';
-import { addMemberDto, createTenantDto, updateTenantDto } from '@/modules/tenants/tenants.dto';
+import { addMemberDto, createTenantDto, offboardMemberDto, updateTenantDto } from '@/modules/tenants/tenants.dto';
 
 export const TenantSchema = z.object({
   id: z.string().uuid().openapi({ example: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22' }),
@@ -121,6 +121,38 @@ export function registerTenantsDocs(registry: OpenAPIRegistry): void {
       401: errorResponse('Unauthorized'),
       403: errorResponse('Forbidden'),
       409: errorResponse('User already a member'),
+    },
+  });
+
+  const OffboardMemberInput = registry.register('OffboardMemberInput', offboardMemberDto);
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/tenants/{tenantId}/members/{memberId}/offboard',
+    summary: 'Offboard a member from tenant',
+    description: 'Offboards a member, revokes active sessions, and optionally reassigns their owned resources to another member.',
+    tags: ['Tenants'],
+    security: [{ [bearerAuth.name]: [] }],
+    request: {
+      params: z.object({
+        tenantId: z.string().uuid(),
+        memberId: z.string().uuid(),
+      }),
+      body: { content: { 'application/json': { schema: OffboardMemberInput } } },
+    },
+    responses: {
+      200: successResponse(
+        z.object({
+          message: z.string(),
+          member: TenantMemberSchema,
+          reassignedFilesCount: z.number(),
+        }),
+        'Member successfully offboarded',
+      ),
+      400: errorResponse('Bad Request (e.g. Last Owner protection or self-offboarding)'),
+      401: errorResponse('Unauthorized'),
+      403: errorResponse('Forbidden'),
+      404: errorResponse('Member not found'),
     },
   });
 

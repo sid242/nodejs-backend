@@ -456,7 +456,9 @@ export async function findTenantMembers(tenantId: string): Promise<
   return enriched.map((r) => ({
     id: r.id,
     userId: r.userId,
-    name: r.user?.name ?? '',
+    firstName: r.user?.firstName ?? '',
+    lastName: r.user?.lastName ?? '',
+    name: [r.user?.firstName, r.user?.lastName].filter(Boolean).join(' ') || '',
     email: r.user?.email ?? '',
     status: r.status,
     role: r.role,

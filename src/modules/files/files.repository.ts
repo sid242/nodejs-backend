@@ -104,3 +104,18 @@ export async function deleteById(
   }
   await executor.delete(files).where(and(...conditions));
 }
+
+export async function reassignOwnerFiles(
+  tenantId: string,
+  oldOwnerId: string,
+  newOwnerId: string,
+  executor: DbExecutor = tenantDb(),
+): Promise<number> {
+  assertTenantScope(tenantId);
+  const result = await executor
+    .update(files)
+    .set({ ownerId: newOwnerId })
+    .where(and(eq(files.tenantId, tenantId), eq(files.ownerId, oldOwnerId)))
+    .returning({ id: files.id });
+  return result?.length ?? 0;
+}

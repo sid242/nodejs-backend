@@ -33,6 +33,7 @@ import {
   verifyAndConsumeMagicLinkToken,
 } from '@/modules/auth/tokens';
 import * as billingService from '@/modules/billing/billing.service';
+import * as filesRepo from '@/modules/files/files.repository';
 import { rbacRepo } from '@/modules/rbac/rbac.repository';
 import * as rbacService from '@/modules/rbac/rbac.service';
 import { emailQueue } from '@/queues/index';
@@ -49,6 +50,7 @@ import {
   type BulkInviteItemDto,
   type CreateTenantDto,
   type ListMembersQueryDto,
+  type OffboardMemberDto,
   type OverrideTenantCustomDomainDto,
   type RequestBrandingUploadUrlDto,
   type SearchAuditLogsDto,
@@ -187,6 +189,13 @@ export async function updateMemberDetails(
     ...(data.memberCode !== undefined ? { memberCode: data.memberCode } : {}),
     ...(data.jobTitle !== undefined ? { jobTitle: data.jobTitle } : {}),
     ...(data.department !== undefined ? { department: data.department } : {}),
+    ...(data.managerMemberId !== undefined ? { managerMemberId: data.managerMemberId } : {}),
+    ...(data.location !== undefined ? { location: data.location } : {}),
+    ...(data.employmentType !== undefined ? { employmentType: data.employmentType } : {}),
+    ...(data.startDate !== undefined ? { startDate: data.startDate } : {}),
+    ...(data.endDate !== undefined ? { endDate: data.endDate } : {}),
+    ...(data.workEmail !== undefined ? { workEmail: data.workEmail } : {}),
+    ...(data.avatarUrl !== undefined ? { avatarUrl: data.avatarUrl } : {}),
   });
 
   await logSecurityEvent({
@@ -597,6 +606,99 @@ export async function updateTenantMemberStatus(
   return {
     message: `Member successfully ${status.toLowerCase()}`,
     member: updated,
+  };
+}
+
+export async function offboardTenantMember(
+  tenantId: string,
+  operatorUserId: string,
+  memberId: string,
+  dto: OffboardMemberDto,
+): Promise<{
+  message: string;
+  member: TenantMember;
+  reassignedFilesCount: number;
+}> {
+  const member = await tenantsRepo.findTenantMemberById(memberId);
+  if (!member || member.tenantId !== tenantId) {
+    throw AppError.notFound('Member not found in this tenant');
+  }
+
+  if (member.userId === operatorUserId) {
+    throw AppError.badRequest('You cannot offboard yourself from the tenant');
+  }
+
+  // Last Owner guard: Cannot offboard if member is the last remaining OWNER
+  const existingRoles = await rbacRepo.getMemberRoles(member.id);
+  const isOwner = existingRoles.some((r) => r.name.toLowerCase() === 'owner');
+  if (isOwner) {
+    const ownerCount = await rbacRepo.countTenantOwners(tenantId);
+    if (ownerCount <= 1) {
+      throw AppError.badRequest(
+        'Cannot offboard the last remaining Owner of this organization. Transfer ownership first.',
+      );
+    }
+  }
+
+  // Find operator member to track who offboarded
+  const operatorMember = await tenantsRepo.findTenantMember(tenantId, operatorUserId);
+
+  // Validate reassignment target if provided
+  let reassignedFilesCount = 0;
+  if (dto.reassignToMemberId) {
+    if (dto.reassignToMemberId === memberId) {
+      throw AppError.badRequest('Cannot reassign resources to the member being offboarded');
+    }
+    const targetMember = await tenantsRepo.findTenantMemberById(dto.reassignToMemberId);
+    if (!targetMember || targetMember.tenantId !== tenantId) {
+      throw AppError.badRequest('Reassignment target member not found in this tenant');
+    }
+    if (targetMember.status !== 'ACTIVE') {
+      throw AppError.badRequest('Reassignment target member must be active');
+    }
+
+    reassignedFilesCount = await filesRepo.reassignOwnerFiles(
+      tenantId,
+      member.userId,
+      targetMember.userId,
+    );
+  }
+
+  // Update member status to SUSPENDED with offboarding metadata
+  const updated = await tenantsRepo.updateTenantMemberMetadata(memberId, {
+    status: 'SUSPENDED',
+    offboardedAt: new Date(),
+    offboardedByMemberId: operatorMember?.id ?? null,
+    reassignedToMemberId: dto.reassignToMemberId ?? null,
+  });
+
+  if (!updated) {
+    throw AppError.internal('Failed to update member offboarding status');
+  }
+
+  // Invalidate sessions and RBAC cache
+  await rbacService.invalidateRbacCache(tenantId, member.userId);
+  await revokeAllUserTokens(member.userId);
+
+  // Audit event
+  await logSecurityEvent({
+    tenantId,
+    userId: operatorUserId,
+    action: 'MEMBER.OFFBOARDED',
+    entityType: 'TenantMember',
+    entityId: memberId,
+    metadata: {
+      targetUserId: member.userId,
+      reassignedToMemberId: dto.reassignToMemberId,
+      reassignedFilesCount,
+      reason: dto.reason,
+    },
+  });
+
+  return {
+    message: 'Member successfully offboarded',
+    member: updated,
+    reassignedFilesCount,
   };
 }
 

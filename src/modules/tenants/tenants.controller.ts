@@ -118,6 +118,17 @@ export const removeMember = asyncHandler(async (req: Request, res: Response) => 
   AppResponse.ok({ message: 'Member removed successfully' }).send(res);
 });
 
+export const offboardMember = asyncHandler(async (req: Request, res: Response) => {
+  const memberId = String(req.params.memberId);
+  const result = await tenantsService.offboardTenantMember(
+    req.tenant!.id,
+    req.user!.id,
+    memberId,
+    req.valid?.body ?? {},
+  );
+  AppResponse.ok(result, result.message).send(res);
+});
+
 export const acceptInvitation = asyncHandler(async (req: Request, res: Response) => {
   const result = await tenantsService.acceptTenantInvitation(
     req.valid!.body.token,

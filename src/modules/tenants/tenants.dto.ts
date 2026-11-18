@@ -117,8 +117,21 @@ export const updateMemberDto = z.object({
   memberCode: z.string().trim().max(50).optional().nullable(),
   jobTitle: z.string().trim().max(100).optional().nullable(),
   department: z.string().trim().max(100).optional().nullable(),
+  managerMemberId: z.string().uuid().optional().nullable(),
+  location: z.string().trim().max(100).optional().nullable(),
+  employmentType: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACTOR', 'INTERN']).optional().nullable(),
+  startDate: z.coerce.date().optional().nullable(),
+  endDate: z.coerce.date().optional().nullable(),
+  workEmail: z.string().trim().email().optional().nullable(),
+  avatarUrl: z.string().trim().url().optional().nullable(),
 });
 export type UpdateMemberDto = z.infer<typeof updateMemberDto>;
+
+export const offboardMemberDto = z.object({
+  reassignToMemberId: z.string().uuid().optional().nullable(),
+  reason: z.string().trim().max(500).optional(),
+});
+export type OffboardMemberDto = z.infer<typeof offboardMemberDto>;
 
 export const updateMemberRoleDto = z.object({
   role: z.string().trim().min(2).max(50),
