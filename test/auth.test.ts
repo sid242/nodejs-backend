@@ -339,7 +339,8 @@ test('2FA TOTP generation, challenge creation and validation lifecycle', async (
     .insert(users)
     .values({
       email: uniqueEmail,
-      name: '2FA Test User',
+      firstName: '2FA Test',
+      lastName: 'User',
       passwordHash: '$2a$12$dummyhashforisolationtesting00000000000000000000000',
       status: 'ACTIVE',
     })

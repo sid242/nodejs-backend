@@ -207,7 +207,8 @@ before(async () => {
     .insert(users)
     .values({
       email: `owner-${Date.now()}@example.com`,
-      name: 'Workspace Owner',
+      firstName: 'Workspace',
+      lastName: 'Owner',
       passwordHash: '$2a$12$dummyuserpasswordhash00000000000000000000000000000',
       status: 'ACTIVE',
     })
@@ -238,7 +239,8 @@ before(async () => {
     .insert(users)
     .values({
       email: `member-${Date.now()}@example.com`,
-      name: 'Regular Workspace Member',
+      firstName: 'Regular Workspace',
+      lastName: 'Member',
       passwordHash: '$2a$12$dummyuserpasswordhash00000000000000000000000000000',
       status: 'ACTIVE',
     })
@@ -269,7 +271,8 @@ before(async () => {
     .insert(users)
     .values({
       email: `inactive-${Date.now()}@example.com`,
-      name: 'Suspended Member',
+      firstName: 'Suspended',
+      lastName: 'Member',
       passwordHash: '$2a$12$dummyuserpasswordhash00000000000000000000000000000',
       status: 'SUSPENDED',
     })

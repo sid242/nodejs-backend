@@ -20,7 +20,8 @@ export const users = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     email: text('email').notNull(),
     passwordHash: text('passwordHash'),
-    name: text('name').notNull(),
+    firstName: text('firstName').notNull().default(''),
+    lastName: text('lastName'),
     avatarUrl: text('avatarUrl'),
     status: userStatusEnum('status').notNull().default('PENDING_VERIFICATION'),
     authMethod: text('authMethod').notNull().default('PASSWORD'),
@@ -43,8 +44,6 @@ export const users = pgTable(
     twoFactorRecoveryCodes: json('twoFactorRecoveryCodes').$type<string[]>(), // bcrypt-hashed single-use recovery codes
 
     // Profile & Preferences
-    firstName: text('firstName'),
-    lastName: text('lastName'),
     locale: text('locale').default('en'),
     timezone: text('timezone').default('UTC'),
     dateFormat: text('dateFormat').default('YYYY-MM-DD'),
@@ -76,7 +75,6 @@ export type NewUser = typeof users.$inferInsert;
 export const publicUser = {
   id: users.id,
   email: users.email,
-  name: users.name,
   firstName: users.firstName,
   lastName: users.lastName,
   avatarUrl: users.avatarUrl,
@@ -95,8 +93,7 @@ export const publicUser = {
 export type PublicUser = {
   id: string;
   email: string;
-  name: string;
-  firstName?: string | null;
+  firstName: string;
   lastName?: string | null;
   avatarUrl?: string | null;
   status: 'PENDING_VERIFICATION' | 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';

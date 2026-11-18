@@ -184,15 +184,23 @@ export class ScimRepository {
 
   async createManagedUser(data: {
     email: string;
-    name: string;
+    name?: string;
+    firstName?: string;
+    lastName?: string;
     authMethod?: 'SCIM' | 'SSO' | 'PASSWORD';
     status?: 'ACTIVE' | 'PENDING_VERIFICATION';
   }) {
+    const first =
+      data.firstName ?? (data.name ? data.name.split(' ')[0] : data.email.split('@')[0])!;
+    const last =
+      data.lastName ?? (data.name ? data.name.split(' ').slice(1).join(' ') || null : null);
+
     const [created] = await primaryDbHandle()
       .insert(users)
       .values({
         email: data.email.trim().toLowerCase(),
-        name: data.name,
+        firstName: first,
+        lastName: last,
         passwordHash: null,
         status: data.status ?? 'ACTIVE',
         authMethod: data.authMethod ?? 'SCIM',
@@ -204,10 +212,15 @@ export class ScimRepository {
   }
 
   async updateUserDisplayName(userId: string, name: string) {
+    const parts = name.trim().split(/\s+/);
+    const firstName = parts[0] ?? name;
+    const lastName = parts.slice(1).join(' ') || null;
+
     const [updated] = await primaryDbHandle()
       .update(users)
       .set({
-        name,
+        firstName,
+        lastName,
         updatedAt: new Date(),
       })
       .where(eq(users.id, userId))

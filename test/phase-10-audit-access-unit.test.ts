@@ -63,13 +63,15 @@ describe('Phase 09: Enterprise Audit Logging, Retention & Effective Access Simul
     adminUser = await authRepo.createUser({
       email: `audit-admin-${timestamp}@example.com`,
       passwordHash: 'dummy_hash',
-      name: 'Audit Administrator',
+      firstName: 'Audit',
+      lastName: 'Administrator',
     });
 
     targetUser = await authRepo.createUser({
       email: `audit-target-${timestamp}@example.com`,
       passwordHash: 'dummy_hash',
-      name: 'Audit Target Member',
+      firstName: 'Audit Target',
+      lastName: 'Member',
     });
 
     // Ensure users have ACTIVE status in DB

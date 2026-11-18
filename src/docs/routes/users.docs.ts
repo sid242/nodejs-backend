@@ -7,7 +7,8 @@ import { listUsersQueryDto, updateMeDto, updateUserStatusDto } from '@/modules/u
 export const UserSchema = z.object({
   id: z.string().uuid().openapi({ example: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' }),
   email: z.string().email().openapi({ example: 'jane.doe@example.com' }),
-  name: z.string().openapi({ example: 'Jane Doe' }),
+  firstName: z.string().openapi({ example: 'Jane' }),
+  lastName: z.string().nullable().openapi({ example: 'Doe' }),
   status: z
     .enum(['PENDING_VERIFICATION', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED'])
     .openapi({ example: 'ACTIVE' }),

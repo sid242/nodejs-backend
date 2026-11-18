@@ -75,16 +75,12 @@ export async function register(
   clientContext?: ClientContext,
 ): Promise<AuthResult> {
   const passwordHash = await bcrypt.hash(password, 12);
-  const displayName =
-    name || [firstName, lastName].filter(Boolean).join(' ').trim() || email.split('@')[0]!;
-  const userFirst = firstName ?? (displayName ? displayName.split(' ')[0] : null);
-  const userLast =
-    lastName ?? (displayName ? displayName.split(' ').slice(1).join(' ') || null : null);
+  const userFirst = (firstName ?? (name ? name.split(' ')[0] : email.split('@')[0]))!;
+  const userLast = lastName ?? (name ? name.split(' ').slice(1).join(' ') || null : null);
 
   const user = await authRepo.createUser({
     email,
     passwordHash,
-    name: displayName,
     firstName: userFirst,
     lastName: userLast,
   });
@@ -93,10 +89,10 @@ export async function register(
   // Slow/unreliable work goes to the queue, not the request path. jobId makes it idempotent.
   const verificationToken = await createEmailVerificationToken(user.id);
   await Promise.all([
-    emailQueue.add('welcome', { to: user.email, name: user.name }, { jobId: `welcome-${user.id}` }),
+    emailQueue.add('welcome', { to: user.email, name: user.firstName }, { jobId: `welcome-${user.id}` }),
     emailQueue.add(
       'verify-email',
-      { to: user.email, name: user.name, token: verificationToken },
+      { to: user.email, name: user.firstName, token: verificationToken },
       { jobId: `verify-email-${user.id}-${Date.now()}` },
     ),
   ]);
@@ -239,7 +235,6 @@ export async function login(
   const user: PublicUser = {
     id: record.id,
     email: record.email,
-    name: record.name,
     firstName: record.firstName,
     lastName: record.lastName,
     status: record.status,
@@ -338,7 +333,7 @@ export async function forgotPassword({ email }: ForgotPasswordDto): Promise<{ me
     const token = await createPasswordResetToken(record.id);
     await emailQueue.add(
       'password-reset',
-      { to: record.email, name: record.name, token },
+      { to: record.email, name: record.firstName, token },
       { jobId: `pwd-reset-${record.id}-${Date.now()}` },
     );
   }
@@ -426,7 +421,7 @@ export async function requestEmailVerification(identifier: {
   const token = await createEmailVerificationToken(user.id);
   await emailQueue.add(
     'verify-email',
-    { to: user.email, name: user.name, token },
+    { to: user.email, name: user.firstName, token },
     { jobId: `verify-email-${user.id}-${Date.now()}` },
   );
 
@@ -487,7 +482,7 @@ export async function requestMagicLink(email: string): Promise<MagicLinkRequestR
     'magic-link',
     {
       to: user.email,
-      name: user.name,
+      name: user.firstName,
       token: rawToken,
       magicLinkUrl,
     },
@@ -646,12 +641,17 @@ export async function redeemHandoff({
   const user: PublicUser = {
     id: userRecord.id,
     email: userRecord.email,
-    name: userRecord.name,
+    firstName: userRecord.firstName,
+    lastName: userRecord.lastName,
     status: userRecord.status,
     emailVerifiedAt: userRecord.emailVerifiedAt,
     phoneNumber: userRecord.phoneNumber,
     phoneVerifiedAt: userRecord.phoneVerifiedAt,
     twoFactorEnabledAt: userRecord.twoFactorEnabledAt,
+    locale: userRecord.locale,
+    timezone: userRecord.timezone,
+    dateFormat: userRecord.dateFormat,
+    lastLoginAt: userRecord.lastLoginAt,
     createdAt: userRecord.createdAt,
   };
 
@@ -691,7 +691,7 @@ export async function impersonateUser({
   sessionId: string;
   expiresInSeconds: number;
   expiresInMinutes: number;
-  targetUser: { id: string; name: string; email: string };
+  targetUser: { id: string; firstName: string; lastName?: string | null; email: string };
 }> {
   if (caller.id === targetUserId) {
     throw AppError.badRequest('Cannot impersonate yourself');
@@ -798,7 +798,8 @@ export async function impersonateUser({
     expiresInMinutes: durationMinutes,
     targetUser: {
       id: targetUserRecord.id,
-      name: targetUserRecord.name,
+      firstName: targetUserRecord.firstName,
+      lastName: targetUserRecord.lastName,
       email: targetUserRecord.email,
     },
   };

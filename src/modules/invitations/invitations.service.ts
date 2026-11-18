@@ -38,6 +38,8 @@ export interface CreateInvitationDto {
 export interface AcceptInvitationDto {
   token: string;
   name?: string;
+  firstName?: string;
+  lastName?: string;
   password?: string;
 }
 
@@ -343,12 +345,23 @@ export async function acceptTenantInvitation(
       throw AppError.badRequest('Password of at least 8 characters is required to create your account');
     }
 
-    const name = dto.name?.trim() || normalizedInvitedEmail.split('@')[0] || 'User';
+    const first =
+      dto.firstName?.trim() ||
+      (dto.name ? dto.name.trim().split(' ')[0] : undefined) ||
+      invitation.firstName ||
+      normalizedInvitedEmail.split('@')[0] ||
+      'User';
+    const last =
+      dto.lastName?.trim() ||
+      (dto.name ? dto.name.trim().split(' ').slice(1).join(' ') || undefined : undefined) ||
+      invitation.lastName ||
+      null;
     const passwordHash = await bcrypt.hash(dto.password, 12);
 
     const createdUser = await invitationsRepo.createInvitedUser({
       email: normalizedInvitedEmail,
-      name,
+      firstName: first,
+      lastName: last,
       passwordHash,
     });
 
@@ -356,7 +369,8 @@ export async function acceptTenantInvitation(
     userForTokens = {
       id: createdUser.id,
       email: createdUser.email,
-      name: createdUser.name,
+      firstName: createdUser.firstName,
+      lastName: createdUser.lastName,
       status: createdUser.status,
       emailVerifiedAt: createdUser.emailVerifiedAt,
       phoneNumber: createdUser.phoneNumber,

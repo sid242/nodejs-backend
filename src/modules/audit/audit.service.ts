@@ -53,13 +53,13 @@ export async function logSecurityEvent(event: AuditEventPayload): Promise<void> 
     if ((!actorEmail || !actorName) && actorId) {
       try {
         const [u] = await primaryDbHandle()
-          .select({ email: users.email, name: users.name })
+          .select({ email: users.email, firstName: users.firstName, lastName: users.lastName })
           .from(users)
           .where(eq(users.id, actorId))
           .limit(1);
         if (u) {
           actorEmail = actorEmail ?? u.email;
-          actorName = actorName ?? u.name;
+          actorName = actorName ?? [u.firstName, u.lastName].filter(Boolean).join(' ');
         }
       } catch {
         /* non-blocking actor lookup */

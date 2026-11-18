@@ -1,8 +1,7 @@
 import { z } from 'zod';
 
 export const updateMeDto = z.object({
-  name: z.string().min(1).max(100).optional(),
-  firstName: z.string().min(1).max(50).nullable().optional(),
+  firstName: z.string().min(1).max(50).optional(),
   lastName: z.string().max(50).nullable().optional(),
   locale: z.string().min(2).max(10).optional(),
   timezone: z.string().min(1).max(50).optional(),

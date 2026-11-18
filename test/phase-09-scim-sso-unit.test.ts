@@ -29,7 +29,8 @@ describe('SCIM 2.0 Directory Sync & Enterprise SSO Unit Tests', () => {
     staffUser = await authRepo.createUser({
       email: `scim-admin-${stamp}@example.com`,
       passwordHash: 'dummy_hash',
-      name: 'Admin User',
+      firstName: 'Admin',
+      lastName: 'User',
     });
 
     // Seed Free and Enterprise plans

@@ -61,7 +61,8 @@ before(async () => {
       .insert(users)
       .values({
         email: `db-user-${randomUUID().slice(0, 8)}@example.com`,
-        name: 'DB Test User',
+        firstName: 'DB Test',
+        lastName: 'User',
         passwordHash: '$2a$12$dummyhashfordbtesting',
       })
       .returning();

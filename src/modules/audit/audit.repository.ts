@@ -81,7 +81,8 @@ async function enrichAuditLogUsers(logs: AuditLog[]): Promise<EnrichedAuditLog[]
   const userRows = await primaryDb
     .select({
       id: users.id,
-      name: users.name,
+      firstName: users.firstName,
+      lastName: users.lastName,
       email: users.email,
     })
     .from(users)
@@ -94,9 +95,11 @@ async function enrichAuditLogUsers(logs: AuditLog[]): Promise<EnrichedAuditLog[]
     const effective = log?.effectiveUserId ? userMap.get(log.effectiveUserId) : null;
     return {
       ...log,
-      actorName: actor?.name ?? null,
+      actorName: actor ? [actor.firstName, actor.lastName].filter(Boolean).join(' ') : null,
       actorEmail: actor?.email ?? null,
-      effectiveUserName: effective?.name ?? null,
+      effectiveUserName: effective
+        ? [effective.firstName, effective.lastName].filter(Boolean).join(' ')
+        : null,
       effectiveUserEmail: effective?.email ?? null,
     };
   });

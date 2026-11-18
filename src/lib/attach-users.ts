@@ -37,7 +37,8 @@ export async function attachUsers<T extends Record<string, any>>(
   const userRows = await primaryDb
     .select({
       id: users.id,
-      name: users.name,
+      firstName: users.firstName,
+      lastName: users.lastName,
       email: users.email,
       avatarUrl: users.avatarUrl,
       status: users.status,

@@ -70,7 +70,8 @@ export const acceptInvitation = asyncHandler(async (req: Request, res: Response)
       clientUser = {
         id: user.id,
         email: user.email,
-        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
         status: user.status,
         emailVerifiedAt: user.emailVerifiedAt,
         phoneNumber: user.phoneNumber,

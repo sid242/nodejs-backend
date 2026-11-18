@@ -180,7 +180,13 @@ export async function findTenantMembersPaginated(tenantId: string, filters: List
     const matchingUsers = await primaryDbHandle()
       .select({ id: users.id })
       .from(users)
-      .where(or(ilike(users.name, searchPattern), ilike(users.email, searchPattern)));
+      .where(
+        or(
+          ilike(users.firstName, searchPattern),
+          ilike(users.lastName, searchPattern),
+          ilike(users.email, searchPattern),
+        ),
+      );
     const matchedUserIds = matchingUsers.map((u) => u.id);
 
     const searchConditions = [
@@ -328,7 +334,8 @@ export async function findTenantMemberDetail(tenantId: string, memberId: string)
   const [userData] = await primaryDbHandle()
     .select({
       id: users.id,
-      name: users.name,
+      firstName: users.firstName,
+      lastName: users.lastName,
       email: users.email,
       phoneNumber: users.phoneNumber,
       status: users.status,

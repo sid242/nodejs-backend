@@ -40,7 +40,8 @@ export interface PermissionProvenance {
 export interface EffectiveAccessResult {
   user: {
     id: string;
-    name: string | null;
+    firstName: string;
+    lastName?: string | null;
     email: string;
     status: string;
   };
@@ -91,7 +92,8 @@ export async function getEffectiveAccess(
   const [userRecord] = await db
     .select({
       id: users.id,
-      name: users.name,
+      firstName: users.firstName,
+      lastName: users.lastName,
       email: users.email,
       status: users.status,
     })

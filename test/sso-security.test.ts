@@ -183,7 +183,8 @@ describe('SSO Security Hardening & Isolation Tests (Gap Pack 01)', () => {
       await authRepo.createUser({
         email: ssoEmail,
         passwordHash: null,
-        name: 'SSO User',
+        firstName: 'SSO',
+        lastName: 'User',
       });
 
       await assert.rejects(

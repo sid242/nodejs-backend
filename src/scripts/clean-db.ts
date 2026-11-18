@@ -183,7 +183,7 @@ async function main() {
   const finalUsers = await db.select().from(users);
   console.log(`\nActive Users (${finalUsers.length}):`);
   finalUsers.forEach((u) =>
-    console.log(`  - <${u.email}> "${u.name}" (Status: ${u.status})`),
+    console.log(`  - <${u.email}> "${u.firstName} ${u.lastName ?? ''}".trim() (Status: ${u.status})`),
   );
 
   const finalStaff = await db.select().from(platformStaff);

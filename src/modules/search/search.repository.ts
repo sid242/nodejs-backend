@@ -22,7 +22,8 @@ export async function searchMembers(
     .select({
       id: tenantMembers.id,
       userId: users.id,
-      name: users.name,
+      firstName: users.firstName,
+      lastName: users.lastName,
       email: users.email,
       jobTitle: tenantMembers.jobTitle,
       department: tenantMembers.department,
@@ -34,7 +35,8 @@ export async function searchMembers(
       and(
         eq(tenantMembers.tenantId, tenantId),
         or(
-          ilike(users.name, pattern),
+          ilike(users.firstName, pattern),
+          ilike(users.lastName, pattern),
           ilike(users.email, pattern),
           ilike(tenantMembers.jobTitle, pattern),
           ilike(tenantMembers.department, pattern),
@@ -45,7 +47,7 @@ export async function searchMembers(
 
   return rows.map((r) => ({
     id: `member-${r.id}`,
-    title: r.name || r.email,
+    title: [r.firstName, r.lastName].filter(Boolean).join(' ') || r.email,
     subtitle: [r.jobTitle, r.department, r.email].filter(Boolean).join(' · '),
     category: 'Members',
     href: `/team?search=${encodeURIComponent(r.email)}`,

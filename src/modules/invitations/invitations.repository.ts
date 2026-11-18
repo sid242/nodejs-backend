@@ -52,11 +52,11 @@ export async function findInvitationByTokenHash(
   let invitedByName: string | null = null;
   if (invitation.invitedByUserId) {
     const [inviter] = await primaryDb
-      .select({ name: users.name })
+      .select({ firstName: users.firstName, lastName: users.lastName })
       .from(users)
       .where(eq(users.id, invitation.invitedByUserId))
       .limit(1);
-    invitedByName = inviter?.name ?? null;
+    invitedByName = inviter ? [inviter.firstName, inviter.lastName].filter(Boolean).join(' ') : null;
   }
 
   return {
@@ -119,11 +119,11 @@ export async function findInvitationById(
   let invitedByName: string | null = null;
   if (invitation.invitedByUserId) {
     const [inviter] = await primaryDb
-      .select({ name: users.name })
+      .select({ firstName: users.firstName, lastName: users.lastName })
       .from(users)
       .where(eq(users.id, invitation.invitedByUserId))
       .limit(1);
-    invitedByName = inviter?.name ?? null;
+    invitedByName = inviter ? [inviter.firstName, inviter.lastName].filter(Boolean).join(' ') : null;
   }
 
   return {
@@ -229,15 +229,20 @@ export async function revokeInvitation(
  */
 export async function createInvitedUser(data: {
   email: string;
-  name: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string | null;
   passwordHash: string;
 }): Promise<User> {
   const primaryDb = primaryDbHandle();
+  const first = data.firstName ?? (data.name ? data.name.split(' ')[0] : data.email.split('@')[0])!;
+  const last = data.lastName ?? (data.name ? data.name.split(' ').slice(1).join(' ') || null : null);
   const [createdUser] = await primaryDb
     .insert(users)
     .values({
       email: data.email,
-      name: data.name,
+      firstName: first,
+      lastName: last,
       passwordHash: data.passwordHash,
       status: 'ACTIVE',
       emailVerifiedAt: new Date(),

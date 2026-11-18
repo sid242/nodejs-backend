@@ -24,7 +24,8 @@ test('Phase 01: Tenant context resolution attaches req.db executor', async () =>
     .insert(users)
     .values({
       email: `ctx-user-${Date.now()}@example.com`,
-      name: 'Context User',
+      firstName: 'Context',
+      lastName: 'User',
       passwordHash: '$2a$12$dummyhash0000000000000000000000000000000000000000000000',
       status: 'ACTIVE',
     })
@@ -103,7 +104,8 @@ test('Phase 01: Socket room authorization restricts tenant room join to active m
     .insert(users)
     .values({
       email: `socket-active-${Date.now()}@example.com`,
-      name: 'Socket Active User',
+      firstName: 'Socket Active',
+      lastName: 'User',
       passwordHash: '$2a$12$dummyhash0000000000000000000000000000000000000000000000',
       status: 'ACTIVE',
     })
@@ -114,7 +116,8 @@ test('Phase 01: Socket room authorization restricts tenant room join to active m
     .insert(users)
     .values({
       email: `socket-nonmember-${Date.now()}@example.com`,
-      name: 'Socket Non-Member',
+      firstName: 'Socket Non-Member',
+      lastName: null,
       passwordHash: '$2a$12$dummyhash0000000000000000000000000000000000000000000000',
       status: 'ACTIVE',
     })

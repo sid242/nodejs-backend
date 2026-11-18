@@ -491,7 +491,8 @@ export async function seedDemo(): Promise<void> {
   await db.insert(users).values({
     email: superAdminEmail,
     passwordHash: adminPasswordHash,
-    name: 'Siddharth SuperAdmin',
+    firstName: 'Siddharth',
+    lastName: 'SuperAdmin',
     status: 'ACTIVE',
     emailVerifiedAt: new Date(),
   });
@@ -565,12 +566,14 @@ export async function seedDemo(): Promise<void> {
       const passwordHash = await bcrypt.hash(memberDef.password, 12);
 
       if (!userRecord) {
+        const parts = memberDef.name.trim().split(/\s+/);
         const [createdUser] = await db
           .insert(users)
           .values({
             email: memberDef.email,
             passwordHash,
-            name: memberDef.name,
+            firstName: parts[0] ?? memberDef.name,
+            lastName: parts.slice(1).join(' ') || null,
             status: 'ACTIVE',
             emailVerifiedAt: new Date(),
           })

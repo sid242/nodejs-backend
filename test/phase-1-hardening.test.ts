@@ -37,7 +37,8 @@ test('Phase 1: S1 - Invite response omits inviteToken/inviteUrl in production an
       .insert(users)
       .values({
         email: existingEmail,
-        name: 'Existing Account',
+        firstName: 'Existing',
+        lastName: 'Account',
         passwordHash: '$2a$12$dummyhash0000000000000000000000000000000000000000000000',
         status: 'ACTIVE',
       })
@@ -75,7 +76,8 @@ test('Phase 1: S1 - Accepting invite for Tenant A does not activate pending memb
     .insert(users)
     .values({
       email,
-      name: 'Multi Workspace User',
+      firstName: 'Multi Workspace',
+      lastName: 'User',
       passwordHash: '$2a$12$dummyhash0000000000000000000000000000000000000000000000',
       status: 'ACTIVE',
     })
@@ -342,7 +344,8 @@ test('Phase 1: S7 - File repository enforces tenant isolation on findById and up
     .insert(users)
     .values({
       email: `file-owner-${Date.now()}@example.com`,
-      name: 'File Owner',
+      firstName: 'File',
+      lastName: 'Owner',
       passwordHash: '$2a$12$dummyhash0000000000000000000000000000000000000000000000',
       status: 'ACTIVE',
     })

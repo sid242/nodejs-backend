@@ -749,11 +749,16 @@ export class SsoService {
         throw AppError.forbidden('User does not exist and Just-In-Time provisioning is disabled for this workspace');
       }
 
+      const nameParts = name.trim().split(/\s+/);
+      const firstName = nameParts[0] || email.split('@')[0] || 'User';
+      const lastName = nameParts.slice(1).join(' ') || undefined;
+
       // Create new user with passwordHash = null (no password login allowed)
       const created = await authRepo.createUser({
         email,
         passwordHash: null,
-        name,
+        firstName,
+        lastName,
       });
       user = await authRepo.findById(created.id);
     }

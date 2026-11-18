@@ -237,16 +237,16 @@ export async function addMemberToTenant(
   if (!targetUser) {
     // Automatically provision account in PENDING_VERIFICATION so the invitee can join seamlessly
     const dummyHash = await bcrypt.hash(randomUUID(), 12);
-    const firstName = dto.firstName?.trim();
-    const lastName = dto.lastName?.trim();
     const defaultNamePart = normalizedEmail.split('@')[0] || 'Member';
-    const computedName =
-      [firstName, lastName].filter(Boolean).join(' ') ||
+    const firstName =
+      dto.firstName?.trim() ||
       defaultNamePart.charAt(0).toUpperCase() + defaultNamePart.slice(1);
+    const lastName = dto.lastName?.trim();
 
     const created = await authRepo.createUser({
       email: normalizedEmail,
-      name: computedName,
+      firstName,
+      lastName,
       passwordHash: dummyHash,
     });
     targetUser = await authRepo.findById(created.id);
@@ -330,7 +330,7 @@ export async function addMemberToTenant(
     'tenant-invite',
     {
       to: targetUser.email,
-      name: targetUser.name,
+      name: [targetUser.firstName, targetUser.lastName].filter(Boolean).join(' ') || 'Member',
       tenantName: tenant?.name ?? 'Workspace',
       roleName: matchedRole.name,
       token: inviteToken,

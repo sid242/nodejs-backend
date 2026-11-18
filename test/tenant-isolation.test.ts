@@ -67,7 +67,8 @@ test('Multi-Tenant Edge Case 1: Unauthenticated and zero-membership users withou
     .insert(users)
     .values({
       email: `zero-member-${Date.now()}@example.com`,
-      name: 'Zero Tenant User',
+      firstName: 'Zero Tenant',
+      lastName: 'User',
       passwordHash: '$2a$12$dummyhashforzeromembertest000000000000000000000000',
       status: 'ACTIVE',
     })
@@ -121,7 +122,8 @@ test('Multi-Tenant Edge Case 2: User with exactly 1 active tenant auto-resolves 
     .insert(users)
     .values({
       email: `single-tenant-${Date.now()}@example.com`,
-      name: 'Single Tenant User',
+      firstName: 'Single Tenant',
+      lastName: 'User',
       passwordHash: '$2a$12$dummyhashforsingletenanttest000000000000000000000000',
       status: 'ACTIVE',
     })
@@ -182,7 +184,8 @@ test('Multi-Tenant Edge Case 3: User with multiple active tenants requires expli
     .insert(users)
     .values({
       email: `multi-tenant-${Date.now()}@example.com`,
-      name: 'Multi Tenant User',
+      firstName: 'Multi Tenant',
+      lastName: 'User',
       passwordHash: '$2a$12$dummyhashformultitenanttest000000000000000000000000',
       status: 'ACTIVE',
     })
@@ -270,7 +273,8 @@ test('Multi-Tenant Edge Case 4: Nonexistent tenant ID returns 404 Not Found', as
     .insert(users)
     .values({
       email: `notfound-user-${Date.now()}@example.com`,
-      name: 'NotFound Test User',
+      firstName: 'NotFound Test',
+      lastName: 'User',
       passwordHash: '$2a$12$dummyhashfornotfoundtest00000000000000000000000000',
       status: 'ACTIVE',
     })
@@ -309,7 +313,8 @@ test('Multi-Tenant Edge Case 5: Tenant slug supplied instead of UUID in x-tenant
     .insert(users)
     .values({
       email: `slug-user-${Date.now()}@example.com`,
-      name: 'Slug Resolution User',
+      firstName: 'Slug Resolution',
+      lastName: 'User',
       passwordHash: '$2a$12$dummyhashforslugresolutiontest00000000000000000000',
       status: 'ACTIVE',
     })
@@ -365,7 +370,8 @@ test('Multi-Tenant Edge Case 6: User attempting to access a tenant they do not b
     .insert(users)
     .values({
       email: `intruder-${Date.now()}@example.com`,
-      name: 'Intruder User',
+      firstName: 'Intruder',
+      lastName: 'User',
       passwordHash: '$2a$12$dummyhashforintrudertest00000000000000000000000000',
       status: 'ACTIVE',
     })
@@ -414,7 +420,8 @@ test('Multi-Tenant Edge Case 7: PostgreSQL Row-Level Security (RLS) enforces ker
     .insert(users)
     .values({
       email: `rls-user-${Date.now()}@example.com`,
-      name: 'RLS User',
+      firstName: 'RLS',
+      lastName: 'User',
       passwordHash: '$2a$12$dummyhashforrlstest0000000000000000000000000000000',
       status: 'ACTIVE',
     })

@@ -1261,16 +1261,16 @@ export async function provisionTenant(
 
   if (!ownerUser) {
     const dummyHash = await bcrypt.hash(randomUUID(), 12);
-    const firstName = data.ownerFirstName?.trim();
-    const lastName = data.ownerLastName?.trim();
     const defaultNamePart = normalizedEmail.split('@')[0] || 'Owner';
-    const computedName =
-      [firstName, lastName].filter(Boolean).join(' ') ||
+    const firstName =
+      data.ownerFirstName?.trim() ||
       defaultNamePart.charAt(0).toUpperCase() + defaultNamePart.slice(1);
+    const lastName = data.ownerLastName?.trim();
 
     const created = await authRepo.createUser({
       email: normalizedEmail,
-      name: computedName,
+      firstName,
+      lastName,
       passwordHash: dummyHash,
     });
     ownerUser = await authRepo.findById(created.id);
@@ -1348,11 +1348,14 @@ export async function provisionTenant(
     `/accept-invite?token=${inviteToken}&tenant=${tenant.id}`,
   );
 
+  const ownerDisplayName =
+    [ownerUser.firstName, ownerUser.lastName].filter(Boolean).join(' ') || 'Owner';
+
   await emailQueue.add(
     'tenant-invite',
     {
       to: ownerUser.email,
-      name: ownerUser.name,
+      name: ownerDisplayName,
       tenantName: tenant.name,
       roleName: 'Owner',
       token: inviteToken,
@@ -1394,7 +1397,9 @@ export async function provisionTenant(
     owner: {
       id: ownerUser.id,
       email: ownerUser.email,
-      name: ownerUser.name,
+      firstName: ownerUser.firstName,
+      lastName: ownerUser.lastName,
+      name: ownerDisplayName,
       isNewUser,
     },
     inviteUrl,
@@ -1522,11 +1527,13 @@ export async function retryTenantProvisioning(
       tenant.id,
       `/accept-invite?token=${inviteToken}&tenant=${tenant.id}`,
     );
+    const memberDisplayName =
+      [existingOwnerMember.firstName, existingOwnerMember.lastName].filter(Boolean).join(' ') || 'Owner';
     await emailQueue.add(
       'tenant-invite',
       {
         to: existingOwnerMember.email,
-        name: existingOwnerMember.name,
+        name: memberDisplayName,
         tenantName: tenant.name,
         roleName: 'Owner',
         token: inviteToken,

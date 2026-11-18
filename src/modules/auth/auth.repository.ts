@@ -6,15 +6,13 @@ import { publicUser, users, type PublicUser, type User } from '@/db/schema/index
 export interface CreateUserData {
   email: string;
   passwordHash?: string | null;
-  name: string;
-  firstName?: string | null;
+  firstName: string;
   lastName?: string | null;
 }
 
 export async function createUser({
   email,
   passwordHash,
-  name,
   firstName,
   lastName,
 }: CreateUserData): Promise<PublicUser> {
@@ -23,8 +21,7 @@ export async function createUser({
     .values({
       email: email.toLowerCase(),
       passwordHash,
-      name,
-      firstName: firstName ?? null,
+      firstName,
       lastName: lastName ?? null,
     })
     .returning(publicUser);

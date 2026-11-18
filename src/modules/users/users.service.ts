@@ -17,7 +17,6 @@ export const getMe = (id: string): Promise<PublicUser> =>
     if (staff) {
       return {
         id: staff.id,
-        name: staff.displayName,
         firstName: staff.displayName,
         lastName: null,
         email: staff.email,
@@ -44,20 +43,6 @@ export async function updateMe(id: string, data: UpdateMeDto): Promise<PublicUse
   const updatePayload: Record<string, any> = {};
   if (data?.firstName !== undefined) updatePayload.firstName = data.firstName;
   if (data?.lastName !== undefined) updatePayload.lastName = data.lastName;
-
-  if (data?.firstName !== undefined || data?.lastName !== undefined) {
-    const first = data?.firstName !== undefined ? data.firstName : '';
-    const last = data?.lastName !== undefined ? data.lastName : '';
-    const combined = [first, last].filter(Boolean).join(' ').trim();
-    if (combined) {
-      updatePayload.name = combined;
-    }
-  } else if (data?.name !== undefined) {
-    updatePayload.name = data.name;
-    const parts = data.name.trim().split(/\s+/);
-    updatePayload.firstName = parts[0] ?? null;
-    updatePayload.lastName = parts.slice(1).join(' ') || null;
-  }
 
   if (data?.avatarUrl !== undefined) updatePayload.avatarUrl = data.avatarUrl;
   if (data?.locale !== undefined) updatePayload.locale = data.locale;

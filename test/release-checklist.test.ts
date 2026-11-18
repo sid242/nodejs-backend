@@ -34,7 +34,8 @@ test('Release Checklist 1 & 2: Cross-Tenant Isolation & Header Tampering Prevent
     .insert(users)
     .values({
       email: uniqueEmail,
-      name: 'Isolation Test User',
+      firstName: 'Isolation Test',
+      lastName: 'User',
       passwordHash: '$2a$12$dummyhashforisolationtesting00000000000000000000000',
       status: 'ACTIVE',
     })
@@ -169,7 +170,8 @@ test('Release Checklist 5: Duplicate Active Memberships are Prevented', async ()
     .insert(users)
     .values({
       email: uniqueEmail,
-      name: 'Duplicate Test User',
+      firstName: 'Duplicate Test',
+      lastName: 'User',
       passwordHash: '$2a$12$dummyhashforduplicatetesting00000000000000000000000',
       status: 'ACTIVE',
     })
@@ -212,7 +214,8 @@ test('Release Checklist 6 & 7: Expired or Single-Use Invitation Tokens Cannot be
     .insert(users)
     .values({
       email: uniqueEmail,
-      name: 'Magic Token Test User',
+      firstName: 'Magic Token Test',
+      lastName: 'User',
       passwordHash: '$2a$12$dummyhashformagictokentesting0000000000000000000000',
       status: 'ACTIVE',
     })
@@ -252,7 +255,8 @@ test('Release Checklist 8: Removing Membership Preserves Global User and Other M
     .insert(users)
     .values({
       email: uniqueEmail,
-      name: 'Global Independent User',
+      firstName: 'Global Independent',
+      lastName: 'User',
       passwordHash: '$2a$12$dummyhashforpreservationtesting00000000000000000000000',
       status: 'ACTIVE',
     })
@@ -420,7 +424,8 @@ test('Release Checklist 11: SaaS Plan Seat Limits Block Over-Quota Member Invite
         .insert(users)
         .values({
           email: uniqueEmail,
-          name: `Quota User ${i}`,
+          firstName: 'Quota',
+          lastName: `User ${i}`,
           passwordHash: '$2a$12$dummyhashforquota000000000000000000000000000000000',
         })
         .returning();

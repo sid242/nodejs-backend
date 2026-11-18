@@ -247,7 +247,8 @@ test('transferTenantOwnership transfers OWNER role and demotes former owner to A
       .values({
         email: `owner-${Date.now()}@example.com`,
         passwordHash: 'dummyhash',
-        name: 'Owner User',
+        firstName: 'Owner',
+        lastName: 'User',
       })
       .returning({ id: users.id });
     formerOwnerUserId = created?.id ?? randomUUID();
