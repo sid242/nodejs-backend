@@ -4,11 +4,12 @@ import { env } from '@/config/env';
 import { logger } from '@/config/logger';
 import { createRedis } from '@/config/redis';
 import { captureJobException } from '@/observability/sentry';
-import { maintenanceQueue, QUEUES } from '@/queues/index';
+import { maintenanceQueue, notificationQueue, QUEUES } from '@/queues/index';
 import { processDbOperation } from '@/queues/workers/db-ops.worker';
 import { processEmail } from '@/queues/workers/email.worker';
 import { processFile } from '@/queues/workers/file.worker';
 import { processMaintenance } from '@/queues/workers/maintenance.worker';
+import { processNotification } from '@/queues/workers/notification.worker';
 
 function createWorker(
   name: string,
@@ -67,6 +68,9 @@ export function startWorkers(): Worker[] {
     createWorker(QUEUES.DB_OPS, processDbOperation as Processor, {
       concurrency: 2,
     }),
+    createWorker(QUEUES.NOTIFICATION, processNotification as Processor, {
+      concurrency: 5,
+    }),
   ];
 }
 
@@ -118,5 +122,11 @@ export async function registerSchedulers(): Promise<void> {
     'verify-audit-chains-nightly',
     { pattern: '0 3 * * *' }, // nightly at 03:00 UTC
     { name: 'verify-audit-chains' },
+  );
+
+  await notificationQueue.upsertJobScheduler(
+    'cleanup-notifications-daily',
+    { pattern: '0 4 * * *' }, // daily at 04:00 UTC
+    { name: 'cleanup-notifications' },
   );
 }

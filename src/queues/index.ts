@@ -8,6 +8,7 @@ export const QUEUES = {
   FILE: 'file-processing',
   MAINTENANCE: 'maintenance',
   DB_OPS: 'db-ops',
+  NOTIFICATION: 'notification',
 } as const;
 
 // Producer connection (used by the API and the worker when it enqueues follow-up jobs).
@@ -32,7 +33,14 @@ export const emailQueue = make(QUEUES.EMAIL);
 export const fileQueue = make(QUEUES.FILE);
 export const maintenanceQueue = make(QUEUES.MAINTENANCE);
 export const dbOpsQueue = make(QUEUES.DB_OPS);
-export const allQueues: Queue[] = [emailQueue, fileQueue, maintenanceQueue, dbOpsQueue];
+export const notificationQueue = make(QUEUES.NOTIFICATION);
+export const allQueues: Queue[] = [
+  emailQueue,
+  fileQueue,
+  maintenanceQueue,
+  dbOpsQueue,
+  notificationQueue,
+];
 
 export async function closeQueues(): Promise<void> {
   await Promise.allSettled(allQueues.map((q) => q.close()));

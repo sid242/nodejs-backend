@@ -109,3 +109,27 @@ export const userGroupStatusEnum = pgEnum('UserGroupStatus', ['ACTIVE', 'ARCHIVE
 
 export const outboxStatusEnum = pgEnum('OutboxStatus', ['PENDING', 'PROCESSING', 'PUBLISHED', 'FAILED']);
 
+export const notificationCategoryEnum = pgEnum('NotificationCategory', [
+  'SECURITY',
+  'ACCOUNT',
+  'BILLING',
+  'TEAM',
+  'FILES',
+  'SYSTEM',
+  'PRODUCT',
+]);
+
+export const notificationSeverityEnum = pgEnum('NotificationSeverity', [
+  'INFO',
+  'SUCCESS',
+  'WARNING',
+  'CRITICAL',
+]);
+
+export const notificationDigestEnum = pgEnum('NotificationDigest', [
+  'NONE',
+  'DAILY',
+  'WEEKLY',
+]);
+
+

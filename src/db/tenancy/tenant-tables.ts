@@ -97,6 +97,9 @@ export const PRIMARY_ONLY_TABLES: string[] = [
   'RolePolicy',
   'PlatformRolePolicy',
   'AuditRetentionRun',
+  'Notification',
+  'NotificationPreference',
+  'PushSubscription',
 ];
 
 const tenantTableMap = new Map<string, TenantTableRegistration>(

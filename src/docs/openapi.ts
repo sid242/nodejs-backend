@@ -7,6 +7,7 @@ import { registerFilesDocs } from '@/docs/routes/files.docs';
 import { registerGeoDocs } from '@/docs/routes/geo.docs';
 import { registerGroupsDocs } from '@/docs/routes/groups.docs';
 import { registerHealthDocs } from '@/docs/routes/health.docs';
+import { registerNotificationsDocs } from '@/docs/routes/notifications.docs';
 import { registerRbacDocs } from '@/docs/routes/rbac.docs';
 import { registerTenantsDocs } from '@/docs/routes/tenants.docs';
 import { registerUsersDocs } from '@/docs/routes/users.docs';
@@ -23,6 +24,7 @@ registerGroupsDocs(registry);
 registerRbacDocs(registry);
 registerGeoDocs(registry);
 registerAddressesDocs(registry);
+registerNotificationsDocs(registry);
 
 // ---------------------------------------------------------------------------
 // OpenAPI Document Builder

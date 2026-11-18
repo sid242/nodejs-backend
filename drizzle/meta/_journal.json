@@ -302,6 +302,13 @@
       "when": 1794913000000,
       "tag": "0042_audit_immutability_and_chaining",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1794982260141,
+      "tag": "0043_colossal_ironclad",
+      "breakpoints": true
     }
   ]
 }

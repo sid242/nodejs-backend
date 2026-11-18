@@ -53,6 +53,9 @@ export const PLATFORM_PERMISSIONS = {
 
   // Database Operations Control Plane
   DATABASE_OPERATE: 'database:operate',
+
+  // Notifications Platform Broadcast
+  NOTIFICATIONS_BROADCAST: 'notifications:broadcast',
 } as const;
 
 export type PlatformPermissionKey =
@@ -286,6 +289,13 @@ export const PLATFORM_PERMISSION_CATALOGUE: PlatformPermissionDefinition[] = [
     description: 'Terminate any active support session across the platform',
     resource: 'tenant_support',
     action: 'end_any',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.NOTIFICATIONS_BROADCAST,
+    name: 'Broadcast System Notifications',
+    description: 'Dispatch platform-wide and targeted broadcast notifications to users and workspaces',
+    resource: 'notifications',
+    action: 'broadcast',
   },
 ];
 

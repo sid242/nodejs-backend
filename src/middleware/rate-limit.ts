@@ -158,6 +158,13 @@ export const resolveLimiter = make({
   windowMs: 60_000,
 });
 
+// Notifications queries and mutations
+export const notificationLimiter = make({
+  name: 'notification',
+  limit: 120,
+  byUser: true,
+});
+
 // Caddy / internal reverse-proxy TLS verification ask queries
 export const internalLimiter = make({
   name: 'internal',
