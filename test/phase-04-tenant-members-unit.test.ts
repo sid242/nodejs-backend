@@ -176,12 +176,14 @@ describe('Phase 04: Tenant Members & Invitations Unit Tests', () => {
     it('validates token requirement and optional password for new users', () => {
       const parsed = acceptInvitationDto.parse({
         token: 'secret-invite-token-abc',
-        name: 'New User',
+        firstName: 'New',
+        lastName: 'User',
         password: 'SecurePassword123!',
       });
 
       assert.equal(parsed.token, 'secret-invite-token-abc');
-      assert.equal(parsed.name, 'New User');
+      assert.equal(parsed.firstName, 'New');
+      assert.equal(parsed.lastName, 'User');
       assert.equal(parsed.password, 'SecurePassword123!');
     });
 

@@ -573,7 +573,7 @@ export async function seedDemo(): Promise<void> {
             email: memberDef.email,
             passwordHash,
             firstName: parts[0] ?? memberDef.name,
-            lastName: parts.slice(1).join(' ') || null,
+            lastName: parts.slice(1).join(' ') || 'User',
             status: 'ACTIVE',
             emailVerifiedAt: new Date(),
           })

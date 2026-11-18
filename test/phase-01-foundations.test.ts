@@ -117,7 +117,7 @@ test('Phase 01: Socket room authorization restricts tenant room join to active m
     .values({
       email: `socket-nonmember-${Date.now()}@example.com`,
       firstName: 'Socket Non-Member',
-      lastName: null,
+      lastName: 'User',
       passwordHash: '$2a$12$dummyhash0000000000000000000000000000000000000000000000',
       status: 'ACTIVE',
     })

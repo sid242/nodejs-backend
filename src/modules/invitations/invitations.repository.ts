@@ -229,20 +229,17 @@ export async function revokeInvitation(
  */
 export async function createInvitedUser(data: {
   email: string;
-  name?: string;
-  firstName?: string;
-  lastName?: string | null;
+  firstName: string;
+  lastName: string;
   passwordHash: string;
 }): Promise<User> {
   const primaryDb = primaryDbHandle();
-  const first = data.firstName ?? (data.name ? data.name.split(' ')[0] : data.email.split('@')[0])!;
-  const last = data.lastName ?? (data.name ? data.name.split(' ').slice(1).join(' ') || null : null);
   const [createdUser] = await primaryDb
     .insert(users)
     .values({
       email: data.email,
-      firstName: first,
-      lastName: last,
+      firstName: data.firstName,
+      lastName: data.lastName,
       passwordHash: data.passwordHash,
       status: 'ACTIVE',
       emailVerifiedAt: new Date(),

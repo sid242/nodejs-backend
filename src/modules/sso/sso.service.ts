@@ -751,7 +751,7 @@ export class SsoService {
 
       const nameParts = name.trim().split(/\s+/);
       const firstName = nameParts[0] || email.split('@')[0] || 'User';
-      const lastName = nameParts.slice(1).join(' ') || undefined;
+      const lastName = nameParts.slice(1).join(' ') || 'User';
 
       // Create new user with passwordHash = null (no password login allowed)
       const created = await authRepo.createUser({

@@ -5,7 +5,7 @@ import bcrypt from 'bcryptjs';
 import { registerDto } from '../src/modules/auth/auth.dto';
 import { hashToken } from '../src/modules/auth/verification.repository';
 
-test('Registration DTO validates firstName and lastName', () => {
+test('Registration DTO validates required firstName and lastName', () => {
   const result = registerDto.safeParse({
     firstName: 'Alice',
     lastName: 'Smith',
@@ -19,20 +19,18 @@ test('Registration DTO validates firstName and lastName', () => {
   }
 });
 
-test('Registration DTO accepts combined name as fallback', () => {
+test('Registration DTO rejects when lastName is missing', () => {
   const result = registerDto.safeParse({
-    name: 'Bob Johnson',
-    email: 'bob@example.com',
+    firstName: 'Alice',
+    email: 'alice@example.com',
     password: 'password123',
   });
-  assert.equal(result.success, true);
-  if (result.success) {
-    assert.equal(result.data.name, 'Bob Johnson');
-  }
+  assert.equal(result.success, false);
 });
 
-test('Registration DTO rejects when neither name nor firstName provided', () => {
+test('Registration DTO rejects when firstName is missing', () => {
   const result = registerDto.safeParse({
+    lastName: 'Smith',
     email: 'charlie@example.com',
     password: 'password123',
   });

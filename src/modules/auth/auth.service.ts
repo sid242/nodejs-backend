@@ -71,18 +71,16 @@ export interface AuthResult extends AuthTokens {
 }
 
 export async function register(
-  { email, password, name, firstName, lastName }: RegisterDto,
+  { email, password, firstName, lastName }: RegisterDto,
   clientContext?: ClientContext,
 ): Promise<AuthResult> {
   const passwordHash = await bcrypt.hash(password, 12);
-  const userFirst = (firstName ?? (name ? name.split(' ')[0] : email.split('@')[0]))!;
-  const userLast = lastName ?? (name ? name.split(' ').slice(1).join(' ') || null : null);
 
   const user = await authRepo.createUser({
     email,
     passwordHash,
-    firstName: userFirst,
-    lastName: userLast,
+    firstName: firstName.trim(),
+    lastName: lastName.trim(),
   });
   await cache.delByPrefix(REDIS_PREFIXES.USERS_LIST_CACHE);
 

@@ -193,7 +193,7 @@ export class ScimRepository {
     const first =
       data.firstName ?? (data.name ? data.name.split(' ')[0] : data.email.split('@')[0])!;
     const last =
-      data.lastName ?? (data.name ? data.name.split(' ').slice(1).join(' ') || null : null);
+      data.lastName ?? (data.name ? data.name.split(' ').slice(1).join(' ') || 'User' : 'User');
 
     const [created] = await primaryDbHandle()
       .insert(users)
@@ -214,7 +214,7 @@ export class ScimRepository {
   async updateUserDisplayName(userId: string, name: string) {
     const parts = name.trim().split(/\s+/);
     const firstName = parts[0] ?? name;
-    const lastName = parts.slice(1).join(' ') || null;
+    const lastName = parts.slice(1).join(' ') || 'User';
 
     const [updated] = await primaryDbHandle()
       .update(users)

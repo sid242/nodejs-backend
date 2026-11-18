@@ -241,7 +241,7 @@ export async function addMemberToTenant(
     const firstName =
       dto.firstName?.trim() ||
       defaultNamePart.charAt(0).toUpperCase() + defaultNamePart.slice(1);
-    const lastName = dto.lastName?.trim();
+    const lastName = dto.lastName?.trim() || 'Member';
 
     const created = await authRepo.createUser({
       email: normalizedEmail,

@@ -7,7 +7,7 @@ export interface CreateUserData {
   email: string;
   passwordHash?: string | null;
   firstName: string;
-  lastName?: string | null;
+  lastName: string;
 }
 
 export async function createUser({
@@ -22,7 +22,7 @@ export async function createUser({
       email: email.toLowerCase(),
       passwordHash,
       firstName,
-      lastName: lastName ?? null,
+      lastName: lastName ?? '',
     })
     .returning(publicUser);
   return user as PublicUser;

@@ -21,7 +21,7 @@ export const users = pgTable(
     email: text('email').notNull(),
     passwordHash: text('passwordHash'),
     firstName: text('firstName').notNull().default(''),
-    lastName: text('lastName'),
+    lastName: text('lastName').notNull().default(''),
     avatarUrl: text('avatarUrl'),
     status: userStatusEnum('status').notNull().default('PENDING_VERIFICATION'),
     authMethod: text('authMethod').notNull().default('PASSWORD'),

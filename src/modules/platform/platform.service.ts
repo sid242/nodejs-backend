@@ -1265,7 +1265,7 @@ export async function provisionTenant(
     const firstName =
       data.ownerFirstName?.trim() ||
       defaultNamePart.charAt(0).toUpperCase() + defaultNamePart.slice(1);
-    const lastName = data.ownerLastName?.trim();
+    const lastName = data.ownerLastName?.trim() || 'Owner';
 
     const created = await authRepo.createUser({
       email: normalizedEmail,

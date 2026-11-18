@@ -330,6 +330,13 @@
       "when": 1794994740215,
       "tag": "0046_illegal_shooting_star",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1794997182389,
+      "tag": "0047_glamorous_radioactive_man",
+      "breakpoints": true
     }
   ]
 }

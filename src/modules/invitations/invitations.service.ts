@@ -37,7 +37,6 @@ export interface CreateInvitationDto {
 
 export interface AcceptInvitationDto {
   token: string;
-  name?: string;
   firstName?: string;
   lastName?: string;
   password?: string;
@@ -347,15 +346,13 @@ export async function acceptTenantInvitation(
 
     const first =
       dto.firstName?.trim() ||
-      (dto.name ? dto.name.trim().split(' ')[0] : undefined) ||
       invitation.firstName ||
       normalizedInvitedEmail.split('@')[0] ||
       'User';
     const last =
       dto.lastName?.trim() ||
-      (dto.name ? dto.name.trim().split(' ').slice(1).join(' ') || undefined : undefined) ||
       invitation.lastName ||
-      null;
+      'Member';
     const passwordHash = await bcrypt.hash(dto.password, 12);
 
     const createdUser = await invitationsRepo.createInvitedUser({

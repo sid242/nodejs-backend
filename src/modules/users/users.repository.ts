@@ -56,20 +56,17 @@ export async function updateStatus(
 
 export async function createManagedUser(data: {
   email: string;
-  name?: string;
-  firstName?: string;
-  lastName?: string;
+  firstName: string;
+  lastName: string;
   authMethod?: 'SCIM' | 'SSO' | 'PASSWORD';
   status?: 'ACTIVE' | 'PENDING_VERIFICATION';
 }): Promise<PublicUser> {
-  const first = data.firstName ?? (data.name ? data.name.split(' ')[0] : data.email.split('@')[0])!;
-  const last = data.lastName ?? (data.name ? data.name.split(' ').slice(1).join(' ') || null : null);
   const [user] = await db
     .insert(users)
     .values({
       email: data.email.trim().toLowerCase(),
-      firstName: first,
-      lastName: last,
+      firstName: data.firstName.trim(),
+      lastName: data.lastName.trim(),
       passwordHash: null,
       authMethod: data.authMethod ?? 'SCIM',
       status: data.status ?? 'ACTIVE',
