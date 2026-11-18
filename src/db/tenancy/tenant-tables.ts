@@ -31,6 +31,8 @@ export const TENANT_TABLES: TenantTableRegistration[] = [
   { name: 'TenantModule', table: schema.tenantModules, tenantColumn: 'tenantId' },
   { name: 'OutboxEvent', table: schema.outboxEvents, tenantColumn: 'tenantId' },
   { name: 'Lead', table: schema.leads, tenantColumn: 'tenantId' },
+  { name: 'TenantSetting', table: schema.tenantSettings, tenantColumn: 'tenantId' },
+  { name: 'TenantSecurityPolicy', table: schema.tenantSecurityPolicies, tenantColumn: 'tenantId' },
 
   // Level 1: Dependent on Level 0
   {

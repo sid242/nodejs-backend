@@ -123,4 +123,87 @@ export function registerTenantsDocs(registry: OpenAPIRegistry): void {
       409: errorResponse('User already a member'),
     },
   });
+
+  const TenantSettingsSchema = registry.register(
+    'TenantSettings',
+    z.object({
+      tenantId: z.string().uuid(),
+      timezone: z.string().openapi({ example: 'UTC' }),
+      locale: z.string().openapi({ example: 'en-US' }),
+      currency: z.string().openapi({ example: 'USD' }),
+      dateFormat: z.string().openapi({ example: 'YYYY-MM-DD' }),
+      timeFormat: z.string().openapi({ example: '24h' }),
+      country: z.string().openapi({ example: 'US' }),
+      legalName: z.string().nullable().openapi({ example: 'Acme Corp Inc.' }),
+      allowedEmailDomains: z.array(z.string()).openapi({ example: ['acme.com'] }),
+      autoJoinDomains: z.boolean().openapi({ example: false }),
+    }),
+  );
+
+  const TenantSecurityPolicySchema = registry.register(
+    'TenantSecurityPolicy',
+    z.object({
+      tenantId: z.string().uuid(),
+      requireMfa: z.enum(['ALL', 'ADMINS', 'NONE']).openapi({ example: 'NONE' }),
+      passwordMinLength: z.number().openapi({ example: 8 }),
+      sessionIdleMinutes: z.number().openapi({ example: 60 }),
+      sessionMaxHours: z.number().openapi({ example: 24 }),
+      ipAllowlist: z.array(z.string()).openapi({ example: [] }),
+      allowedAuthMethods: z.array(z.string()).openapi({ example: ['PASSWORD', 'MAGIC', 'SSO'] }),
+      enforceSso: z.boolean().openapi({ example: false }),
+      allowSupportAccess: z.boolean().openapi({ example: true }),
+    }),
+  );
+
+  registry.registerPath({
+    method: 'get',
+    path: '/api/v1/tenants/{tenantId}/settings',
+    summary: 'Get workspace typed settings',
+    tags: ['Tenants'],
+    security: [{ [bearerAuth.name]: [] }],
+    responses: {
+      200: successResponse(TenantSettingsSchema, 'Tenant settings retrieved'),
+      401: errorResponse('Unauthorized'),
+      403: errorResponse('Forbidden'),
+    },
+  });
+
+  registry.registerPath({
+    method: 'put',
+    path: '/api/v1/tenants/{tenantId}/settings',
+    summary: 'Update workspace typed settings',
+    tags: ['Tenants'],
+    security: [{ [bearerAuth.name]: [] }],
+    responses: {
+      200: successResponse(TenantSettingsSchema, 'Tenant settings updated'),
+      401: errorResponse('Unauthorized'),
+      403: errorResponse('Forbidden'),
+    },
+  });
+
+  registry.registerPath({
+    method: 'get',
+    path: '/api/v1/tenants/{tenantId}/settings/security',
+    summary: 'Get workspace security policy',
+    tags: ['Tenants'],
+    security: [{ [bearerAuth.name]: [] }],
+    responses: {
+      200: successResponse(TenantSecurityPolicySchema, 'Tenant security policy retrieved'),
+      401: errorResponse('Unauthorized'),
+      403: errorResponse('Forbidden'),
+    },
+  });
+
+  registry.registerPath({
+    method: 'put',
+    path: '/api/v1/tenants/{tenantId}/settings/security',
+    summary: 'Update workspace security policy',
+    tags: ['Tenants'],
+    security: [{ [bearerAuth.name]: [] }],
+    responses: {
+      200: successResponse(TenantSecurityPolicySchema, 'Tenant security policy updated'),
+      401: errorResponse('Unauthorized'),
+      403: errorResponse('Forbidden'),
+    },
+  });
 }

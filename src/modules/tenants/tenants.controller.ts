@@ -299,3 +299,31 @@ export const checkMemberEmailAvailability = asyncHandler(async (req: Request, re
     existsInWorkspace: isMember,
   }).send(res);
 });
+
+// ─── Typed Workspace Settings & Security Policies ───────────────────────────
+
+export const getTenantSettings = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenant?.id ?? String(req.params.tenantId);
+  const settings = await tenantsService.getTenantSettings(tenantId);
+  AppResponse.ok(settings).send(res);
+});
+
+export const updateTenantSettings = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenant?.id ?? String(req.params.tenantId);
+  const body = req.valid?.body ?? req.body;
+  const settings = await tenantsService.updateTenantSettings(tenantId, body, req.user!.id);
+  AppResponse.ok(settings, 'Workspace settings updated successfully').send(res);
+});
+
+export const getTenantSecurityPolicy = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenant?.id ?? String(req.params.tenantId);
+  const policy = await tenantsService.getTenantSecurityPolicy(tenantId);
+  AppResponse.ok(policy).send(res);
+});
+
+export const updateTenantSecurityPolicy = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenant?.id ?? String(req.params.tenantId);
+  const body = req.valid?.body ?? req.body;
+  const policy = await tenantsService.updateTenantSecurityPolicy(tenantId, body, req.user!.id);
+  AppResponse.ok(policy, 'Workspace security policy updated successfully').send(res);
+});

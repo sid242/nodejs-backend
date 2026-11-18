@@ -309,6 +309,13 @@
       "when": 1794982260141,
       "tag": "0043_colossal_ironclad",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1794984182314,
+      "tag": "0044_strong_spacker_dave",
+      "breakpoints": true
     }
   ]
 }

@@ -40,6 +40,7 @@ import { emitToRoom } from '@/sockets/emitter';
 
 import { tenantBrandingRepo } from './tenant-branding.repository';
 import { tenantEmailRepo } from './tenant-email.repository';
+import * as tenantSettingsRepo from './tenant-settings.repository';
 import { buildPlatformUrl, buildTenantUrl, getEffectiveUrlMode } from './tenant-url.service';
 import {
   addMemberDto,
@@ -55,6 +56,8 @@ import {
   type UpdateMemberDto,
   type UpdateTenantBrandingDto,
   type UpdateTenantDto,
+  type UpdateTenantSecurityPolicyDto,
+  type UpdateTenantSettingsDto,
   type UpdateTenantUrlSettingsDto,
   type UpsertTenantEmailConfigDto,
 } from './tenants.dto';
@@ -1946,4 +1949,95 @@ export async function overrideTenantUrlSettings(
   });
 
   return getTenantUrlSettings(tenantId);
+}
+
+export async function getTenantSettings(tenantId: string) {
+  const existing = await tenantSettingsRepo.findSettingsByTenantId(tenantId);
+  if (existing) return existing;
+
+  const tenant = await tenantsRepo.findTenantById(tenantId);
+  return {
+    tenantId,
+    timezone: tenant?.timezone ?? 'UTC',
+    locale: tenant?.locale ?? 'en-US',
+    currency: tenant?.currency ?? 'USD',
+    dateFormat: 'YYYY-MM-DD',
+    timeFormat: '24h',
+    weekStartsOn: 'monday',
+    fiscalYearStartMonth: 1,
+    country: tenant?.country ?? 'US',
+    industry: null,
+    companySize: null,
+    legalName: tenant?.legalName ?? null,
+    taxId: null,
+    billingAddressId: null,
+    supportEmail: tenant?.supportEmail ?? null,
+    websiteUrl: null,
+    termsUrl: null,
+    privacyUrl: null,
+    defaultMemberRoleId: null,
+    allowedEmailDomains: [],
+    autoJoinDomains: false,
+    memberLimitNotified: false,
+  };
+}
+
+export async function updateTenantSettings(
+  tenantId: string,
+  data: UpdateTenantSettingsDto,
+  actorUserId: string,
+) {
+  const updated = await tenantSettingsRepo.upsertSettings(tenantId, data);
+
+  await auditRepo.createAuditLog({
+    tenantId,
+    action: 'TENANT.SETTINGS_UPDATED',
+    entityType: 'TenantSetting',
+    entityId: updated.id,
+    actorType: 'USER',
+    actorUserId,
+    metadata: data as Record<string, unknown>,
+  });
+
+  return updated;
+}
+
+export async function getTenantSecurityPolicy(tenantId: string) {
+  const existing = await tenantSettingsRepo.findSecurityPolicyByTenantId(tenantId);
+  if (existing) return existing;
+
+  return {
+    tenantId,
+    requireMfa: 'NONE',
+    passwordMinLength: 8,
+    passwordMaxAgeDays: null,
+    sessionIdleMinutes: 60,
+    sessionMaxHours: 24,
+    ipAllowlist: [],
+    allowedAuthMethods: ['PASSWORD', 'MAGIC', 'SSO'],
+    enforceSso: false,
+    allowSupportAccess: true,
+    inviteExpiryDays: 7,
+    allowPersonalEmails: true,
+  };
+}
+
+export async function updateTenantSecurityPolicy(
+  tenantId: string,
+  data: UpdateTenantSecurityPolicyDto,
+  actorUserId: string,
+) {
+  const updated = await tenantSettingsRepo.upsertSecurityPolicy(tenantId, data);
+
+  await auditRepo.createAuditLog({
+    tenantId,
+    action: 'TENANT.SECURITY_POLICY_UPDATED',
+    entityType: 'TenantSecurityPolicy',
+    entityId: updated.id,
+    actorType: 'USER',
+    actorUserId,
+    metadata: data as Record<string, unknown>,
+  });
+
+  return updated;
 }

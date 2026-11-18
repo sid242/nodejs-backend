@@ -256,6 +256,64 @@ router.delete(
   controller.deleteTenantEmailConfig,
 );
 
+// Typed Workspace General Settings
+router.get(
+  '/:tenantId/settings',
+  requireAuth,
+  requireTenant,
+  requirePermission('tenants:read'),
+  controller.getTenantSettings,
+);
+
+router.put(
+  '/:tenantId/settings',
+  requireAuth,
+  requireTenant,
+  blockInSupportSession('workspace settings'),
+  requirePermission('tenants:update'),
+  validate({ body: dto.updateTenantSettingsDto }),
+  controller.updateTenantSettings,
+);
+
+router.patch(
+  '/:tenantId/settings',
+  requireAuth,
+  requireTenant,
+  blockInSupportSession('workspace settings'),
+  requirePermission('tenants:update'),
+  validate({ body: dto.updateTenantSettingsDto }),
+  controller.updateTenantSettings,
+);
+
+// Workspace Security Policies
+router.get(
+  '/:tenantId/settings/security',
+  requireAuth,
+  requireTenant,
+  requirePermission('tenants:read'),
+  controller.getTenantSecurityPolicy,
+);
+
+router.put(
+  '/:tenantId/settings/security',
+  requireAuth,
+  requireTenant,
+  blockInSupportSession('security policies'),
+  requirePermission('tenants:update'),
+  validate({ body: dto.updateTenantSecurityPolicyDto }),
+  controller.updateTenantSecurityPolicy,
+);
+
+router.patch(
+  '/:tenantId/settings/security',
+  requireAuth,
+  requireTenant,
+  blockInSupportSession('security policies'),
+  requirePermission('tenants:update'),
+  validate({ body: dto.updateTenantSecurityPolicyDto }),
+  controller.updateTenantSecurityPolicy,
+);
+
 // Tenant White-Label & Branding Management
 router.get(
   '/:tenantId/branding',

@@ -343,3 +343,44 @@ export const verifyCustomDomainDto = z.object({
 });
 
 export type VerifyCustomDomainDto = z.infer<typeof verifyCustomDomainDto>;
+
+export const updateTenantSettingsDto = z.object({
+  timezone: z.string().trim().min(1).max(100).optional(),
+  locale: z.string().trim().min(1).max(20).optional(),
+  currency: z.string().trim().length(3).optional(),
+  dateFormat: z.string().trim().min(1).max(30).optional(),
+  timeFormat: z.enum(['12h', '24h']).optional(),
+  weekStartsOn: z.enum(['sunday', 'monday']).optional(),
+  fiscalYearStartMonth: z.number().int().min(1).max(12).optional(),
+  country: z.string().trim().min(2).max(100).optional(),
+  industry: z.string().trim().max(100).optional().nullable(),
+  companySize: z.string().trim().max(100).optional().nullable(),
+  legalName: z.string().trim().max(200).optional().nullable(),
+  taxId: z.string().trim().max(100).optional().nullable(),
+  billingAddressId: z.string().uuid().optional().nullable(),
+  supportEmail: z.string().trim().email().optional().nullable().or(z.literal('')),
+  websiteUrl: z.string().trim().url().optional().nullable().or(z.literal('')),
+  termsUrl: z.string().trim().url().optional().nullable().or(z.literal('')),
+  privacyUrl: z.string().trim().url().optional().nullable().or(z.literal('')),
+  defaultMemberRoleId: z.string().uuid().optional().nullable(),
+  allowedEmailDomains: z.array(z.string().trim().min(1)).optional(),
+  autoJoinDomains: z.boolean().optional(),
+});
+
+export type UpdateTenantSettingsDto = z.infer<typeof updateTenantSettingsDto>;
+
+export const updateTenantSecurityPolicyDto = z.object({
+  requireMfa: z.enum(['ALL', 'ADMINS', 'NONE']).optional(),
+  passwordMinLength: z.number().int().min(8).max(128).optional(),
+  passwordMaxAgeDays: z.number().int().min(1).max(365).optional().nullable(),
+  sessionIdleMinutes: z.number().int().min(5).max(1440).optional(),
+  sessionMaxHours: z.number().int().min(1).max(720).optional(),
+  ipAllowlist: z.array(z.string().trim()).optional(),
+  allowedAuthMethods: z.array(z.enum(['PASSWORD', 'MAGIC', 'SSO'])).optional(),
+  enforceSso: z.boolean().optional(),
+  allowSupportAccess: z.boolean().optional(),
+  inviteExpiryDays: z.number().int().min(1).max(30).optional(),
+  allowPersonalEmails: z.boolean().optional(),
+});
+
+export type UpdateTenantSecurityPolicyDto = z.infer<typeof updateTenantSecurityPolicyDto>;
