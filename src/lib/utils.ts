@@ -30,6 +30,8 @@ export const safeFilename = (name: string): string =>
   name
     .normalize('NFKD')
     .replace(/[^\w.-]+/g, '_')
+    .replace(/\.{2,}/g, '_')
+    .replace(/^[.-]+/, '')
     .replace(/_+/g, '_')
     .slice(-100);
 

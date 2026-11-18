@@ -19,6 +19,7 @@ export const TENANT_TABLES: TenantTableRegistration[] = [
   { name: 'AppRole', table: schema.roles, tenantColumn: 'tenantId' },
   { name: 'TenantMember', table: schema.tenantMembers, tenantColumn: 'tenantId' },
   { name: 'TenantInvitation', table: schema.tenantInvitations, tenantColumn: 'tenantId' },
+  { name: 'FileFolder', table: schema.fileFolders, tenantColumn: 'tenantId' },
   { name: 'File', table: schema.files, tenantColumn: 'tenantId' },
   { name: 'EmailTemplate', table: schema.emailTemplates, tenantColumn: 'tenantId' },
   { name: 'TenantEmailConfig', table: schema.tenantEmailConfigs, tenantColumn: 'tenantId' },
@@ -58,6 +59,18 @@ export const TENANT_TABLES: TenantTableRegistration[] = [
     table: schema.userGroupRoles,
     tenantColumn: 'tenantId',
     dependsOn: ['UserGroup', 'AppRole'],
+  },
+  {
+    name: 'FileShare',
+    table: schema.fileShares,
+    tenantColumn: 'tenantId',
+    dependsOn: ['File'],
+  },
+  {
+    name: 'FileVersion',
+    table: schema.fileVersions,
+    tenantColumn: 'tenantId',
+    dependsOn: ['File'],
   },
 ];
 

@@ -2,12 +2,13 @@ import type { Request, Response } from 'express';
 
 import { createRedis } from '@/config/redis';
 import { asyncHandler } from '@/lib/async-handler';
+import { AppError } from '@/lib/errors';
 import { AppResponse } from '@/lib/responses';
 import * as service from '@/modules/files/files.service';
 
 export const listFiles = asyncHandler(async (req: Request, res: Response) => {
-  const files = await service.listFiles(req.user!.id, req.tenant?.id);
-  AppResponse.ok(files).send(res);
+  const result = await service.listFiles(req.user!.id, req.tenant?.id, req.valid?.query);
+  AppResponse.ok(result).send(res);
 });
 
 export const requestUpload = asyncHandler(async (req: Request, res: Response) => {
@@ -31,10 +32,131 @@ export const getDownloadUrl = asyncHandler(async (req: Request, res: Response) =
   AppResponse.ok(result).send(res);
 });
 
+export const updateFile = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.updateFile(
+    req.user!.id,
+    req.valid?.params.id,
+    req.tenant?.id,
+    req.valid?.body,
+  );
+  AppResponse.ok(result, 'File updated').send(res);
+});
+
 export const deleteFile = asyncHandler(async (req: Request, res: Response) => {
-  await service.deleteFile(req.user!.id, req.valid?.params.id, req.tenant?.id);
+  const permanent = req.query.permanent === 'true';
+  await service.deleteFile(req.user!.id, req.valid?.params.id, req.tenant?.id, permanent);
   res.status(204).end();
 });
+
+export const restoreFile = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.tenant?.id) throw AppError.badRequest('Tenant context required');
+  const result = await service.restoreFile(req.user!.id, req.valid?.params.id, req.tenant.id);
+  AppResponse.ok(result, 'File restored').send(res);
+});
+
+// ---------------------------------------------------------------------------
+// Folders
+// ---------------------------------------------------------------------------
+
+export const listFolders = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.tenant?.id) throw AppError.badRequest('Tenant context required');
+  const parentId = typeof req.query.parentId === 'string' ? req.query.parentId : undefined;
+  const folders = await service.listFolders(req.tenant.id, parentId);
+  AppResponse.ok(folders).send(res);
+});
+
+export const createFolder = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.tenant?.id) throw AppError.badRequest('Tenant context required');
+  const folder = await service.createFolder(req.user!.id, req.tenant.id, req.valid?.body);
+  AppResponse.created(folder, 'Folder created').send(res);
+});
+
+export const getFolder = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.tenant?.id) throw AppError.badRequest('Tenant context required');
+  const folder = await service.getFolder(req.tenant.id, req.valid?.params.id);
+  AppResponse.ok(folder).send(res);
+});
+
+export const updateFolder = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.tenant?.id) throw AppError.badRequest('Tenant context required');
+  const folder = await service.updateFolder(req.tenant.id, req.valid?.params.id, req.valid?.body);
+  AppResponse.ok(folder, 'Folder updated').send(res);
+});
+
+export const deleteFolder = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.tenant?.id) throw AppError.badRequest('Tenant context required');
+  await service.deleteFolder(req.tenant.id, req.valid?.params.id);
+  res.status(204).end();
+});
+
+// ---------------------------------------------------------------------------
+// Shares
+// ---------------------------------------------------------------------------
+
+export const createShare = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.tenant?.id) throw AppError.badRequest('Tenant context required');
+  const share = await service.createShare(
+    req.user!.id,
+    req.tenant.id,
+    req.valid?.params.id,
+    req.valid?.body,
+  );
+  AppResponse.created(share, 'Share link created').send(res);
+});
+
+export const listShares = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.tenant?.id) throw AppError.badRequest('Tenant context required');
+  const shares = await service.listShares(req.user!.id, req.tenant.id, req.valid?.params.id);
+  AppResponse.ok(shares).send(res);
+});
+
+export const revokeShare = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.tenant?.id) throw AppError.badRequest('Tenant context required');
+  const fileId = (req.valid?.params?.id ?? req.params.id) as string;
+  const shareId = (req.valid?.params?.shareId ?? req.params.shareId) as string;
+  await service.revokeShare(req.user!.id, req.tenant.id, fileId, shareId);
+  res.status(204).end();
+});
+
+export const accessShare = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.accessShare(req.valid?.params.token, req.body?.password);
+  AppResponse.ok(result).send(res);
+});
+
+// ---------------------------------------------------------------------------
+// Versions
+// ---------------------------------------------------------------------------
+
+export const listVersions = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.tenant?.id) throw AppError.badRequest('Tenant context required');
+  const versions = await service.listVersions(req.user!.id, req.tenant.id, req.valid?.params.id);
+  AppResponse.ok(versions).send(res);
+});
+
+export const restoreVersion = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.tenant?.id) throw AppError.badRequest('Tenant context required');
+  const result = await service.restoreVersion(
+    req.user!.id,
+    req.tenant.id,
+    req.valid?.params.id,
+    req.valid?.body.versionNumber,
+  );
+  AppResponse.ok(result, 'Version restored').send(res);
+});
+
+// ---------------------------------------------------------------------------
+// Storage Analytics
+// ---------------------------------------------------------------------------
+
+export const getStorageStats = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.tenant?.id) throw AppError.badRequest('Tenant context required');
+  const stats = await service.getStorageStats(req.tenant.id);
+  AppResponse.ok(stats).send(res);
+});
+
+// ---------------------------------------------------------------------------
+// Realtime SSE
+// ---------------------------------------------------------------------------
 
 export const streamEvents = (req: Request, res: Response): void => {
   const userId = req.user?.id;

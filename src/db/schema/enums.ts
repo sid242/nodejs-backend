@@ -1,6 +1,17 @@
 import { pgEnum } from 'drizzle-orm/pg-core';
 
 export const fileStatusEnum = pgEnum('FileStatus', ['PENDING', 'UPLOADED']);
+export const fileScanStatusEnum = pgEnum('FileScanStatus', [
+  'PENDING',
+  'CLEAN',
+  'INFECTED',
+  'SKIPPED',
+]);
+export const fileVisibilityEnum = pgEnum('FileVisibility', [
+  'PRIVATE',
+  'TENANT',
+  'PUBLIC_LINK',
+]);
 
 export const userStatusEnum = pgEnum('UserStatus', [
   'PENDING_VERIFICATION',
