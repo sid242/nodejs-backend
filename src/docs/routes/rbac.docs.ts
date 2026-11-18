@@ -3,9 +3,11 @@ import { z } from 'zod';
 
 import { bearerAuth, errorResponse, successResponse } from '@/docs/helpers';
 import {
+  cloneRoleDto,
   createModuleDto,
   createPermissionDto,
   createRoleDto,
+  explainAccessQueryDto,
   toggleModuleDto,
   updateModuleDto,
   updatePermissionDto,
@@ -55,6 +57,25 @@ export const RoleWithPermissionsSchema = z.object({
   permissions: z.array(z.string()).openapi({ example: ['files:read', 'files:write'] }),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime().optional(),
+});
+
+export const AccessExplanationSchema = z.object({
+  allowed: z.boolean(),
+  permission: z.string().openapi({ example: 'files:write' }),
+  permissionName: z.string().openapi({ example: 'Upload Files' }),
+  moduleName: z.string().openapi({ example: 'File Storage' }),
+  memberId: z.string().uuid(),
+  userId: z.string().uuid(),
+  isOwner: z.boolean(),
+  isModuleEnabled: z.boolean(),
+  reasons: z.array(
+    z.object({
+      source: z.enum(['OWNER', 'DIRECT_ROLE', 'GROUP_ROLE', 'MODULE_DISABLED']),
+      granted: z.boolean(),
+      name: z.string(),
+      detail: z.string(),
+    }),
+  ),
 });
 
 export function registerRbacDocs(registry: OpenAPIRegistry): void {
@@ -287,6 +308,42 @@ export function registerRbacDocs(registry: OpenAPIRegistry): void {
       401: errorResponse('Unauthorized'),
       403: errorResponse('Forbidden'),
       404: errorResponse('Role not found'),
+    },
+  });
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/rbac/tenants/{tenantId}/roles/{roleId}/clone',
+    summary: 'Clone an existing role into a new custom role',
+    description: 'Copies all permissions from an existing role (system or tenant) into a new custom tenant role.',
+    tags: ['RBAC - Tenant Roles'],
+    security: [{ [bearerAuth.name]: [] }],
+    request: {
+      body: { content: { 'application/json': { schema: cloneRoleDto } } },
+    },
+    responses: {
+      201: successResponse(RoleWithPermissionsSchema, 'Role cloned successfully'),
+      401: errorResponse('Unauthorized'),
+      403: errorResponse('Forbidden'),
+      404: errorResponse('Source role not found'),
+    },
+  });
+
+  registry.registerPath({
+    method: 'get',
+    path: '/api/v1/rbac/tenants/{tenantId}/access/explain',
+    summary: 'Explain permission access provenance for a tenant member',
+    description: 'Returns detailed reasoning showing whether a member has access to a permission, including owner privileges, direct roles, group roles, and module enablement state.',
+    tags: ['RBAC - Access Explainer'],
+    security: [{ [bearerAuth.name]: [] }],
+    request: {
+      query: explainAccessQueryDto,
+    },
+    responses: {
+      200: successResponse(AccessExplanationSchema, 'Access explanation breakdown'),
+      401: errorResponse('Unauthorized'),
+      403: errorResponse('Forbidden'),
+      404: errorResponse('Member or permission not found'),
     },
   });
 

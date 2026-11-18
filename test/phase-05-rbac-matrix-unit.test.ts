@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
+  cloneRoleDto,
+  createPermissionDto,
   createRoleDto,
+  explainAccessQueryDto,
   listRolesFilterDto,
   updateRoleDto,
-  createPermissionDto,
 } from '@/modules/rbac/rbac.dto';
 import * as rbacService from '@/modules/rbac/rbac.service';
 import { rbacRepo } from '@/modules/rbac/rbac.repository';
@@ -579,6 +581,40 @@ describe('Phase 05: Roles & Permissions (RBAC Matrix) Unit Tests', () => {
         rbacRepo.deleteRole = originalDeleteRole;
         cache.delByPrefix = originalDelByPrefix;
       }
+    });
+  });
+
+  describe('9. cloneRoleDto and explainAccessQueryDto validation', () => {
+    it('validates valid clone role payload', () => {
+      const parsed = cloneRoleDto.parse({
+        name: 'Cloned Custom Manager',
+        description: 'Copy of system manager role',
+      });
+      assert.equal(parsed.name, 'Cloned Custom Manager');
+      assert.equal(parsed.description, 'Copy of system manager role');
+    });
+
+    it('rejects empty or overly long name in cloneRoleDto', () => {
+      assert.throws(() => cloneRoleDto.parse({ name: ' ' }));
+      assert.throws(() => cloneRoleDto.parse({ name: 'a'.repeat(60) }));
+    });
+
+    it('validates valid explainAccessQueryDto parameters', () => {
+      const parsed = explainAccessQueryDto.parse({
+        memberId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+        permission: 'files:write',
+      });
+      assert.equal(parsed.memberId, 'a1b2c3d4-e5f6-7890-abcd-ef1234567890');
+      assert.equal(parsed.permission, 'files:write');
+    });
+
+    it('rejects invalid uuid in explainAccessQueryDto', () => {
+      assert.throws(() =>
+        explainAccessQueryDto.parse({
+          memberId: 'not-a-uuid',
+          permission: 'files:write',
+        }),
+      );
     });
   });
 });

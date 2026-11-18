@@ -1,9 +1,20 @@
 import { and, eq, isNull } from 'drizzle-orm';
 
 import { db } from '@/config/db';
-import { roles } from '@/db/schema/index';
+import {
+  appModules,
+  permissions,
+  roles,
+  tenantModules,
+  userGroupMembers,
+  userGroupRoles,
+  userGroups,
+} from '@/db/schema/index';
+import { tenantDb } from '@/db/tenancy/context';
 import { cache } from '@/lib/cache';
 import { AppError } from '@/lib/errors';
+import * as auditRepo from '@/modules/audit/audit.repository';
+import { tenantsRepo } from '@/modules/tenants/tenants.repository';
 
 import { SYSTEM_MODULE_DEFINITIONS } from './modules.registry';
 import * as dto from './rbac.dto';
@@ -387,6 +398,215 @@ export async function getRoleById(
     assignedUsersCount: usersCount,
     assignedGroupsCount: groupsCount,
     permissions: perms,
+  };
+}
+
+export async function cloneTenantRole(
+  tenantId: string,
+  roleId: string,
+  data: dto.CloneRoleDto,
+  callerUserId?: string,
+) {
+  const sourceRole = await rbacRepo.findRoleById(roleId);
+  if (!sourceRole) {
+    throw AppError.notFound('Source role not found');
+  }
+
+  // Ensure role belongs to tenant or is a system role template
+  if (sourceRole.tenantId && sourceRole.tenantId !== tenantId) {
+    throw AppError.forbidden('Cannot clone a role from another workspace');
+  }
+
+  // Fetch permissions of source role
+  const permissionKeys = await rbacRepo.getRolePermissionKeys(sourceRole.id);
+
+  const cloneName = data.name.trim();
+  const cloneDescription = data.description?.trim() || `Cloned from ${sourceRole.name}`;
+
+  const cloned = await createCustomTenantRole(
+    tenantId,
+    {
+      name: cloneName,
+      description: cloneDescription,
+      permissions: permissionKeys,
+      scope: 'TENANT',
+      isActive: true,
+    },
+    callerUserId,
+  );
+
+  if (callerUserId) {
+    await auditRepo.createAuditLog({
+      tenantId,
+      action: 'ROLE.CLONED',
+      entityType: 'AppRole',
+      entityId: cloned.id,
+      actorType: 'USER',
+      actorUserId: callerUserId,
+      metadata: {
+        sourceRoleId: sourceRole.id,
+        sourceRoleName: sourceRole.name,
+        newRoleId: cloned.id,
+        newRoleName: cloned.name,
+        permissionsCount: permissionKeys.length,
+      },
+    });
+  }
+
+  return cloned;
+}
+
+export async function explainMemberAccess(
+  tenantId: string,
+  memberId: string,
+  permissionKey: string,
+) {
+  const member = await tenantsRepo.findTenantMemberById(memberId);
+  if (!member || member.tenantId !== tenantId) {
+    throw AppError.notFound('Member not found in this workspace');
+  }
+
+  const [permission] = await db
+    .select()
+    .from(permissions)
+    .where(eq(permissions.key, permissionKey))
+    .limit(1);
+
+  if (!permission) {
+    throw AppError.notFound(`Permission '${permissionKey}' does not exist`);
+  }
+
+  // Check if module is disabled for tenant
+  let isModuleEnabled = true;
+  let moduleName = 'Core';
+  if (permission.moduleId) {
+    const [mod] = await db
+      .select()
+      .from(appModules)
+      .where(eq(appModules.id, permission.moduleId))
+      .limit(1);
+    if (mod) {
+      moduleName = mod.name;
+    }
+    const [tenantMod] = await tenantDb()
+      .select()
+      .from(tenantModules)
+      .where(and(eq(tenantModules.tenantId, tenantId), eq(tenantModules.moduleId, permission.moduleId)))
+      .limit(1);
+    if (tenantMod && !tenantMod.isEnabled) {
+      isModuleEnabled = false;
+    }
+  }
+
+  // Check effective permissions and provenance
+  const effective = await rbacRepo.getEffectivePermissions(tenantId, member.userId);
+  const isOwner = effective.roles.some((r) => r.toUpperCase() === 'OWNER');
+
+  const directRoles = await rbacRepo.getMemberRoles(member.id);
+  const directRoleMatches: string[] = [];
+  for (const r of directRoles) {
+    const rolePerms = await rbacRepo.getRolePermissionKeys(r.id);
+    if (rolePerms?.includes(permissionKey)) {
+      directRoleMatches.push(r.name);
+    }
+  }
+
+  // Check group roles
+  const groupRoles = await tenantDb()
+    .select({
+      groupName: userGroups.name,
+      roleId: roles.id,
+      roleName: roles.name,
+    })
+    .from(userGroupMembers)
+    .innerJoin(userGroups, eq(userGroupMembers.groupId, userGroups.id))
+    .innerJoin(userGroupRoles, eq(userGroupMembers.groupId, userGroupRoles.groupId))
+    .innerJoin(roles, eq(userGroupRoles.roleId, roles.id))
+    .where(
+      and(
+        eq(userGroupMembers.userId, member.userId),
+        eq(userGroupMembers.tenantId, tenantId),
+        eq(userGroups.status, 'ACTIVE'),
+        eq(roles.isActive, true),
+      ),
+    );
+
+  const groupRoleMatches: Array<{ groupName: string; roleName: string }> = [];
+  for (const gr of groupRoles) {
+    const rolePerms = await rbacRepo.getRolePermissionKeys(gr.roleId);
+    if (rolePerms?.includes(permissionKey)) {
+      groupRoleMatches.push({ groupName: gr.groupName, roleName: gr.roleName });
+    }
+  }
+
+  const reasons: Array<{
+    source: 'OWNER' | 'DIRECT_ROLE' | 'GROUP_ROLE' | 'MODULE_DISABLED';
+    granted: boolean;
+    name: string;
+    detail: string;
+  }> = [];
+
+  if (!isModuleEnabled) {
+    reasons.push({
+      source: 'MODULE_DISABLED',
+      granted: false,
+      name: moduleName,
+      detail: `Module '${moduleName}' is disabled in workspace settings, blocking access.`,
+    });
+  }
+
+  if (isOwner) {
+    reasons.push({
+      source: 'OWNER',
+      granted: isModuleEnabled,
+      name: 'Owner',
+      detail: isModuleEnabled
+        ? 'User is an organization Owner with unrestricted access to enabled modules.'
+        : 'User is Owner, but the parent module is disabled in workspace settings.',
+    });
+  }
+
+  for (const rName of directRoleMatches) {
+    reasons.push({
+      source: 'DIRECT_ROLE',
+      granted: isModuleEnabled,
+      name: rName,
+      detail: `Permission granted via directly assigned role '${rName}'.`,
+    });
+  }
+
+  for (const gr of groupRoleMatches) {
+    reasons.push({
+      source: 'GROUP_ROLE',
+      granted: isModuleEnabled,
+      name: `${gr.groupName} (${gr.roleName})`,
+      detail: `Permission granted via membership in group '${gr.groupName}' with role '${gr.roleName}'.`,
+    });
+  }
+
+  const isGranted =
+    isModuleEnabled &&
+    (isOwner || directRoleMatches.length > 0 || groupRoleMatches.length > 0);
+
+  if (reasons.length === 0) {
+    reasons.push({
+      source: 'DIRECT_ROLE',
+      granted: false,
+      name: 'No Matching Grants',
+      detail: 'None of the user’s assigned roles or group memberships grant this permission.',
+    });
+  }
+
+  return {
+    allowed: isGranted,
+    permission: permissionKey,
+    permissionName: permission.name,
+    moduleName,
+    memberId: member.id,
+    userId: member.userId,
+    isOwner,
+    isModuleEnabled,
+    reasons,
   };
 }
 

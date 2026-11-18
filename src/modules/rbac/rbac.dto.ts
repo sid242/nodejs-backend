@@ -41,6 +41,20 @@ export const updateRoleDto = z.object({
 
 export type UpdateRoleDto = z.infer<typeof updateRoleDto>;
 
+export const cloneRoleDto = z.object({
+  name: z.string().trim().min(2).max(50),
+  description: z.string().trim().max(255).optional(),
+});
+
+export type CloneRoleDto = z.infer<typeof cloneRoleDto>;
+
+export const explainAccessQueryDto = z.object({
+  memberId: z.string().uuid(),
+  permission: z.string().trim().min(1),
+});
+
+export type ExplainAccessQueryDto = z.infer<typeof explainAccessQueryDto>;
+
 export const assignRoleDto = z.object({
   roleId: z.string().uuid(),
 });

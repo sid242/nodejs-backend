@@ -113,6 +113,26 @@ export const deleteTenantRole = asyncHandler(async (req: Request, res: Response)
   AppResponse.ok({ message: 'Role deleted successfully' }).send(res);
 });
 
+export const cloneTenantRole = asyncHandler(async (req: Request, res: Response) => {
+  const roleId = String(req.params.roleId);
+  const result = await rbacService.cloneTenantRole(
+    req.tenant!.id,
+    roleId,
+    req.valid!.body,
+    req.user?.id,
+  );
+  AppResponse.created(result, 'Role cloned successfully').send(res);
+});
+
+export const explainMemberAccess = asyncHandler(async (req: Request, res: Response) => {
+  const result = await rbacService.explainMemberAccess(
+    req.tenant!.id,
+    req.valid!.query.memberId,
+    req.valid!.query.permission,
+  );
+  AppResponse.ok(result).send(res);
+});
+
 export const listTenantModules = asyncHandler(async (req: Request, res: Response) => {
   const modules = await rbacService.listTenantModules(req.tenant!.id);
   AppResponse.ok(modules).send(res);

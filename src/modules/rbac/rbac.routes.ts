@@ -91,13 +91,22 @@ router.delete(
   controller.deleteTenantRole,
 );
 
-// Backward-compatible alias
-router.delete(
-  '/:tenantId/roles/:roleId',
+router.post(
+  '/tenants/:tenantId/roles/:roleId/clone',
   requireAuth,
   requireTenant,
-  requirePermission('roles:delete'),
-  controller.deleteTenantRole,
+  requirePermission('roles:create'),
+  validate({ body: dto.cloneRoleDto }),
+  controller.cloneTenantRole,
+);
+
+router.get(
+  '/tenants/:tenantId/access/explain',
+  requireAuth,
+  requireTenant,
+  requirePermission('roles:read'),
+  validate({ query: dto.explainAccessQueryDto }),
+  controller.explainMemberAccess,
 );
 
 // ==========================================
