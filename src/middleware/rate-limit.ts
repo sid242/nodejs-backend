@@ -165,6 +165,13 @@ export const notificationLimiter = make({
   byUser: true,
 });
 
+// Fast debounced search queries
+export const searchLimiter = make({
+  name: 'search',
+  limit: 180,
+  byUser: true,
+});
+
 // Caddy / internal reverse-proxy TLS verification ask queries
 export const internalLimiter = make({
   name: 'internal',
