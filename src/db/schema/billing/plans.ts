@@ -42,6 +42,13 @@ export const plans = pgTable(
     limits: jsonb('limits').$type<PlanLimits>().notNull(),
     isPublic: boolean('isPublic').notNull().default(true),
     isActive: boolean('isActive').notNull().default(true),
+    isFeatured: boolean('isFeatured').notNull().default(false),
+    badge: text('badge'),
+    features: jsonb('features').$type<string[]>().notNull().default([]),
+    pricePerSeatMinor: integer('pricePerSeatMinor').notNull().default(0),
+    includedSeats: integer('includedSeats').notNull().default(1),
+    version: integer('version').notNull().default(1),
+    ctaLabel: text('ctaLabel').default('Get Started'),
     sortOrder: integer('sortOrder').notNull().default(0),
     createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updatedAt', { precision: 3, mode: 'date' })
@@ -92,6 +99,13 @@ export const publicPlan = {
   limits: plans.limits,
   isPublic: plans.isPublic,
   isActive: plans.isActive,
+  isFeatured: plans.isFeatured,
+  badge: plans.badge,
+  features: plans.features,
+  pricePerSeatMinor: plans.pricePerSeatMinor,
+  includedSeats: plans.includedSeats,
+  version: plans.version,
+  ctaLabel: plans.ctaLabel,
   sortOrder: plans.sortOrder,
 };
 

@@ -342,8 +342,8 @@ DROP POLICY IF EXISTS "platform_bypass_policy" ON "tenant_sso_configs";
 CREATE POLICY "tenant_isolation_policy" ON "tenant_sso_configs"
   FOR ALL
   TO tenant_app_role, app_runtime, public
-  USING (("tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid))
-  WITH CHECK (("tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid));
+  USING (("tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid))
+  WITH CHECK (("tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid));
 
 -- Create permissive platform bypass policy for maintenance & platform operator tasks
 CREATE POLICY "platform_bypass_policy" ON "tenant_sso_configs"
@@ -370,8 +370,8 @@ DROP POLICY IF EXISTS "platform_bypass_policy" ON "tenant_scim_tokens";
 CREATE POLICY "tenant_isolation_policy" ON "tenant_scim_tokens"
   FOR ALL
   TO tenant_app_role, app_runtime, public
-  USING (("tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid))
-  WITH CHECK (("tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid));
+  USING (("tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid))
+  WITH CHECK (("tenant_id" = NULLIF(current_setting('app.tenant_id', true), '')::uuid));
 
 -- Create permissive platform bypass policy for maintenance & platform operator tasks
 CREATE POLICY "platform_bypass_policy" ON "tenant_scim_tokens"
@@ -482,8 +482,8 @@ DROP POLICY IF EXISTS "platform_bypass_policy" ON "RolePermission";
 CREATE POLICY "tenant_isolation_policy" ON "RolePermission"
   FOR ALL
   TO tenant_app_role, app_runtime, public
-  USING (("tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid))
-  WITH CHECK (("tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid));
+  USING (EXISTS (SELECT 1 FROM "AppRole" r WHERE r.id = "roleId" AND (r."tenantId" IS NULL OR r."tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid)))
+  WITH CHECK (EXISTS (SELECT 1 FROM "AppRole" r WHERE r.id = "roleId" AND (r."tenantId" IS NULL OR r."tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid)));
 
 -- Create permissive platform bypass policy for maintenance & platform operator tasks
 CREATE POLICY "platform_bypass_policy" ON "RolePermission"
@@ -566,8 +566,8 @@ DROP POLICY IF EXISTS "platform_bypass_policy" ON "UserGroupRole";
 CREATE POLICY "tenant_isolation_policy" ON "UserGroupRole"
   FOR ALL
   TO tenant_app_role, app_runtime, public
-  USING (("tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid))
-  WITH CHECK (("tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid));
+  USING (EXISTS (SELECT 1 FROM "UserGroup" g WHERE g.id = "groupId" AND g."tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid))
+  WITH CHECK (EXISTS (SELECT 1 FROM "UserGroup" g WHERE g.id = "groupId" AND g."tenantId" = NULLIF(current_setting('app.tenant_id', true), '')::uuid));
 
 -- Create permissive platform bypass policy for maintenance & platform operator tasks
 CREATE POLICY "platform_bypass_policy" ON "UserGroupRole"

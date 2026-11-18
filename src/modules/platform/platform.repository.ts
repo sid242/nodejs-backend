@@ -707,7 +707,7 @@ export async function findTenantsPaginated(filters: ListPlatformTenantsQueryDto)
         ),
         ownerName: sql<
           string | null
-        >`(SELECT u."name" FROM "TenantMember" tm JOIN "User" u ON tm."userId" = u."id" JOIN "TenantMemberRole" tmr ON tmr."memberId" = tm."id" JOIN "AppRole" r ON tmr."roleId" = r."id" WHERE tm."tenantId" = "Tenant"."id" AND lower(r."name") = 'owner' LIMIT 1)`.as(
+        >`(SELECT NULLIF(TRIM(CONCAT(u."firstName", ' ', u."lastName")), '') FROM "TenantMember" tm JOIN "User" u ON tm."userId" = u."id" JOIN "TenantMemberRole" tmr ON tmr."memberId" = tm."id" JOIN "AppRole" r ON tmr."roleId" = r."id" WHERE tm."tenantId" = "Tenant"."id" AND lower(r."name") = 'owner' LIMIT 1)`.as(
           'ownerName',
         ),
         subscriptionId: subscriptions.id,
@@ -774,7 +774,7 @@ export async function findTenantDetailById(id: string) {
       ),
       ownerName: sql<
         string | null
-      >`(SELECT u."name" FROM "TenantMember" tm JOIN "User" u ON tm."userId" = u."id" JOIN "TenantMemberRole" tmr ON tmr."memberId" = tm."id" JOIN "AppRole" r ON tmr."roleId" = r."id" WHERE tm."tenantId" = "Tenant"."id" AND lower(r."name") = 'owner' LIMIT 1)`.as(
+      >`(SELECT NULLIF(TRIM(CONCAT(u."firstName", ' ', u."lastName")), '') FROM "TenantMember" tm JOIN "User" u ON tm."userId" = u."id" JOIN "TenantMemberRole" tmr ON tmr."memberId" = tm."id" JOIN "AppRole" r ON tmr."roleId" = r."id" WHERE tm."tenantId" = "Tenant"."id" AND lower(r."name") = 'owner' LIMIT 1)`.as(
         'ownerName',
       ),
     })

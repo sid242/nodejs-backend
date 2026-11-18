@@ -66,6 +66,7 @@ export const TENANT_TABLES: TenantTableRegistration[] = [
  */
 export const PRIMARY_ONLY_TABLES: string[] = [
   'Tenant',
+  'TenantSlugHistory',
   'tenant_secrets',
   'User',
   'Session',
@@ -76,6 +77,7 @@ export const PRIMARY_ONLY_TABLES: string[] = [
   'SubscriptionEvent',
   'SubscriptionChange',
   'Invoice',
+  'InvoiceSequence',
   'Payment',
   'Refund',
   'BillingWebhook',

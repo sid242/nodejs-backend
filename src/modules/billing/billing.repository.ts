@@ -7,6 +7,7 @@ import {
   entitlementDefinitions,
   files,
   invoices,
+  invoiceSequences,
   payments,
   planEntitlements,
   planModules,
@@ -734,11 +735,25 @@ export async function createBillingWebhook(data: NewBillingWebhook): Promise<Bil
 // 6. Invoices Repository Operations
 // ==========================================
 
-export async function generateInvoiceNumber(): Promise<string> {
-  const currentYear = new Date().getFullYear();
-  const [result] = await db.select({ total: count() }).from(invoices);
-  const sequence = (Number(result?.total ?? 0) + 1).toString().padStart(5, '0');
-  return `INV-${currentYear}-${sequence}`;
+export async function generateInvoiceNumber(
+  year: number = new Date().getFullYear(),
+): Promise<{ year: number; seq: number; invoiceNumber: string }> {
+  const [row] = await db
+    .insert(invoiceSequences)
+    .values({ year, nextSeq: 2 })
+    .onConflictDoUpdate({
+      target: invoiceSequences.year,
+      set: { nextSeq: sql`${invoiceSequences.nextSeq} + 1` },
+    })
+    .returning({ nextSeq: invoiceSequences.nextSeq });
+
+  const seq = (row?.nextSeq ?? 2) - 1;
+  const sequenceStr = seq.toString().padStart(5, '0');
+  return {
+    year,
+    seq,
+    invoiceNumber: `INV-${year}-${sequenceStr}`,
+  };
 }
 
 export async function createInvoice(
@@ -746,7 +761,18 @@ export async function createInvoice(
     invoiceNumber?: string;
   },
 ): Promise<Invoice> {
-  const invoiceNumber = data.invoiceNumber ?? (await generateInvoiceNumber());
+  const currentYear = new Date().getFullYear();
+  let invoiceNumber = data.invoiceNumber;
+  let invoiceYear = data.invoiceYear ?? currentYear;
+  let invoiceSeq = data.invoiceSeq;
+
+  if (!invoiceNumber) {
+    const generated = await generateInvoiceNumber(invoiceYear);
+    invoiceNumber = generated.invoiceNumber;
+    invoiceYear = generated.year;
+    invoiceSeq = generated.seq;
+  }
+
   const amountCents = Number(data.amountCents ?? 0);
   const taxCents = Number(data.taxCents ?? 0);
   const totalCents = amountCents + taxCents;
@@ -756,6 +782,8 @@ export async function createInvoice(
     .values({
       ...data,
       invoiceNumber,
+      invoiceYear,
+      invoiceSeq,
       totalCents,
     })
     .returning();

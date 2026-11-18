@@ -30,6 +30,22 @@ export const invoices = pgTable(
     amountCents: integer('amountCents').notNull().default(0),
     taxCents: integer('taxCents').notNull().default(0),
     totalCents: integer('totalCents').notNull().default(0),
+    subtotalMinor: integer('subtotalMinor').notNull().default(0),
+    discountMinor: integer('discountMinor').notNull().default(0),
+    taxBreakdown: jsonb('taxBreakdown')
+      .$type<Array<{ name: string; ratePercent: number; amountMinor: number }>>()
+      .default([]),
+    customerSnapshot: jsonb('customerSnapshot').$type<{
+      name: string;
+      email: string;
+      address?: string;
+      taxId?: string;
+    }>(),
+    creditedMinor: integer('creditedMinor').notNull().default(0),
+    attemptCount: integer('attemptCount').notNull().default(0),
+    nextAttemptAt: timestamp('nextAttemptAt', { precision: 3, mode: 'date' }),
+    invoiceYear: integer('invoiceYear'),
+    invoiceSeq: integer('invoiceSeq'),
     currency: text('currency').notNull().default('USD'),
     lineItems: jsonb('lineItems')
       .$type<
@@ -56,6 +72,7 @@ export const invoices = pgTable(
   },
   (table) => [
     uniqueIndex('Invoice_invoiceNumber_unique').on(table.invoiceNumber),
+    index('Invoice_year_seq_idx').on(table.invoiceYear, table.invoiceSeq),
     index('Invoice_tenantId_idx').on(table.tenantId),
     index('Invoice_subscriptionId_idx').on(table.subscriptionId),
     index('Invoice_status_idx').on(table.status),
@@ -76,6 +93,15 @@ export const publicInvoice = {
   amountCents: invoices.amountCents,
   taxCents: invoices.taxCents,
   totalCents: invoices.totalCents,
+  subtotalMinor: invoices.subtotalMinor,
+  discountMinor: invoices.discountMinor,
+  taxBreakdown: invoices.taxBreakdown,
+  customerSnapshot: invoices.customerSnapshot,
+  creditedMinor: invoices.creditedMinor,
+  attemptCount: invoices.attemptCount,
+  nextAttemptAt: invoices.nextAttemptAt,
+  invoiceYear: invoices.invoiceYear,
+  invoiceSeq: invoices.invoiceSeq,
   currency: invoices.currency,
   lineItems: invoices.lineItems,
   billingPeriodStart: invoices.billingPeriodStart,

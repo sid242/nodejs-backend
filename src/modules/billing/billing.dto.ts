@@ -31,6 +31,13 @@ export const createPlanDto = z.object({
   moduleKeys: z.array(z.string()).optional(),
   isPublic: z.boolean().default(true),
   isActive: z.boolean().default(true),
+  isFeatured: z.boolean().default(false),
+  badge: z.string().trim().max(50).optional(),
+  features: z.array(z.string()).default([]),
+  pricePerSeatMinor: z.coerce.number().int().min(0).default(0),
+  includedSeats: z.coerce.number().int().min(1).default(1),
+  version: z.coerce.number().int().min(1).default(1),
+  ctaLabel: z.string().trim().max(50).default('Get Started'),
   sortOrder: z.coerce.number().int().default(0),
 });
 
