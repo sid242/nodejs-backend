@@ -2,8 +2,9 @@ import type { PublicUser } from '@/db/schema/index';
 import { cache } from '@/lib/cache';
 import { AppError } from '@/lib/errors';
 import { revokeAllUserTokens } from '@/modules/auth/tokens';
+import * as loginEventsRepo from '@/modules/auth/user-login-events.repository';
 import * as platformRepo from '@/modules/platform/platform.repository';
-import type { ListUsersQueryDto, UpdateMeDto } from '@/modules/users/users.dto';
+import type { ListLoginHistoryQueryDto, ListUsersQueryDto, UpdateMeDto } from '@/modules/users/users.dto';
 import * as userRepo from '@/modules/users/users.repository';
 
 export const getMe = (id: string): Promise<PublicUser> =>
@@ -17,6 +18,8 @@ export const getMe = (id: string): Promise<PublicUser> =>
       return {
         id: staff.id,
         name: staff.displayName,
+        firstName: staff.displayName,
+        lastName: null,
         email: staff.email,
         emailVerifiedAt: staff.createdAt,
         role: 'ADMIN',
@@ -25,6 +28,9 @@ export const getMe = (id: string): Promise<PublicUser> =>
         phoneVerifiedAt: null,
         avatarUrl: null,
         twoFactorEnabledAt: staff.twoFactorEnabledAt,
+        locale: 'en',
+        timezone: 'UTC',
+        dateFormat: 'YYYY-MM-DD',
         lastLoginAt: staff.lastLoginAt,
         createdAt: staff.createdAt,
         updatedAt: staff.updatedAt,
@@ -36,7 +42,28 @@ export const getMe = (id: string): Promise<PublicUser> =>
 
 export async function updateMe(id: string, data: UpdateMeDto): Promise<PublicUser> {
   const updatePayload: Record<string, any> = {};
-  if (data?.name !== undefined) updatePayload.name = data.name;
+  if (data?.firstName !== undefined) updatePayload.firstName = data.firstName;
+  if (data?.lastName !== undefined) updatePayload.lastName = data.lastName;
+
+  if (data?.firstName !== undefined || data?.lastName !== undefined) {
+    const first = data?.firstName !== undefined ? data.firstName : '';
+    const last = data?.lastName !== undefined ? data.lastName : '';
+    const combined = [first, last].filter(Boolean).join(' ').trim();
+    if (combined) {
+      updatePayload.name = combined;
+    }
+  } else if (data?.name !== undefined) {
+    updatePayload.name = data.name;
+    const parts = data.name.trim().split(/\s+/);
+    updatePayload.firstName = parts[0] ?? null;
+    updatePayload.lastName = parts.slice(1).join(' ') || null;
+  }
+
+  if (data?.avatarUrl !== undefined) updatePayload.avatarUrl = data.avatarUrl;
+  if (data?.locale !== undefined) updatePayload.locale = data.locale;
+  if (data?.timezone !== undefined) updatePayload.timezone = data.timezone;
+  if (data?.dateFormat !== undefined) updatePayload.dateFormat = data.dateFormat;
+
   if (data?.phoneNumber !== undefined) {
     updatePayload.phoneNumber = data.phoneNumber;
     updatePayload.phoneVerifiedAt = null;
@@ -45,6 +72,16 @@ export async function updateMe(id: string, data: UpdateMeDto): Promise<PublicUse
   if (!user) throw AppError.notFound('User not found');
   await Promise.all([cache.del(`user:${id}`), cache.delByPrefix('users:list:')]);
   return user;
+}
+
+export async function getLoginHistory(
+  userId: string,
+  query: ListLoginHistoryQueryDto,
+): Promise<loginEventsRepo.PaginatedLoginHistoryResult> {
+  return loginEventsRepo.findLoginHistoryByUserId(userId, {
+    page: query?.page ?? 1,
+    limit: query?.limit ?? 20,
+  });
 }
 
 export const listUsers = ({

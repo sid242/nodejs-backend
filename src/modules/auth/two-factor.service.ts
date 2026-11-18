@@ -9,7 +9,9 @@ import { cache } from '@/lib/cache';
 import { decrypt, encrypt } from '@/lib/crypto';
 import { AppError } from '@/lib/errors';
 import * as authRepo from '@/modules/auth/auth.repository';
+import * as sessionsRepo from '@/modules/auth/sessions.repository';
 import { issueTokens, type AuthTokens } from '@/modules/auth/tokens';
+import * as loginEventsRepo from '@/modules/auth/user-login-events.repository';
 import {
   getUserMembershipsWithCanonicalUrls,
   type UserMembershipSummary,
@@ -20,7 +22,7 @@ import {
 } from '@/modules/auth/verification.repository';
 
 const APP_NAME = 'App';
-const RECOVERY_CODE_COUNT = 8;
+const RECOVERY_CODE_COUNT = 10;
 
 // ─── Setup ──────────────────────────────────────────────────────────────────────
 
@@ -205,6 +207,14 @@ export async function createTwoFactorChallenge(userId: string): Promise<TwoFacto
   };
 }
 
+export interface TwoFactorClientContext {
+  ip?: string;
+  userAgent?: string;
+  deviceName?: string;
+  country?: string;
+  city?: string;
+}
+
 /**
  * Verifies a 2FA challenge: consumes the challenge token, validates the TOTP
  * code (or recovery code), and issues auth tokens.
@@ -212,6 +222,7 @@ export async function createTwoFactorChallenge(userId: string): Promise<TwoFacto
 export async function verifyTwoFactorChallenge(
   challengeToken: string,
   code: string,
+  clientContext?: TwoFactorClientContext,
 ): Promise<{ user: PublicUser; memberships: UserMembershipSummary[] } & AuthTokens> {
   // Consume the challenge token
   const record = await verifyAndConsumeHashedToken(challengeToken, 'TWO_FACTOR_CHALLENGE');
@@ -225,6 +236,24 @@ export async function verifyTwoFactorChallenge(
   if (!user.twoFactorSecret || !user.twoFactorEnabledAt) {
     throw AppError.badRequest(AUTH_MESSAGES.TWO_FACTOR_NOT_ENABLED);
   }
+
+  const publicUser: PublicUser = {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    status: user.status,
+    emailVerifiedAt: user.emailVerifiedAt,
+    phoneNumber: user.phoneNumber,
+    phoneVerifiedAt: user.phoneVerifiedAt,
+    twoFactorEnabledAt: user.twoFactorEnabledAt,
+    locale: user.locale,
+    timezone: user.timezone,
+    dateFormat: user.dateFormat,
+    lastLoginAt: new Date(),
+    createdAt: user.createdAt,
+  };
 
   // First try TOTP code validation
   const decryptedSecret = decrypt(user.twoFactorSecret);
@@ -242,19 +271,33 @@ export async function verifyTwoFactorChallenge(
 
   if (delta !== null) {
     // Valid TOTP code — issue tokens
-    const publicUser: PublicUser = {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      status: user.status,
-      emailVerifiedAt: user.emailVerifiedAt,
-      phoneNumber: user.phoneNumber,
-      phoneVerifiedAt: user.phoneVerifiedAt,
-      twoFactorEnabledAt: user.twoFactorEnabledAt,
-      createdAt: user.createdAt,
-    };
+    await loginEventsRepo.recordLoginEvent({
+      userId: user.id,
+      result: 'SUCCESS',
+      method: 'PASSWORD',
+      ip: clientContext?.ip,
+      userAgent: clientContext?.userAgent,
+      country: clientContext?.country,
+      city: clientContext?.city,
+    });
+    await authRepo.updateLoginSuccess(user.id);
+
+    const tokens = await issueTokens(publicUser);
+    if (tokens.refreshToken) {
+      await sessionsRepo.createSessionRecord({
+        userId: user.id,
+        refreshToken: tokens.refreshToken,
+        userAgent: clientContext?.userAgent,
+        ipAddress: clientContext?.ip,
+        deviceName: clientContext?.deviceName,
+        country: clientContext?.country,
+        city: clientContext?.city,
+        expiresInSeconds: 30 * 24 * 3600,
+      });
+    }
+
     const memberships = await getUserMembershipsWithCanonicalUrls(user.id);
-    return { user: publicUser, ...(await issueTokens(publicUser)), memberships };
+    return { user: publicUser, ...tokens, memberships };
   }
 
   // If TOTP failed, try recovery codes
@@ -270,6 +313,15 @@ export async function verifyTwoFactorChallenge(
   }
 
   if (matchedIndex === -1) {
+    await loginEventsRepo.recordLoginEvent({
+      userId: user.id,
+      result: 'MFA_FAILED',
+      method: 'PASSWORD',
+      ip: clientContext?.ip,
+      userAgent: clientContext?.userAgent,
+      country: clientContext?.country,
+      city: clientContext?.city,
+    });
     throw AppError.badRequest(AUTH_MESSAGES.TWO_FACTOR_INVALID_CODE);
   }
 
@@ -278,34 +330,121 @@ export async function verifyTwoFactorChallenge(
   updatedCodes.splice(matchedIndex, 1);
   await authRepo.updateRecoveryCodes(userId, updatedCodes);
 
-  const publicUser: PublicUser = {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    status: user.status,
-    emailVerifiedAt: user.emailVerifiedAt,
-    phoneNumber: user.phoneNumber,
-    phoneVerifiedAt: user.phoneVerifiedAt,
-    twoFactorEnabledAt: user.twoFactorEnabledAt,
-    createdAt: user.createdAt,
-  };
+  await loginEventsRepo.recordLoginEvent({
+    userId: user.id,
+    result: 'SUCCESS',
+    method: 'RECOVERY_CODE',
+    ip: clientContext?.ip,
+    userAgent: clientContext?.userAgent,
+    country: clientContext?.country,
+    city: clientContext?.city,
+  });
+  await authRepo.updateLoginSuccess(user.id);
+
+  const tokens = await issueTokens(publicUser);
+  if (tokens.refreshToken) {
+    await sessionsRepo.createSessionRecord({
+      userId: user.id,
+      refreshToken: tokens.refreshToken,
+      userAgent: clientContext?.userAgent,
+      ipAddress: clientContext?.ip,
+      deviceName: clientContext?.deviceName,
+      country: clientContext?.country,
+      city: clientContext?.city,
+      expiresInSeconds: 30 * 24 * 3600,
+    });
+  }
+
   const memberships = await getUserMembershipsWithCanonicalUrls(user.id);
-  return { user: publicUser, ...(await issueTokens(publicUser)), memberships };
+  return { user: publicUser, ...tokens, memberships };
 }
 
-// ─── Status ─────────────────────────────────────────────────────────────────────
+// ─── Status & Recovery Codes ────────────────────────────────────────────────────
 
 export interface TwoFactorStatus {
   enabled: boolean;
   enabledAt: Date | null;
+  recoveryCodesRemaining: number;
 }
 
 export async function getTwoFactorStatus(userId: string): Promise<TwoFactorStatus> {
-  const user = await authRepo.findPublicUserById(userId);
-  if (!user) throw AppError.notFound('User not found');
+  const user = await authRepo.findById(userId);
+  if (!user || user.deletedAt) throw AppError.notFound('User not found');
+
+  const recoveryCodes = (user.twoFactorRecoveryCodes as string[]) ?? [];
 
   return {
     enabled: !!user.twoFactorEnabledAt,
     enabledAt: user.twoFactorEnabledAt ?? null,
+    recoveryCodesRemaining: recoveryCodes.length,
+  };
+}
+
+export interface RegenerateRecoveryCodesResult {
+  recoveryCodes: string[];
+  message: string;
+}
+
+/**
+ * Regenerates 10 new recovery codes for the user after validating password or 2FA code.
+ */
+export async function regenerateRecoveryCodes(
+  userId: string,
+  verification: { password?: string; code?: string },
+): Promise<RegenerateRecoveryCodesResult> {
+  const user = await authRepo.findById(userId);
+  if (!user || user.deletedAt) throw AppError.notFound('User not found');
+
+  if (!user.twoFactorEnabledAt || !user.twoFactorSecret) {
+    throw AppError.badRequest(AUTH_MESSAGES.TWO_FACTOR_NOT_ENABLED);
+  }
+
+  let verified = false;
+
+  // Verify by password if supplied
+  if (verification.password && user.passwordHash) {
+    const passwordValid = await bcrypt.compare(verification.password, user.passwordHash);
+    if (passwordValid) {
+      verified = true;
+    }
+  }
+
+  // Verify by TOTP code if supplied and not yet verified
+  if (!verified && verification.code) {
+    const decryptedSecret = decrypt(user.twoFactorSecret);
+    const secret = Secret.fromBase32(decryptedSecret);
+    const totp = new TOTP({
+      issuer: APP_NAME,
+      label: user.email,
+      algorithm: 'SHA1',
+      digits: 6,
+      period: 30,
+      secret,
+    });
+    const delta = totp.validate({ token: verification.code, window: 1 });
+    if (delta !== null) {
+      verified = true;
+    }
+  }
+
+  if (!verified) {
+    throw AppError.badRequest('Invalid password or verification code.');
+  }
+
+  // Generate 10 new recovery codes
+  const rawRecoveryCodes: string[] = [];
+  const hashedRecoveryCodes: string[] = [];
+  for (let i = 0; i < RECOVERY_CODE_COUNT; i++) {
+    const rawCode = randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase();
+    rawRecoveryCodes.push(rawCode);
+    hashedRecoveryCodes.push(await bcrypt.hash(rawCode, 10));
+  }
+
+  await authRepo.updateRecoveryCodes(userId, hashedRecoveryCodes);
+  await cache.del(`${REDIS_PREFIXES.USER_CACHE}${userId}`);
+
+  return {
+    recoveryCodes: rawRecoveryCodes,
+    message: 'New recovery codes generated successfully. Store them in a secure place.',
   };
 }

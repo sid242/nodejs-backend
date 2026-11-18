@@ -19,6 +19,9 @@ import type {
   VerifyEmailDto,
 } from '@/modules/auth/auth.dto';
 import * as authRepo from '@/modules/auth/auth.repository';
+import * as sessionsRepo from '@/modules/auth/sessions.repository';
+import * as loginEventsRepo from '@/modules/auth/user-login-events.repository';
+import { hashToken } from '@/modules/auth/verification.repository';
 import { assertSsoNotEnforced } from '@/modules/sso/sso.enforcement';
 import {
   consumeRefreshToken,
@@ -53,14 +56,38 @@ const DUMMY_HASH = bcrypt.hashSync('dummy-password', 12);
 
 export { getUserMembershipsWithCanonicalUrls, type UserMembershipSummary };
 
+export interface ClientContext {
+  ip?: string;
+  userAgent?: string;
+  country?: string;
+  city?: string;
+  deviceName?: string;
+  deviceType?: string;
+}
+
 export interface AuthResult extends AuthTokens {
   user: PublicUser;
   memberships: UserMembershipSummary[];
 }
 
-export async function register({ email, password, name }: RegisterDto): Promise<AuthResult> {
+export async function register(
+  { email, password, name, firstName, lastName }: RegisterDto,
+  clientContext?: ClientContext,
+): Promise<AuthResult> {
   const passwordHash = await bcrypt.hash(password, 12);
-  const user = await authRepo.createUser({ email, passwordHash, name });
+  const displayName =
+    name || [firstName, lastName].filter(Boolean).join(' ').trim() || email.split('@')[0]!;
+  const userFirst = firstName ?? (displayName ? displayName.split(' ')[0] : null);
+  const userLast =
+    lastName ?? (displayName ? displayName.split(' ').slice(1).join(' ') || null : null);
+
+  const user = await authRepo.createUser({
+    email,
+    passwordHash,
+    name: displayName,
+    firstName: userFirst,
+    lastName: userLast,
+  });
   await cache.delByPrefix(REDIS_PREFIXES.USERS_LIST_CACHE);
 
   // Slow/unreliable work goes to the queue, not the request path. jobId makes it idempotent.
@@ -74,25 +101,108 @@ export async function register({ email, password, name }: RegisterDto): Promise<
     ),
   ]);
 
+  const tokens = await issueTokens(user);
+  if (tokens.refreshToken) {
+    await sessionsRepo.createSessionRecord({
+      userId: user.id,
+      refreshToken: tokens.refreshToken,
+      userAgent: clientContext?.userAgent,
+      ipAddress: clientContext?.ip,
+      deviceName: clientContext?.deviceName,
+      country: clientContext?.country,
+      city: clientContext?.city,
+      expiresInSeconds: 30 * 24 * 3600,
+    });
+  }
+
   const memberships = await getUserMembershipsWithCanonicalUrls(user.id);
-  return { user, ...(await issueTokens(user)), memberships };
+  return { user, ...tokens, memberships };
 }
 
-export async function login({
-  email,
-  password,
-}: LoginDto): Promise<AuthResult | TwoFactorChallengeData> {
+export async function login(
+  { email, password }: LoginDto,
+  clientContext?: ClientContext,
+): Promise<AuthResult | TwoFactorChallengeData> {
   const record = await authRepo.findByEmail(email);
 
+  // Timing parity: always compare with dummy hash if email does not exist
+  if (!record) {
+    await bcrypt.compare(password, DUMMY_HASH);
+    await loginEventsRepo.recordLoginEvent({
+      userId: null,
+      result: 'FAILED',
+      method: 'PASSWORD',
+      ip: clientContext?.ip,
+      userAgent: clientContext?.userAgent,
+      country: clientContext?.country,
+      city: clientContext?.city,
+    });
+    throw AppError.unauthorized(AUTH_MESSAGES.INVALID_CREDENTIALS);
+  }
+
   // If user account is managed without password (e.g. SCIM/SSO provisioned)
-  if (record && !record.passwordHash) {
+  if (!record.passwordHash) {
     await assertSsoNotEnforced({ email: record.email, userId: record.id });
+    await loginEventsRepo.recordLoginEvent({
+      userId: record.id,
+      result: 'FAILED',
+      method: 'PASSWORD',
+      ip: clientContext?.ip,
+      userAgent: clientContext?.userAgent,
+      country: clientContext?.country,
+      city: clientContext?.city,
+    });
     throw AppError.unauthorized('Account is managed via Single Sign-On. Please sign in with SSO.');
   }
 
-  const ok = await bcrypt.compare(password, record?.passwordHash ?? DUMMY_HASH);
-  if (!record || !record.passwordHash || !ok || record.deletedAt)
+  // Account Lockout check with timing parity
+  if (record.lockedUntil && new Date(record.lockedUntil).getTime() > Date.now()) {
+    await bcrypt.compare(password, DUMMY_HASH);
+    await loginEventsRepo.recordLoginEvent({
+      userId: record.id,
+      result: 'LOCKED',
+      method: 'PASSWORD',
+      ip: clientContext?.ip,
+      userAgent: clientContext?.userAgent,
+      country: clientContext?.country,
+      city: clientContext?.city,
+    });
+    const remainingMins = Math.max(
+      1,
+      Math.ceil((new Date(record.lockedUntil).getTime() - Date.now()) / (60 * 1000)),
+    );
+    throw AppError.unauthorized(
+      `Account is temporarily locked due to multiple failed login attempts. Please try again in ${remainingMins} minute(s).`,
+    );
+  }
+
+  const ok = await bcrypt.compare(password, record.passwordHash);
+  if (!ok || record.deletedAt) {
+    const attempts = (record.failedLoginAttempts ?? 0) + 1;
+    let lockedUntil: Date | null = null;
+    if (attempts >= 5) {
+      // 15 minutes, doubling with subsequent failed attempts
+      const lockMins = 15 * Math.pow(2, Math.min(attempts - 5, 4));
+      lockedUntil = new Date(Date.now() + lockMins * 60 * 1000);
+    }
+    await authRepo.recordFailedLogin(record.id, attempts, lockedUntil);
+    await loginEventsRepo.recordLoginEvent({
+      userId: record.id,
+      result: lockedUntil ? 'LOCKED' : 'FAILED',
+      method: 'PASSWORD',
+      ip: clientContext?.ip,
+      userAgent: clientContext?.userAgent,
+      country: clientContext?.country,
+      city: clientContext?.city,
+    });
+
+    if (lockedUntil) {
+      throw AppError.unauthorized(
+        'Account is temporarily locked due to multiple failed login attempts. Please try again later.',
+      );
+    }
     throw AppError.unauthorized(AUTH_MESSAGES.INVALID_CREDENTIALS);
+  }
 
   if (record.status === 'SUSPENDED' || record.status === 'DEACTIVATED') {
     throw AppError.forbidden(`Account is ${record.status.toLowerCase()}`);
@@ -108,29 +218,77 @@ export async function login({
     });
   }
 
+  // Reset lockout counters upon successful authentication
+  await authRepo.updateLoginSuccess(record.id);
+
   // If 2FA is enabled, return a challenge instead of tokens
   if (record.twoFactorEnabledAt) {
     return createTwoFactorChallenge(record.id);
   }
 
+  await loginEventsRepo.recordLoginEvent({
+    userId: record.id,
+    result: 'SUCCESS',
+    method: 'PASSWORD',
+    ip: clientContext?.ip,
+    userAgent: clientContext?.userAgent,
+    country: clientContext?.country,
+    city: clientContext?.city,
+  });
+
   const user: PublicUser = {
     id: record.id,
     email: record.email,
     name: record.name,
+    firstName: record.firstName,
+    lastName: record.lastName,
     status: record.status,
     emailVerifiedAt: record.emailVerifiedAt,
     phoneNumber: record.phoneNumber,
     phoneVerifiedAt: record.phoneVerifiedAt,
     twoFactorEnabledAt: record.twoFactorEnabledAt,
+    locale: record.locale,
+    timezone: record.timezone,
+    dateFormat: record.dateFormat,
+    lastLoginAt: new Date(),
     createdAt: record.createdAt,
   };
+
+  const tokens = await issueTokens(user);
+  if (tokens.refreshToken) {
+    await sessionsRepo.createSessionRecord({
+      userId: user.id,
+      refreshToken: tokens.refreshToken,
+      userAgent: clientContext?.userAgent,
+      ipAddress: clientContext?.ip,
+      deviceName: clientContext?.deviceName,
+      country: clientContext?.country,
+      city: clientContext?.city,
+      expiresInSeconds: 30 * 24 * 3600,
+    });
+  }
+
   const memberships = await getUserMembershipsWithCanonicalUrls(record.id);
-  return { user, ...(await issueTokens(user)), memberships };
+  return { user, ...tokens, memberships };
 }
 
 export async function refresh(
   refreshToken: string,
+  clientContext?: ClientContext,
 ): Promise<AuthTokens & { memberships: UserMembershipSummary[] }> {
+  const refreshTokenHash = hashToken(refreshToken);
+  const existingSession = await sessionsRepo.findSessionByRefreshTokenHash(refreshTokenHash);
+
+  // Refresh token rotation reuse detection
+  if (existingSession && (existingSession.isRevoked || existingSession.rotatedAt)) {
+    // Reuse of an already rotated or revoked session detected! Revoke entire family
+    if (existingSession.familyId) {
+      await sessionsRepo.revokeSessionFamily(existingSession.familyId);
+    }
+    await revokeAllUserTokens(existingSession.userId);
+    throw AppError.unauthorized('Refresh token reuse detected. All sessions have been revoked.');
+  }
+
   const userId = await consumeRefreshToken(refreshToken);
   const user = await authRepo.findPublicUserById(userId);
   if (!user) throw AppError.unauthorized();
@@ -142,8 +300,35 @@ export async function refresh(
   }
 
   const tokens = await issueTokens(user);
+  const newSession = await sessionsRepo.createSessionRecord({
+    userId: user.id,
+    refreshToken: tokens.refreshToken,
+    familyId: existingSession?.familyId ?? undefined,
+    userAgent: clientContext?.userAgent ?? existingSession?.userAgent ?? undefined,
+    ipAddress: clientContext?.ip ?? existingSession?.ipAddress ?? undefined,
+    deviceName: clientContext?.deviceName ?? existingSession?.deviceName ?? undefined,
+    country: clientContext?.country ?? existingSession?.country ?? undefined,
+    city: clientContext?.city ?? existingSession?.city ?? undefined,
+    expiresInSeconds: 30 * 24 * 3600,
+  });
+
+  if (existingSession) {
+    await sessionsRepo.markSessionRotated(existingSession.id, newSession.id);
+  }
+
   const memberships = await getUserMembershipsWithCanonicalUrls(user.id);
   return { ...tokens, memberships };
+}
+
+export async function revokeOtherSessions(
+  userId: string,
+  currentSessionId?: string,
+): Promise<{ count: number; message: string }> {
+  const count = await sessionsRepo.revokeOtherUserSessions(userId, currentSessionId);
+  return {
+    count,
+    message: count > 0 ? `${count} other session(s) revoked successfully.` : 'No other active sessions found.',
+  };
 }
 
 export async function forgotPassword({ email }: ForgotPasswordDto): Promise<{ message: string }> {

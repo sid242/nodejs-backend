@@ -1,5 +1,6 @@
 import { isNull } from 'drizzle-orm';
 import {
+  boolean,
   index,
   integer,
   json,
@@ -41,6 +42,18 @@ export const users = pgTable(
     twoFactorEnabledAt: timestamp('twoFactorEnabledAt', { precision: 3, mode: 'date' }),
     twoFactorRecoveryCodes: json('twoFactorRecoveryCodes').$type<string[]>(), // bcrypt-hashed single-use recovery codes
 
+    // Profile & Preferences
+    firstName: text('firstName'),
+    lastName: text('lastName'),
+    locale: text('locale').default('en'),
+    timezone: text('timezone').default('UTC'),
+    dateFormat: text('dateFormat').default('YYYY-MM-DD'),
+    lastPasswordResetAt: timestamp('lastPasswordResetAt', { precision: 3, mode: 'date' }),
+    termsAcceptedAt: timestamp('termsAcceptedAt', { precision: 3, mode: 'date' }),
+    termsVersion: text('termsVersion'),
+    marketingOptIn: boolean('marketingOptIn').default(false),
+    lastSeenAt: timestamp('lastSeenAt', { precision: 3, mode: 'date' }),
+
     // Soft delete & timestamps
     deletedAt: timestamp('deletedAt', { precision: 3, mode: 'date' }),
     createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
@@ -64,12 +77,18 @@ export const publicUser = {
   id: users.id,
   email: users.email,
   name: users.name,
+  firstName: users.firstName,
+  lastName: users.lastName,
   avatarUrl: users.avatarUrl,
   status: users.status,
   emailVerifiedAt: users.emailVerifiedAt,
   phoneNumber: users.phoneNumber,
   phoneVerifiedAt: users.phoneVerifiedAt,
   twoFactorEnabledAt: users.twoFactorEnabledAt,
+  locale: users.locale,
+  timezone: users.timezone,
+  dateFormat: users.dateFormat,
+  lastLoginAt: users.lastLoginAt,
   createdAt: users.createdAt,
 };
 
@@ -77,11 +96,17 @@ export type PublicUser = {
   id: string;
   email: string;
   name: string;
+  firstName?: string | null;
+  lastName?: string | null;
   avatarUrl?: string | null;
   status: 'PENDING_VERIFICATION' | 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
   emailVerifiedAt: Date | null;
   phoneNumber?: string | null;
   phoneVerifiedAt?: Date | null;
   twoFactorEnabledAt?: Date | null;
+  locale?: string | null;
+  timezone?: string | null;
+  dateFormat?: string | null;
+  lastLoginAt?: Date | null;
   createdAt: Date;
 };

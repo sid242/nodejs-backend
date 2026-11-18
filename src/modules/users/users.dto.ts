@@ -2,6 +2,11 @@ import { z } from 'zod';
 
 export const updateMeDto = z.object({
   name: z.string().min(1).max(100).optional(),
+  firstName: z.string().min(1).max(50).nullable().optional(),
+  lastName: z.string().max(50).nullable().optional(),
+  locale: z.string().min(2).max(10).optional(),
+  timezone: z.string().min(1).max(50).optional(),
+  dateFormat: z.string().min(1).max(20).optional(),
   avatarUrl: z.string().url('Must be a valid URL').nullable().optional(),
   phoneNumber: z
     .preprocess(
@@ -21,6 +26,13 @@ export const updateMeDto = z.object({
 });
 
 export type UpdateMeDto = z.infer<typeof updateMeDto>;
+
+export const listLoginHistoryQueryDto = z.object({
+  page: z.coerce.number().int().min(1).max(10_000).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+export type ListLoginHistoryQueryDto = z.infer<typeof listLoginHistoryQueryDto>;
 
 export const listUsersQueryDto = z.object({
   page: z.coerce.number().int().min(1).max(10_000).default(1),

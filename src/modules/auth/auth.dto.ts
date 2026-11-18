@@ -3,11 +3,18 @@ import { z } from 'zod';
 const emailSchema = z.string().email().max(254);
 const passwordSchema = z.string().min(8).max(128);
 
-export const registerDto = z.object({
-  name: z.string().min(1).max(100),
-  email: emailSchema,
-  password: passwordSchema,
-});
+export const registerDto = z
+  .object({
+    name: z.string().min(1).max(100).optional(),
+    firstName: z.string().min(1).max(50).optional(),
+    lastName: z.string().max(50).optional(),
+    email: emailSchema,
+    password: passwordSchema,
+  })
+  .refine((data) => data.name || data.firstName, {
+    message: 'Either name or firstName is required',
+    path: ['firstName'],
+  });
 
 export type RegisterDto = z.infer<typeof registerDto>;
 
@@ -115,6 +122,24 @@ export const revokeSessionParamsDto = z.object({
 });
 
 export type RevokeSessionParamsDto = z.infer<typeof revokeSessionParamsDto>;
+
+export const regenerateRecoveryCodesDto = z
+  .object({
+    password: z.string().optional(),
+    code: z.string().optional(),
+  })
+  .refine((data) => data.password || data.code, {
+    message: 'Either password or 2FA code is required to regenerate recovery codes',
+    path: ['code'],
+  });
+
+export type RegenerateRecoveryCodesDto = z.infer<typeof regenerateRecoveryCodesDto>;
+
+export const revokeOtherSessionsDto = z.object({
+  currentSessionId: z.string().uuid().optional(),
+});
+
+export type RevokeOtherSessionsDto = z.infer<typeof revokeOtherSessionsDto>;
 
 // ─── Session Handoff ────────────────────────────────────────────────────────────
 

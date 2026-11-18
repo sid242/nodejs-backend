@@ -10,14 +10,27 @@ import * as sessionsRepo from '@/modules/auth/sessions.repository';
 import { revokeRefreshToken } from '@/modules/auth/tokens';
 import * as twoFactorService from '@/modules/auth/two-factor.service';
 
+function extractClientContext(req: Request): service.ClientContext {
+  const forwarded = req.headers['x-forwarded-for'];
+  const ip = typeof forwarded === 'string' ? forwarded.split(',')[0]?.trim() : req.ip;
+  const userAgent = req.headers['user-agent'];
+  return {
+    ip: ip || undefined,
+    userAgent: userAgent || undefined,
+    country: (req.headers['cf-ipcountry'] || req.headers['x-country']) as string | undefined,
+    city: (req.headers['cf-ipcity'] || req.headers['x-city']) as string | undefined,
+    deviceName: (req.headers['x-device-name'] as string) || undefined,
+  };
+}
+
 export const register = asyncHandler(async (req: Request, res: Response) => {
-  const result = await service.register(req.valid?.body);
+  const result = await service.register(req.valid?.body, extractClientContext(req));
   setAuthCookies(res, result);
   AppResponse.created(result, 'Registered').send(res);
 });
 
 export const login = asyncHandler(async (req: Request, res: Response) => {
-  const result = await service.login(req.valid?.body);
+  const result = await service.login(req.valid?.body, extractClientContext(req));
 
   // If 2FA is required, return the challenge (no cookies set)
   if ('twoFactorRequired' in result && result.twoFactorRequired) {
@@ -34,7 +47,7 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
   if (!token) {
     throw AppError.unauthorized('Refresh token is required');
   }
-  const result = await service.refresh(token);
+  const result = await service.refresh(token, extractClientContext(req));
   setAuthCookies(res, result);
   AppResponse.ok(result, 'Token refreshed').send(res);
 });
@@ -81,14 +94,38 @@ export const verifyEmail = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const listSessions = asyncHandler(async (req: Request, res: Response) => {
-  const sessions = await sessionsRepo.findUserActiveSessions(req.user!.id);
-  AppResponse.ok(sessions).send(res);
+  const activeSessions = await sessionsRepo.findUserActiveSessions(req.user!.id);
+  const clientCtx = extractClientContext(req);
+
+  // Format sessions and determine current session
+  const formatted = activeSessions.map((s, idx) => ({
+    id: s.id,
+    userId: s.userId,
+    ipAddress: s.ipAddress,
+    userAgent: s.userAgent,
+    deviceName: s.deviceName,
+    country: s.country,
+    city: s.city,
+    deviceType: s.deviceType,
+    lastActiveAt: s.lastActiveAt,
+    createdAt: s.createdAt,
+    // First session or matching IP/UA is marked as current
+    isCurrent: idx === 0 || (s.ipAddress === clientCtx.ip && s.userAgent === clientCtx.userAgent),
+  }));
+
+  AppResponse.ok(formatted).send(res);
 });
 
 export const revokeSession = asyncHandler(async (req: Request, res: Response) => {
   const success = await sessionsRepo.revokeSessionById(String(req.params.sessionId), req.user!.id);
   if (!success) throw AppError.notFound('Session not found');
   AppResponse.ok({ message: 'Session revoked successfully' }).send(res);
+});
+
+export const revokeOtherSessions = asyncHandler(async (req: Request, res: Response) => {
+  const currentSessionId = req.valid?.body?.currentSessionId;
+  const result = await service.revokeOtherSessions(req.user!.id, currentSessionId);
+  AppResponse.ok(result, result.message).send(res);
 });
 
 export const requestMagicLink = asyncHandler(async (req: Request, res: Response) => {
@@ -124,7 +161,11 @@ export const disableTwoFactor = asyncHandler(async (req: Request, res: Response)
 
 export const verifyTwoFactorChallenge = asyncHandler(async (req: Request, res: Response) => {
   const { challengeToken, code } = req.valid?.body ?? {};
-  const result = await twoFactorService.verifyTwoFactorChallenge(challengeToken, code);
+  const result = await twoFactorService.verifyTwoFactorChallenge(
+    challengeToken,
+    code,
+    extractClientContext(req),
+  );
   setAuthCookies(res, result);
   AppResponse.ok(result, 'Two-factor authentication verified').send(res);
 });
@@ -133,6 +174,12 @@ export const getTwoFactorStatus = asyncHandler(async (req: Request, res: Respons
   if (!req.user?.id) throw AppError.unauthorized();
   const result = await twoFactorService.getTwoFactorStatus(req.user.id);
   AppResponse.ok(result).send(res);
+});
+
+export const regenerateRecoveryCodes = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user?.id) throw AppError.unauthorized();
+  const result = await twoFactorService.regenerateRecoveryCodes(req.user.id, req.valid?.body ?? {});
+  AppResponse.ok(result, result.message).send(res);
 });
 
 // ─── Session Handoff ────────────────────────────────────────────────────────────

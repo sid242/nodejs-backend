@@ -19,10 +19,12 @@ import {
   loginDto,
   redeemHandoffDto,
   refreshTokenDto,
+  regenerateRecoveryCodesDto,
   registerDto,
   requestEmailVerificationDto,
   requestMagicLinkDto,
   resetPasswordDto,
+  revokeOtherSessionsDto,
   revokeSessionParamsDto,
   verifyEmailDto,
   verifyMagicLinkDto,
@@ -115,6 +117,12 @@ router.post('/verify-email/confirm', validate({ body: verifyEmailDto }), control
 
 // --- Active Device Sessions Management ---
 router.get('/sessions', requireAuth, controller.listSessions);
+router.post(
+  '/sessions/revoke-others',
+  requireAuth,
+  validate({ body: revokeOtherSessionsDto }),
+  controller.revokeOtherSessions,
+);
 router.delete(
   '/sessions/:sessionId',
   requireAuth,
@@ -147,6 +155,13 @@ router.post(
   '/2fa/verify',
   validate({ body: verifyTwoFactorChallengeDto }),
   controller.verifyTwoFactorChallenge,
+);
+router.post(
+  '/2fa/recovery-codes/regenerate',
+  requireAuth,
+  blockInSupportSession('Regenerate 2FA Recovery Codes'),
+  validate({ body: regenerateRecoveryCodesDto }),
+  controller.regenerateRecoveryCodes,
 );
 router.get('/2fa/status', requireAuth, controller.getTwoFactorStatus);
 

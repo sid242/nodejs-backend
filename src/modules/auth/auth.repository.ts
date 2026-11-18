@@ -7,16 +7,26 @@ export interface CreateUserData {
   email: string;
   passwordHash?: string | null;
   name: string;
+  firstName?: string | null;
+  lastName?: string | null;
 }
 
 export async function createUser({
   email,
   passwordHash,
   name,
+  firstName,
+  lastName,
 }: CreateUserData): Promise<PublicUser> {
   const [user] = await db
     .insert(users)
-    .values({ email: email.toLowerCase(), passwordHash, name })
+    .values({
+      email: email.toLowerCase(),
+      passwordHash,
+      name,
+      firstName: firstName ?? null,
+      lastName: lastName ?? null,
+    })
     .returning(publicUser);
   return user as PublicUser;
 }
@@ -86,4 +96,31 @@ export async function disableTwoFactor(id: string): Promise<void> {
 
 export async function updateRecoveryCodes(id: string, hashedCodes: string[]): Promise<void> {
   await db.update(users).set({ twoFactorRecoveryCodes: hashedCodes }).where(eq(users.id, id));
+}
+
+export async function updateLoginSuccess(id: string): Promise<void> {
+  await db
+    .update(users)
+    .set({
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+      lastLoginAt: new Date(),
+      lastSeenAt: new Date(),
+    })
+    .where(eq(users.id, id));
+}
+
+export async function recordFailedLogin(
+  id: string,
+  attempts: number,
+  lockedUntil?: Date | null,
+): Promise<void> {
+  await db
+    .update(users)
+    .set({
+      failedLoginAttempts: attempts,
+      lockedUntil: lockedUntil ?? null,
+      lastSeenAt: new Date(),
+    })
+    .where(eq(users.id, id));
 }

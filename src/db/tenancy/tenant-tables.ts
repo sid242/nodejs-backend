@@ -102,6 +102,7 @@ export const PRIMARY_ONLY_TABLES: string[] = [
   'Notification',
   'NotificationPreference',
   'PushSubscription',
+  'UserLoginEvent',
 ];
 
 const tenantTableMap = new Map<string, TenantTableRegistration>(

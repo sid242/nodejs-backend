@@ -14,6 +14,11 @@ export const updateMe = asyncHandler(async (req: Request, res: Response) => {
   AppResponse.ok(user, 'Profile updated').send(res);
 });
 
+export const getLoginHistory = asyncHandler(async (req: Request, res: Response) => {
+  const history = await service.getLoginHistory(req.user!.id, req.valid?.query);
+  AppResponse.ok(history).send(res);
+});
+
 export const listUsers = asyncHandler(async (req: Request, res: Response) => {
   const data = await service.listUsers(req.valid?.query);
   AppResponse.ok(data).send(res);

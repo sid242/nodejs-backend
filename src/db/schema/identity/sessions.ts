@@ -11,6 +11,12 @@ export const sessions = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     refreshTokenHash: text('refreshTokenHash').notNull().unique(),
+    familyId: uuid('familyId'),
+    rotatedAt: timestamp('rotatedAt', { precision: 3, mode: 'date' }),
+    replacedBy: uuid('replacedBy'),
+    deviceName: text('deviceName'),
+    country: text('country'),
+    city: text('city'),
     userAgent: text('userAgent'),
     ipAddress: text('ipAddress'),
     deviceType: text('deviceType'),
@@ -21,6 +27,7 @@ export const sessions = pgTable(
   },
   (table) => [
     index('Session_userId_isRevoked_idx').on(table.userId, table.isRevoked),
+    index('Session_familyId_idx').on(table.familyId),
     index('Session_expiresAt_idx').on(table.expiresAt),
   ],
 );
