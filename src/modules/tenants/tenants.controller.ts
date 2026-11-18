@@ -78,8 +78,21 @@ export const getTenant = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const updateTenant = asyncHandler(async (req: Request, res: Response) => {
-  const updated = await tenantsService.updateTenantDetails(req.tenant!.id, req.valid!.body);
+  const updated = await tenantsService.updateTenantDetails(
+    req.tenant!.id,
+    req.valid!.body,
+    req.user?.id,
+  );
   AppResponse.ok(updated, 'Tenant updated successfully').send(res);
+});
+
+export const changeTenantSlug = asyncHandler(async (req: Request, res: Response) => {
+  const updated = await tenantsService.updateTenantDetails(
+    req.tenant!.id,
+    { slug: req.valid!.body.slug },
+    req.user?.id,
+  );
+  AppResponse.ok(updated, 'Workspace slug updated successfully').send(res);
 });
 
 export const listMembers = asyncHandler(async (req: Request, res: Response) => {

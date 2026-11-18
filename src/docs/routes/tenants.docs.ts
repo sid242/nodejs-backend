@@ -95,6 +95,29 @@ export function registerTenantsDocs(registry: OpenAPIRegistry): void {
   });
 
   registry.registerPath({
+    method: 'patch',
+    path: '/api/v1/tenants/{tenantId}/slug',
+    summary: 'Change tenant workspace slug',
+    description: 'Changes the workspace slug with DNS-label validation and creates a 90-day redirect from the old slug.',
+    tags: ['Tenants'],
+    security: [{ [bearerAuth.name]: [] }],
+    request: {
+      params: z.object({
+        tenantId: z.string().uuid(),
+      }),
+      body: { content: { 'application/json': { schema: z.object({ slug: z.string().min(3).max(63) }) } } },
+    },
+    responses: {
+      200: successResponse(TenantSchema, 'Workspace slug updated successfully'),
+      400: errorResponse('Validation error'),
+      401: errorResponse('Unauthorized'),
+      403: errorResponse('Forbidden'),
+      404: errorResponse('Tenant not found'),
+      409: errorResponse('Slug already in use'),
+    },
+  });
+
+  registry.registerPath({
     method: 'get',
     path: '/api/v1/tenants/{tenantId}/members',
     summary: 'List tenant members',

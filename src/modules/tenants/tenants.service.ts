@@ -145,8 +145,52 @@ export async function getTenantDetails(tenantId: string): Promise<PublicTenant> 
 export async function updateTenantDetails(
   tenantId: string,
   data: UpdateTenantDto,
+  actorUserId?: string,
 ): Promise<PublicTenant> {
-  const updated = await tenantsRepo.updateTenant(tenantId, data);
+  const current = await tenantsRepo.findTenantById(tenantId);
+  if (!current) throw AppError.notFound('Tenant not found');
+
+  if (data.slug && data.slug.toLowerCase() !== current.slug.toLowerCase()) {
+    const normalizedSlug = data.slug.toLowerCase();
+    const existingWithSlug = await tenantsRepo.findTenantBySlug(normalizedSlug);
+    if (existingWithSlug && existingWithSlug.id !== tenantId) {
+      throw AppError.conflict('Workspace slug is already taken by another organization.');
+    }
+
+    const activeRedirect = await tenantsRepo.findActiveSlugRedirect(normalizedSlug);
+    if (activeRedirect && activeRedirect.tenantId !== tenantId) {
+      throw AppError.conflict(
+        'Workspace slug is currently reserved by a recent organization URL redirect.',
+      );
+    }
+
+    // Save previous slug in history for 90-day redirect
+    await tenantsRepo.recordSlugChange(tenantId, current.slug, 90);
+
+    // Invalidate Redis caches
+    await cache.del(`branding:resolve:slug:${current.slug}`);
+    await cache.del(`branding:resolve:slug:${normalizedSlug}`);
+
+    if (actorUserId) {
+      await auditRepo.createAuditLog({
+        tenantId,
+        action: 'TENANT.SLUG_CHANGED',
+        entityType: 'Tenant',
+        entityId: tenantId,
+        actorType: 'USER',
+        actorUserId,
+        metadata: {
+          previousSlug: current.slug,
+          newSlug: normalizedSlug,
+        },
+      });
+    }
+  }
+
+  const updated = await tenantsRepo.updateTenant(tenantId, {
+    ...data,
+    slug: data.slug ? data.slug.toLowerCase() : undefined,
+  });
   if (!updated) throw AppError.notFound('Tenant not found');
 
   return {
@@ -1050,6 +1094,8 @@ export interface PublicTenantResolution {
   slug?: string;
   name?: string;
   status?: string;
+  isRedirect?: boolean;
+  redirectedFromSlug?: string;
   pathOnly?: boolean;
   canonicalBase?: string;
   urlMode?: 'path' | 'subdomain' | 'customDomain';
@@ -1133,7 +1179,21 @@ export async function resolvePublicTenant(options: {
 
   // 2. Slug lookup (prioritized when slug is explicitly requested)
   if (rawSlug) {
-    const tenant = await tenantsRepo.findTenantBySlug(rawSlug);
+    let tenant = await tenantsRepo.findTenantBySlug(rawSlug);
+    let isRedirect = false;
+    let redirectedFromSlug: string | undefined;
+
+    if (!tenant) {
+      const redirectRecord = await tenantsRepo.findActiveSlugRedirect(rawSlug);
+      if (redirectRecord) {
+        tenant = await tenantsRepo.findTenantById(redirectRecord.tenantId);
+        if (tenant) {
+          isRedirect = true;
+          redirectedFromSlug = rawSlug;
+        }
+      }
+    }
+
     if (tenant) {
       const branding = await tenantBrandingRepo.findBrandingByTenantId(tenant.id);
       const entitlements = await billingService.getTenantEntitlements(tenant.id);
@@ -1145,6 +1205,8 @@ export async function resolvePublicTenant(options: {
         slug: tenant.slug,
         name: tenant.name,
         status: tenant.status,
+        isRedirect,
+        redirectedFromSlug,
         tenant: {
           id: tenant.id,
           name: tenant.name,
@@ -1217,7 +1279,21 @@ export async function resolvePublicTenant(options: {
           throw new AppError(404, 'Workspace not found', 'TENANT_NOT_FOUND');
         }
 
-        const tenant = await tenantsRepo.findTenantBySlug(label);
+        let tenant = await tenantsRepo.findTenantBySlug(label);
+        let isRedirect = false;
+        let redirectedFromSlug: string | undefined;
+
+        if (!tenant) {
+          const redirectRecord = await tenantsRepo.findActiveSlugRedirect(label);
+          if (redirectRecord) {
+            tenant = await tenantsRepo.findTenantById(redirectRecord.tenantId);
+            if (tenant) {
+              isRedirect = true;
+              redirectedFromSlug = label;
+            }
+          }
+        }
+
         if (!tenant) {
           await cache.set(cacheKey, { notFound: true }, 30);
           throw new AppError(404, 'Workspace not found', 'TENANT_NOT_FOUND');
@@ -1234,6 +1310,8 @@ export async function resolvePublicTenant(options: {
             slug: tenant.slug,
             name: tenant.name,
             status: tenant.status,
+            isRedirect,
+            redirectedFromSlug,
             pathOnly: true,
             canonicalBase: effective.canonicalBase,
             urlMode: effective.mode,
@@ -1249,6 +1327,8 @@ export async function resolvePublicTenant(options: {
           slug: tenant.slug,
           name: tenant.name,
           status: tenant.status,
+          isRedirect,
+          redirectedFromSlug,
           tenant: {
             id: tenant.id,
             name: tenant.name,

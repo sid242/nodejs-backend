@@ -4,8 +4,10 @@ import { describe, it } from 'node:test';
 import {
   addMemberDto,
   bulkInviteMembersDto,
+  changeSlugDto,
   listMembersQueryDto,
   offboardMemberDto,
+  tenantSlugSchema,
   updateMemberDto,
   updateMemberStatusDto,
 } from '@/modules/tenants/tenants.dto';
@@ -244,6 +246,42 @@ describe('Phase 04: Tenant Members & Invitations Unit Tests', () => {
           reassignToMemberId: 'invalid-not-uuid',
         });
       });
+    });
+  });
+
+  describe('8. changeSlugDto and tenantSlugSchema validation', () => {
+    it('accepts valid DNS-label compliant slugs', () => {
+      const validSlugs = ['acme-corp', 'team-123', 'alpha', 'super-cool-workspace'];
+      for (const slug of validSlugs) {
+        const parsed = changeSlugDto.parse({ slug });
+        assert.equal(parsed.slug, slug);
+      }
+    });
+
+    it('rejects slugs violating DNS rules', () => {
+      const invalidSlugs = [
+        '-invalid-start',
+        'invalid-end-',
+        'UPPERCASE',
+        'has spaces',
+        'has.dots',
+        'ab', // under 3 chars
+        'a'.repeat(64), // over 63 chars
+      ];
+      for (const slug of invalidSlugs) {
+        assert.throws(() => {
+          changeSlugDto.parse({ slug });
+        });
+      }
+    });
+
+    it('rejects reserved platform slugs', () => {
+      const reserved = ['admin', 'api', 'app', 'auth', 'billing', 'support', 'status'];
+      for (const slug of reserved) {
+        assert.throws(() => {
+          changeSlugDto.parse({ slug });
+        });
+      }
     });
   });
 });

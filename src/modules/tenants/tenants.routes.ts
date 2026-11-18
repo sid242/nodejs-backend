@@ -106,6 +106,15 @@ router.patch(
   controller.updateTenant,
 );
 
+router.patch(
+  '/:tenantId/slug',
+  requireAuth,
+  requireTenant,
+  requirePermission('tenants:update'),
+  validate({ body: dto.changeSlugDto }),
+  controller.changeTenantSlug,
+);
+
 router.get(
   '/:tenantId/members',
   requireAuth,

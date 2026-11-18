@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
 import type { DbExecutor } from '@/config/db';
 import {
@@ -18,6 +18,7 @@ import {
   tenantMembers,
   tenantModules,
   tenants,
+  tenantSlugHistory,
   userGroupMembers,
   userGroups,
   users,
@@ -26,6 +27,7 @@ import {
   type PublicTenant,
   type Tenant,
   type TenantMember,
+  type TenantSlugHistoryRecord,
 } from '@/db/schema';
 import * as rbacRepo from '@/modules/rbac/rbac.repository';
 import * as rbacService from '@/modules/rbac/rbac.service';
@@ -282,7 +284,9 @@ export async function findTenantMembersPaginated(tenantId: string, filters: List
   const items = enriched.map((r) => ({
     id: r.id,
     userId: r.userId,
-    name: r.user?.name ?? '',
+    firstName: r.user?.firstName ?? '',
+    lastName: r.user?.lastName ?? '',
+    name: [r.user?.firstName, r.user?.lastName].filter(Boolean).join(' ') || '',
     email: r.user?.email ?? '',
     status: r.status,
     memberCode: r.memberCode,
@@ -374,13 +378,20 @@ export async function findTenantMemberDetail(tenantId: string, memberId: string)
 
   return {
     ...member,
-    user: userData ?? {
-      id: member.userId,
-      name: '',
-      email: '',
-      phoneNumber: null,
-      status: 'INACTIVE',
-    },
+    user: userData
+      ? {
+          ...userData,
+          name: [userData.firstName, userData.lastName].filter(Boolean).join(' ') || '',
+        }
+      : {
+          id: member.userId,
+          firstName: '',
+          lastName: '',
+          name: '',
+          email: '',
+          phoneNumber: null,
+          status: 'INACTIVE',
+        },
     roles: assignedRoles,
     groups,
   };
@@ -645,10 +656,57 @@ export async function updateTenantUrlStyle(
   return record ?? null;
 }
 
+export async function findActiveSlugRedirect(oldSlug: string): Promise<TenantSlugHistoryRecord | null> {
+  const [record] = await primaryDbHandle()
+    .select()
+    .from(tenantSlugHistory)
+    .where(
+      and(
+        eq(tenantSlugHistory.oldSlug, oldSlug.trim().toLowerCase()),
+        gt(tenantSlugHistory.expiresAt, new Date()),
+      ),
+    )
+    .limit(1);
+  return record ?? null;
+}
+
+export async function recordSlugChange(
+  tenantId: string,
+  oldSlug: string,
+  daysToRetain: number = 90,
+  executor?: DbExecutor,
+): Promise<TenantSlugHistoryRecord> {
+  const exec = executor ?? primaryDbHandle();
+  const normalizedOld = oldSlug.trim().toLowerCase();
+  const expiresAt = new Date(Date.now() + daysToRetain * 24 * 60 * 60 * 1000);
+
+  const [record] = await exec
+    .insert(tenantSlugHistory)
+    .values({
+      tenantId,
+      oldSlug: normalizedOld,
+      changedAt: new Date(),
+      expiresAt,
+    })
+    .onConflictDoUpdate({
+      target: tenantSlugHistory.oldSlug,
+      set: {
+        tenantId,
+        changedAt: new Date(),
+        expiresAt,
+      },
+    })
+    .returning();
+
+  return record!;
+}
+
 export const tenantsRepo = {
   createTenant,
   findTenantById,
   findTenantBySlug,
+  findActiveSlugRedirect,
+  recordSlugChange,
   updateTenant,
   updateTenantUrlStyle,
   findUserTenants,

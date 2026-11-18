@@ -81,6 +81,14 @@ export const updateTenantDto = z
 
 export type UpdateTenantDto = z.infer<typeof updateTenantDto>;
 
+export const changeSlugDto = z
+  .object({
+    slug: tenantSlugSchema,
+  })
+  .strict();
+
+export type ChangeSlugDto = z.infer<typeof changeSlugDto>;
+
 export const listMembersQueryDto = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
