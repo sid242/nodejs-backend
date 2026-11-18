@@ -236,6 +236,13 @@ export async function findTenantMembersPaginated(tenantId: string, filters: List
         phone: tenantMembers.phone,
         jobTitle: tenantMembers.jobTitle,
         department: tenantMembers.department,
+        location: tenantMembers.location,
+        employmentType: tenantMembers.employmentType,
+        workEmail: tenantMembers.workEmail,
+        avatarUrl: tenantMembers.avatarUrl,
+        startDate: tenantMembers.startDate,
+        endDate: tenantMembers.endDate,
+        offboardedAt: tenantMembers.offboardedAt,
         role: sql<string>`coalesce((
           SELECT UPPER(r."name")
           FROM "TenantMemberRole" tmr
@@ -293,6 +300,13 @@ export async function findTenantMembersPaginated(tenantId: string, filters: List
     phone: r.phone,
     jobTitle: r.jobTitle,
     department: r.department,
+    location: r.location,
+    employmentType: r.employmentType,
+    workEmail: r.workEmail,
+    avatarUrl: r.avatarUrl,
+    startDate: r.startDate,
+    endDate: r.endDate,
+    offboardedAt: r.offboardedAt,
     role: r.role,
     roleId: r.roleId,
     joinedAt: r.joinedAt,
@@ -322,6 +336,16 @@ export async function findTenantMemberDetail(tenantId: string, memberId: string)
       phone: tenantMembers.phone,
       jobTitle: tenantMembers.jobTitle,
       department: tenantMembers.department,
+      managerMemberId: tenantMembers.managerMemberId,
+      location: tenantMembers.location,
+      employmentType: tenantMembers.employmentType,
+      startDate: tenantMembers.startDate,
+      endDate: tenantMembers.endDate,
+      workEmail: tenantMembers.workEmail,
+      avatarUrl: tenantMembers.avatarUrl,
+      offboardedAt: tenantMembers.offboardedAt,
+      offboardedByMemberId: tenantMembers.offboardedByMemberId,
+      reassignedToMemberId: tenantMembers.reassignedToMemberId,
       invitedAt: tenantMembers.invitedAt,
       joinedAt: tenantMembers.joinedAt,
       lastLoginAt: tenantMembers.lastLoginAt,
@@ -430,11 +454,26 @@ export async function findTenantMembers(tenantId: string): Promise<
   Array<{
     id: string;
     userId: string;
+    firstName: string;
+    lastName: string;
     name: string;
     email: string;
     status: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
+    memberCode: string | null;
+    phone: string | null;
+    jobTitle: string | null;
+    department: string | null;
+    location: string | null;
+    employmentType: string | null;
+    workEmail: string | null;
+    avatarUrl: string | null;
+    startDate: Date | null;
+    endDate: Date | null;
+    offboardedAt: Date | null;
     role: string;
     joinedAt: Date;
+    invitedAt: Date | null;
+    lastLoginAt: Date | null;
   }>
 > {
   assertTenantScope(tenantId);
@@ -443,6 +482,17 @@ export async function findTenantMembers(tenantId: string): Promise<
       id: tenantMembers.id,
       userId: tenantMembers.userId,
       status: tenantMembers.status,
+      memberCode: tenantMembers.memberCode,
+      phone: tenantMembers.phone,
+      jobTitle: tenantMembers.jobTitle,
+      department: tenantMembers.department,
+      location: tenantMembers.location,
+      employmentType: tenantMembers.employmentType,
+      workEmail: tenantMembers.workEmail,
+      avatarUrl: tenantMembers.avatarUrl,
+      startDate: tenantMembers.startDate,
+      endDate: tenantMembers.endDate,
+      offboardedAt: tenantMembers.offboardedAt,
       role: sql<string>`coalesce((
         SELECT UPPER(r."name")
         FROM "TenantMemberRole" tmr
@@ -457,6 +507,8 @@ export async function findTenantMembers(tenantId: string): Promise<
         LIMIT 1
       ), 'MEMBER')`,
       joinedAt: tenantMembers.joinedAt,
+      invitedAt: tenantMembers.invitedAt,
+      lastLoginAt: tenantMembers.lastLoginAt,
     })
     .from(tenantMembers)
     .where(eq(tenantMembers.tenantId, tenantId))
@@ -472,8 +524,21 @@ export async function findTenantMembers(tenantId: string): Promise<
     name: [r.user?.firstName, r.user?.lastName].filter(Boolean).join(' ') || '',
     email: r.user?.email ?? '',
     status: r.status,
+    memberCode: r.memberCode,
+    phone: r.phone,
+    jobTitle: r.jobTitle,
+    department: r.department,
+    location: r.location,
+    employmentType: r.employmentType,
+    workEmail: r.workEmail,
+    avatarUrl: r.avatarUrl,
+    startDate: r.startDate,
+    endDate: r.endDate,
+    offboardedAt: r.offboardedAt,
     role: r.role,
     joinedAt: r.joinedAt,
+    invitedAt: r.invitedAt,
+    lastLoginAt: r.lastLoginAt,
   }));
 }
 

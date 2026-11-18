@@ -104,6 +104,12 @@ export const listMembersQueryDto = z.object({
 });
 export type ListMembersQueryDto = z.infer<typeof listMembersQueryDto>;
 
+export const exportMembersQueryDto = z.object({
+  status: z.enum(['ACTIVE', 'INVITED', 'SUSPENDED', 'REMOVED', 'ALL']).optional(),
+  format: z.enum(['csv', 'json']).default('csv'),
+});
+export type ExportMembersQueryDto = z.infer<typeof exportMembersQueryDto>;
+
 export const addMemberDto = z.object({
   email: z.string().trim().email(),
   role: z.string().trim().min(2).max(50).default('MEMBER'),

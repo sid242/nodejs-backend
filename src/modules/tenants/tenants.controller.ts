@@ -100,6 +100,23 @@ export const listMembers = asyncHandler(async (req: Request, res: Response) => {
   AppResponse.ok(members).send(res);
 });
 
+export const exportMembers = asyncHandler(async (req: Request, res: Response) => {
+  const result = await tenantsService.exportMembers(
+    req.tenant!.id,
+    req.valid?.query,
+    req.user?.id,
+  );
+
+  if (result.format === 'json') {
+    AppResponse.ok(result.data).send(res);
+    return;
+  }
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+  res.status(200).send(result.data);
+});
+
 export const getMember = asyncHandler(async (req: Request, res: Response) => {
   const member = await tenantsService.getMemberDetail(req.tenant!.id, String(req.params.memberId));
   AppResponse.ok(member).send(res);

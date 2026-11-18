@@ -125,6 +125,15 @@ router.get(
 );
 
 router.get(
+  '/:tenantId/members/export',
+  requireAuth,
+  requireTenant,
+  requirePermission('members:read'),
+  validate({ query: dto.exportMembersQueryDto }),
+  controller.exportMembers,
+);
+
+router.get(
   '/:tenantId/members/:memberId',
   requireAuth,
   requireTenant,

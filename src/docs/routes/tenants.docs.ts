@@ -131,6 +131,36 @@ export function registerTenantsDocs(registry: OpenAPIRegistry): void {
   });
 
   registry.registerPath({
+    method: 'get',
+    path: '/api/v1/tenants/{tenantId}/members/export',
+    summary: 'Export tenant members',
+    description: 'Exports workspace team members as a CSV or JSON report.',
+    tags: ['Tenants'],
+    security: [{ [bearerAuth.name]: [] }],
+    request: {
+      params: z.object({
+        tenantId: z.string().uuid(),
+      }),
+      query: z.object({
+        status: z.enum(['ACTIVE', 'INVITED', 'SUSPENDED', 'REMOVED', 'ALL']).optional(),
+        format: z.enum(['csv', 'json']).default('csv'),
+      }),
+    },
+    responses: {
+      200: {
+        description: 'CSV file download or JSON list',
+        content: {
+          'text/csv': { schema: z.string() },
+          'application/json': { schema: z.array(TenantMemberSchema) },
+        },
+      },
+      401: errorResponse('Unauthorized'),
+      403: errorResponse('Forbidden'),
+      404: errorResponse('Tenant not found'),
+    },
+  });
+
+  registry.registerPath({
     method: 'post',
     path: '/api/v1/tenants/{tenantId}/members',
     summary: 'Add or invite member to tenant',

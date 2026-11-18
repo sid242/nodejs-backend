@@ -5,6 +5,7 @@ import {
   addMemberDto,
   bulkInviteMembersDto,
   changeSlugDto,
+  exportMembersQueryDto,
   listMembersQueryDto,
   offboardMemberDto,
   tenantSlugSchema,
@@ -282,6 +283,32 @@ describe('Phase 04: Tenant Members & Invitations Unit Tests', () => {
           changeSlugDto.parse({ slug });
         });
       }
+    });
+  });
+
+  describe('9. exportMembersQueryDto validation', () => {
+    it('applies default format csv', () => {
+      const parsed = exportMembersQueryDto.parse({});
+      assert.equal(parsed.format, 'csv');
+      assert.equal(parsed.status, undefined);
+    });
+
+    it('accepts json format and status filter', () => {
+      const parsed = exportMembersQueryDto.parse({
+        format: 'json',
+        status: 'ACTIVE',
+      });
+      assert.equal(parsed.format, 'json');
+      assert.equal(parsed.status, 'ACTIVE');
+    });
+
+    it('rejects invalid format or status', () => {
+      assert.throws(() => {
+        exportMembersQueryDto.parse({ format: 'pdf' as any });
+      });
+      assert.throws(() => {
+        exportMembersQueryDto.parse({ status: 'BANNED' as any });
+      });
     });
   });
 });

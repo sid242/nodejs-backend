@@ -49,6 +49,7 @@ import {
   type AddMemberDto,
   type BulkInviteItemDto,
   type CreateTenantDto,
+  type ExportMembersQueryDto,
   type ListMembersQueryDto,
   type OffboardMemberDto,
   type OverrideTenantCustomDomainDto,
@@ -209,6 +210,83 @@ export async function listMembers(tenantId: string, filters?: ListMembersQueryDt
     return tenantsRepo.findTenantMembersPaginated(tenantId, filters);
   }
   return tenantsRepo.findTenantMembers(tenantId);
+}
+
+export async function exportMembers(
+  tenantId: string,
+  options?: ExportMembersQueryDto,
+  actorUserId?: string,
+) {
+  const tenant = await tenantsRepo.findTenantById(tenantId);
+  if (!tenant) throw AppError.notFound('Tenant not found');
+
+  const members = await tenantsRepo.findTenantMembers(tenantId);
+  const filtered =
+    options?.status && options.status !== 'ALL'
+      ? members.filter((m) => m.status === options.status)
+      : members;
+
+  if (actorUserId) {
+    await auditRepo.createAuditLog({
+      tenantId,
+      action: 'MEMBER.EXPORTED',
+      entityType: 'TenantMember',
+      entityId: tenantId,
+      actorType: 'USER',
+      actorUserId,
+      metadata: {
+        count: filtered.length,
+        format: options?.format ?? 'csv',
+      },
+    });
+  }
+
+  if (options?.format === 'json') {
+    return { format: 'json' as const, data: filtered, filename: `members-${tenant.slug}.json` };
+  }
+
+  const headers = [
+    'Member ID',
+    'First Name',
+    'Last Name',
+    'Email',
+    'Role',
+    'Status',
+    'Member Code',
+    'Job Title',
+    'Department',
+    'Location',
+    'Employment Type',
+    'Work Email',
+    'Joined Date',
+  ];
+
+  const escapeCsv = (val: unknown): string => {
+    if (val === null || val === undefined) return '""';
+    const str = String(val).replace(/"/g, '""');
+    return `"${str}"`;
+  };
+
+  const rows = filtered.map((m) => [
+    escapeCsv(m.id),
+    escapeCsv(m.firstName),
+    escapeCsv(m.lastName),
+    escapeCsv(m.email),
+    escapeCsv(m.role),
+    escapeCsv(m.status),
+    escapeCsv(m.memberCode ?? ''),
+    escapeCsv(m.jobTitle ?? ''),
+    escapeCsv(m.department ?? ''),
+    escapeCsv(m.location ?? ''),
+    escapeCsv(m.employmentType ?? ''),
+    escapeCsv(m.workEmail ?? ''),
+    escapeCsv(m.joinedAt ? new Date(m.joinedAt).toISOString() : ''),
+  ]);
+
+  const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+  const filename = `members-${tenant.slug}-${new Date().toISOString().split('T')[0]}.csv`;
+
+  return { format: 'csv' as const, data: csvContent, filename };
 }
 
 export async function getMemberDetail(tenantId: string, memberId: string) {
