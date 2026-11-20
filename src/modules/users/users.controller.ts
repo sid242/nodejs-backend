@@ -33,3 +33,23 @@ export const updateUserStatus = asyncHandler(async (req: Request, res: Response)
   const user = await service.updateUserStatus(String(req.params.userId), req.valid?.body.status);
   AppResponse.ok(user, 'User status updated successfully').send(res);
 });
+
+export const getAvatarUploadUrl = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.getAvatarUploadUrl(req.user!.id, req.valid?.body);
+  AppResponse.ok(result, 'Avatar upload URL generated').send(res);
+});
+
+export const getMemberships = asyncHandler(async (req: Request, res: Response) => {
+  const memberships = await service.getMemberships(req.user!.id);
+  AppResponse.ok(memberships).send(res);
+});
+
+export const requestEmailChange = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.requestEmailChange(req.user!.id, req.valid?.body.newEmail);
+  AppResponse.ok(result, result.message).send(res);
+});
+
+export const confirmEmailChange = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.confirmEmailChange(req.user!.id, req.valid?.body.token);
+  AppResponse.ok(result, result.message).send(res);
+});

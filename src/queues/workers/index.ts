@@ -101,6 +101,12 @@ export async function registerSchedulers(): Promise<void> {
   );
 
   await maintenanceQueue.upsertJobScheduler(
+    'billing-dunning-daily',
+    { pattern: '0 5 * * *' }, // daily at 05:00 UTC
+    { name: 'billing-dunning' },
+  );
+
+  await maintenanceQueue.upsertJobScheduler(
     'domain-reverify-weekly',
     { pattern: '0 3 * * 0' }, // weekly Sunday at 03:00
     { name: 'domain-reverify' },

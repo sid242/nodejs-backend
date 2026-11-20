@@ -5,6 +5,7 @@ import { env } from '@/config/env';
 import { tenants, type PlanLimits } from '@/db/schema';
 import { cache } from '@/lib/cache';
 import { AppError } from '@/lib/errors';
+import { createDownloadUrl } from '@/lib/s3';
 import * as platformRepo from '@/modules/platform/platform.repository';
 import * as rbacRepo from '@/modules/rbac/rbac.repository';
 import { tenantBrandingRepo } from '@/modules/tenants/tenant-branding.repository';
@@ -1033,6 +1034,24 @@ export async function getTenantInvoiceById(tenantId: string, invoiceId: string) 
     throw AppError.notFound('Invoice not found');
   }
   return invoice;
+}
+
+export async function downloadTenantInvoice(tenantId: string, invoiceId: string) {
+  const invoice = await getTenantInvoiceById(tenantId, invoiceId);
+
+  let downloadUrl = invoice.pdfUrl;
+  if (invoice.pdfUrl && !invoice.pdfUrl.startsWith('http')) {
+    downloadUrl = await createDownloadUrl(invoice.pdfUrl, 300, {
+      filename: `invoice-${invoice.invoiceNumber}.pdf`,
+      disposition: 'attachment',
+    });
+  }
+
+  return {
+    invoiceNumber: invoice.invoiceNumber,
+    downloadUrl: downloadUrl ?? null,
+    invoice,
+  };
 }
 
 export async function listPlatformInvoices(query?: ListPlatformInvoicesQueryDto) {

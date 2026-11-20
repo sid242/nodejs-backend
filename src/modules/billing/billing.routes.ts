@@ -252,6 +252,12 @@ router.get(
 );
 
 router.get('/invoices/:invoiceId', requireAuth, requireTenant, controller.getTenantInvoiceById);
+router.get(
+  '/invoices/:invoiceId/download',
+  requireAuth,
+  requireTenant,
+  controller.downloadTenantInvoice,
+);
 
 // ==========================================
 // 7. Public Pricing & Plans Catalog

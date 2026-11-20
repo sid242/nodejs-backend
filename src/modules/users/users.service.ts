@@ -1,11 +1,28 @@
-import type { PublicUser } from '@/db/schema/index';
+import { eq } from 'drizzle-orm';
+
+import { db } from '@/config/db';
+import { env } from '@/config/env';
+import { users, type PublicUser } from '@/db/schema/index';
 import { cache } from '@/lib/cache';
 import { AppError } from '@/lib/errors';
+import { createUploadPost } from '@/lib/s3';
+import { safeFilename } from '@/lib/utils';
 import { revokeAllUserTokens } from '@/modules/auth/tokens';
 import * as loginEventsRepo from '@/modules/auth/user-login-events.repository';
+import {
+  createHashedVerificationToken,
+  verifyAndConsumeHashedToken,
+} from '@/modules/auth/verification.repository';
 import * as platformRepo from '@/modules/platform/platform.repository';
-import type { ListLoginHistoryQueryDto, ListUsersQueryDto, UpdateMeDto } from '@/modules/users/users.dto';
+import { getUserMembershipsWithCanonicalUrls } from '@/modules/tenants/tenant-url.service';
+import type {
+  AvatarUploadUrlDto,
+  ListLoginHistoryQueryDto,
+  ListUsersQueryDto,
+  UpdateMeDto,
+} from '@/modules/users/users.dto';
 import * as userRepo from '@/modules/users/users.repository';
+import { emailQueue } from '@/queues/index';
 
 export const getMe = (id: string): Promise<PublicUser> =>
   cache.wrap(`user:${id}`, 300, async () => {
@@ -102,4 +119,124 @@ export async function updateUserStatus(
     revocationPromise,
   ]);
   return updated;
+}
+
+export function buildS3PublicUrl(key: string): string {
+  if (env.S3_ENDPOINT) {
+    const base = env.S3_ENDPOINT.replace(/\/$/, '');
+    return `${base}/${env.S3_BUCKET}/${key}`;
+  }
+  return `https://${env.S3_BUCKET}.s3.${env.AWS_REGION}.amazonaws.com/${key}`;
+}
+
+export async function getAvatarUploadUrl(userId: string, dto: AvatarUploadUrlDto) {
+  const user = await userRepo.findById(userId);
+  if (!user) throw AppError.notFound('User not found');
+
+  const sanitized = safeFilename(dto.filename || 'avatar.png');
+  const key = `avatars/${userId}/${Date.now()}-${sanitized}`;
+
+  const upload = await createUploadPost({
+    key,
+    contentType: dto.contentType,
+    expiresIn: 300,
+  });
+
+  const publicUrl = buildS3PublicUrl(key);
+
+  return {
+    upload,
+    fileKey: key,
+    publicUrl,
+  };
+}
+
+export async function getMemberships(userId: string) {
+  return getUserMembershipsWithCanonicalUrls(userId);
+}
+
+export async function requestEmailChange(userId: string, newEmail: string) {
+  const normalizedNewEmail = newEmail.toLowerCase().trim();
+  const user = await userRepo.findById(userId);
+  if (!user) throw AppError.notFound('User not found');
+
+  if (user.email.toLowerCase() === normalizedNewEmail) {
+    throw AppError.badRequest('New email address must be different from current email');
+  }
+
+  const existing = await userRepo.findByEmail(normalizedNewEmail);
+  if (existing) {
+    throw AppError.conflict('An account with this email address already exists');
+  }
+
+  await db
+    .update(users)
+    .set({ pendingEmail: normalizedNewEmail, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+
+  const { rawToken } = await createHashedVerificationToken({
+    userId,
+    type: 'EMAIL_CHANGE',
+    target: normalizedNewEmail,
+    ttlSeconds: 24 * 3600,
+  });
+
+  const exposeDev = Boolean(env.EXPOSE_DEV_TOKENS) && process.env.NODE_ENV !== 'production';
+
+  // Queue email to new address
+  await emailQueue.add(
+    'verify-email',
+    {
+      to: normalizedNewEmail,
+      name: [user.firstName, user.lastName].filter(Boolean).join(' ') || 'User',
+      token: rawToken,
+    },
+    { jobId: `email-change-${userId}-${Date.now()}` },
+  );
+
+  await cache.del(`user:${userId}`);
+
+  return {
+    success: true,
+    message: `Verification link sent to ${normalizedNewEmail}. Please confirm to complete email change.`,
+    token: exposeDev ? rawToken : undefined,
+  };
+}
+
+export async function confirmEmailChange(userId: string, token: string) {
+  const record = await verifyAndConsumeHashedToken(token, 'EMAIL_CHANGE');
+  if (record.userId !== userId) {
+    throw AppError.forbidden('Verification token belongs to another account');
+  }
+
+  const newEmail = record.target;
+  if (!newEmail) {
+    throw AppError.badRequest('No pending email address bound to this verification token');
+  }
+
+  const existing = await userRepo.findByEmail(newEmail);
+  if (existing && existing.id !== userId) {
+    throw AppError.conflict('An account with this email address already exists');
+  }
+
+  await db
+    .update(users)
+    .set({
+      email: newEmail,
+      pendingEmail: null,
+      emailVerifiedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, userId));
+
+  // Revoke all other active sessions for security after sensitive email change
+  await revokeAllUserTokens(userId);
+  await Promise.all([cache.del(`user:${userId}`), cache.delByPrefix('users:list:')]);
+
+  const updatedUser = await userRepo.findById(userId);
+  return {
+    success: true,
+    message: 'Email address updated successfully',
+    user: updatedUser,
+  };
 }

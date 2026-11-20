@@ -59,6 +59,12 @@ export const getTenantInvoiceById = asyncHandler(async (req: Request, res: Respo
   return AppResponse.ok(invoice).send(res);
 });
 
+export const downloadTenantInvoice = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenant!.id;
+  const result = await service.downloadTenantInvoice(tenantId, req.params.invoiceId as string);
+  return AppResponse.ok(result, 'Invoice download URL generated').send(res);
+});
+
 // ==========================================
 // 3. Platform Plans Catalog
 // ==========================================

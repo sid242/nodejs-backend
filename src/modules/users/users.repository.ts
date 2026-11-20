@@ -9,6 +9,15 @@ export async function findById(id: string): Promise<PublicUser | null> {
   return (user as PublicUser) ?? null;
 }
 
+export async function findByEmail(email: string): Promise<PublicUser | null> {
+  const [user] = await db
+    .select(publicUser)
+    .from(users)
+    .where(eq(users.email, email.trim().toLowerCase()))
+    .limit(1);
+  return (user as PublicUser) ?? null;
+}
+
 export async function updateById(
   id: string,
   data: Partial<NewUser>,

@@ -51,3 +51,30 @@ export const userIdParamDto = z.object({
 });
 
 export type UserIdParamDto = z.infer<typeof userIdParamDto>;
+
+export const avatarUploadUrlDto = z.object({
+  contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif'], {
+    message: 'Avatar must be a JPEG, PNG, WebP, or GIF image',
+  }),
+  filename: z.string().trim().max(100).optional().default('avatar.png'),
+});
+
+export type AvatarUploadUrlDto = z.infer<typeof avatarUploadUrlDto>;
+
+export const requestEmailChangeDto = z.object({
+  newEmail: z.string().trim().email('Must be a valid email address').toLowerCase(),
+});
+
+export type RequestEmailChangeDto = z.infer<typeof requestEmailChangeDto>;
+
+export const confirmEmailChangeDto = z.object({
+  token: z.string().trim().min(1, 'Verification token is required'),
+});
+
+export type ConfirmEmailChangeDto = z.infer<typeof confirmEmailChangeDto>;
+
+export const revertEmailChangeDto = z.object({
+  token: z.string().trim().min(1, 'Revert token is required'),
+});
+
+export type RevertEmailChangeDto = z.infer<typeof revertEmailChangeDto>;

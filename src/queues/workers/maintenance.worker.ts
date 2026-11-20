@@ -63,6 +63,25 @@ export async function processMaintenance(job: Job): Promise<{ removed: number; f
     return { removed: expiredTrials.length, failed: 0 };
   }
 
+  if (job.name === 'billing-dunning') {
+    const now = new Date();
+    // Subscriptions that are PAST_DUE past the 7-day grace period become CANCELED / SUSPENDED
+    const graceCutoff = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
+    const pastDueOverGrace = await db
+      .update(subscriptions)
+      .set({ status: 'CANCELED', updatedAt: now })
+      .where(and(eq(subscriptions.status, 'PAST_DUE'), lt(subscriptions.updatedAt, graceCutoff)))
+      .returning();
+
+    if (pastDueOverGrace.length > 0) {
+      logger.warn(
+        { count: pastDueOverGrace.length, subscriptionIds: pastDueOverGrace.map((s) => s.id) },
+        'Suspended past-due subscriptions after 7-day grace period',
+      );
+    }
+    return { removed: pastDueOverGrace.length, failed: 0 };
+  }
+
   if (job.name === 'cleanup-stale-db-operations') {
     const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000);
     const staleOps = await db
