@@ -1,8 +1,10 @@
 import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
+import { and, eq } from 'drizzle-orm';
 
+import { db } from '@/config/db';
 import { env } from '@/config/env';
-import { type PublicUser } from '@/db/schema';
+import { users, verificationTokens, type PublicUser } from '@/db/schema';
 import { AppError } from '@/lib/errors';
 import { logSecurityEvent } from '@/modules/audit/audit.service';
 import * as authRepo from '@/modules/auth/auth.repository';
@@ -260,29 +262,79 @@ export async function previewInvitation(token: string) {
   const tokenHash = hashInvitationToken(token);
   const invitation = await invitationsRepo.findInvitationByTokenHash(tokenHash);
 
-  if (!invitation) {
-    throw AppError.badRequest('Invalid or expired invitation token');
+  if (invitation) {
+    if (invitation.status !== 'PENDING') {
+      throw AppError.badRequest(`This invitation has already been ${invitation.status.toLowerCase()}`);
+    }
+
+    if (new Date() > new Date(invitation.expiresAt)) {
+      await invitationsRepo.updateInvitation(invitation.id, { status: 'EXPIRED' });
+      throw AppError.badRequest('This invitation token has expired');
+    }
+
+    const existingUser = await authRepo.findByEmail(invitation.email);
+
+    return {
+      email: invitation.email,
+      tenantName: invitation.tenantName ?? 'Workspace',
+      tenantSlug: invitation.tenantSlug,
+      roleName: invitation.roleName ?? 'Member',
+      expiresAt: invitation.expiresAt,
+      hasAccount: Boolean(existingUser),
+    };
   }
 
-  if (invitation.status !== 'PENDING') {
-    throw AppError.badRequest(`This invitation has already been ${invitation.status.toLowerCase()}`);
+  // Fallback: Check verificationTokens for magic-link based workspace invitation
+  const [magicToken] = await db
+    .select()
+    .from(verificationTokens)
+    .where(and(eq(verificationTokens.tokenHash, tokenHash), eq(verificationTokens.type, 'MAGIC_LINK')))
+    .limit(1);
+
+  if (magicToken) {
+    if (magicToken.usedAt) {
+      throw AppError.badRequest('This invitation has already been used');
+    }
+
+    if (new Date() > new Date(magicToken.expiresAt)) {
+      throw AppError.badRequest('This invitation token has expired');
+    }
+
+    const user = await authRepo.findById(magicToken.userId);
+    if (!user) {
+      throw AppError.badRequest('Invited user record not found');
+    }
+
+    const tenant = magicToken.target ? await tenantsRepo.findTenantById(magicToken.target) : null;
+    let roleName = 'Member';
+    if (magicToken.target) {
+      const member = await tenantsRepo.findTenantMember(magicToken.target, user.id);
+      if (member) {
+        const roles = await rbacRepo.getMemberRoles(member.id);
+        if (roles && roles.length > 0) {
+          roleName = roles?.[0]?.name ?? 'Member';
+        }
+      }
+    }
+
+    const hasRealAccount = Boolean(
+      user.emailVerifiedAt &&
+      user.status !== 'PENDING_VERIFICATION' &&
+      user.passwordHash &&
+      !user.passwordHash.startsWith('$2a$12$dummy'),
+    );
+
+    return {
+      email: user.email,
+      tenantName: tenant?.name ?? 'Workspace',
+      tenantSlug: tenant?.slug,
+      roleName,
+      expiresAt: magicToken.expiresAt,
+      hasAccount: hasRealAccount,
+    };
   }
 
-  if (new Date() > new Date(invitation.expiresAt)) {
-    await invitationsRepo.updateInvitation(invitation.id, { status: 'EXPIRED' });
-    throw AppError.badRequest('This invitation token has expired');
-  }
-
-  const existingUser = await authRepo.findByEmail(invitation.email);
-
-  return {
-    email: invitation.email,
-    tenantName: invitation.tenantName ?? 'Workspace',
-    tenantSlug: invitation.tenantSlug,
-    roleName: invitation.roleName ?? 'Member',
-    expiresAt: invitation.expiresAt,
-    hasAccount: Boolean(existingUser),
-  };
+  throw AppError.badRequest('Invalid or expired invitation token');
 }
 
 export async function acceptTenantInvitation(
@@ -294,113 +346,260 @@ export async function acceptTenantInvitation(
   const tokenHash = hashInvitationToken(dto.token);
   const invitation = await invitationsRepo.findInvitationByTokenHash(tokenHash);
 
-  if (!invitation) {
+  if (invitation) {
+    if (invitation.status !== 'PENDING') {
+      throw AppError.badRequest(`This invitation has already been ${invitation.status.toLowerCase()}`);
+    }
+
+    if (new Date() > new Date(invitation.expiresAt)) {
+      await invitationsRepo.updateInvitation(invitation.id, { status: 'EXPIRED' });
+      throw AppError.badRequest('This invitation token has expired');
+    }
+
+    const normalizedInvitedEmail = invitation.email.toLowerCase();
+    const existingUser = await authRepo.findByEmail(normalizedInvitedEmail);
+
+    // Mandatory SSO enforcement check
+    await assertSsoNotEnforced({
+      email: normalizedInvitedEmail,
+      userId: existingUser?.id,
+      targetTenantId: invitation.tenantId,
+    });
+
+    let targetUserId: string;
+    let userForTokens: PublicUser;
+
+    if (existingUser) {
+      // If the invitee already has an account, they MUST be logged in as that account to accept
+      if (!clientUser) {
+        return {
+          requiresLogin: true,
+          email: invitation.email,
+          message: 'Account exists. Please log in with your credentials to accept this invitation.',
+        };
+      }
+
+      if (clientUser.email.toLowerCase() !== normalizedInvitedEmail) {
+        throw AppError.forbidden(
+          `You are currently logged in as ${clientUser.email}. Please switch to ${invitation.email} to accept this invitation.`,
+        );
+      }
+
+      targetUserId = existingUser.id;
+      userForTokens = clientUser;
+    } else {
+      // New user path: requires name & password to set up new account
+      if (!dto.password || dto.password.length < 8) {
+        throw AppError.badRequest('Password of at least 8 characters is required to create your account');
+      }
+
+      const first =
+        dto.firstName?.trim() ||
+        invitation.firstName ||
+        normalizedInvitedEmail.split('@')[0] ||
+        'User';
+      const last =
+        dto.lastName?.trim() ||
+        invitation.lastName ||
+        'Member';
+      const passwordHash = await bcrypt.hash(dto.password, 12);
+
+      const createdUser = await invitationsRepo.createInvitedUser({
+        email: normalizedInvitedEmail,
+        firstName: first,
+        lastName: last,
+        passwordHash,
+      });
+
+      targetUserId = createdUser.id;
+      userForTokens = {
+        id: createdUser.id,
+        email: createdUser.email,
+        firstName: createdUser.firstName,
+        lastName: createdUser.lastName,
+        status: createdUser.status,
+        emailVerifiedAt: createdUser.emailVerifiedAt,
+        phoneNumber: createdUser.phoneNumber,
+        phoneVerifiedAt: createdUser.phoneVerifiedAt,
+        twoFactorEnabledAt: createdUser.twoFactorEnabledAt,
+        createdAt: createdUser.createdAt,
+      };
+    }
+
+    // Atomically create/activate membership, assign role, and mark invitation ACCEPTED
+    await invitationsRepo.executeAcceptanceTransaction({
+      tenantId: invitation.tenantId,
+      userId: targetUserId,
+      roleId: invitation.roleId,
+      invitationId: invitation.id,
+      memberMetadata: {
+        memberCode: invitation.memberCode,
+        phone: invitation.phone,
+        jobTitle: invitation.jobTitle,
+        department: invitation.department,
+      },
+    });
+
+    // Invalidate RBAC cache
+    await rbacService.invalidateRbacCache(invitation.tenantId, targetUserId);
+
+    await logSecurityEvent({
+      tenantId: invitation.tenantId,
+      userId: targetUserId,
+      action: 'INVITATION.ACCEPTED',
+      entityType: 'TenantInvitation',
+      entityId: invitation.id,
+      metadata: { email: invitation.email, roleId: invitation.roleId },
+    });
+
+    const tokens = await issueTokens(userForTokens);
+
+    return {
+      success: true,
+      message: 'Invitation accepted successfully',
+      user: userForTokens,
+      activeTenantId: invitation.tenantId,
+      tenantSlug: invitation.tenantSlug,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+    };
+  }
+
+  // Fallback: Check verificationTokens for magic-link based workspace invitation
+  const [magicToken] = await db
+    .select()
+    .from(verificationTokens)
+    .where(and(eq(verificationTokens.tokenHash, tokenHash), eq(verificationTokens.type, 'MAGIC_LINK')))
+    .limit(1);
+
+  if (!magicToken) {
     throw AppError.badRequest('Invalid or expired invitation token');
   }
 
-  if (invitation.status !== 'PENDING') {
-    throw AppError.badRequest(`This invitation has already been ${invitation.status.toLowerCase()}`);
+  if (magicToken.usedAt) {
+    throw AppError.badRequest('This invitation has already been used');
   }
 
-  if (new Date() > new Date(invitation.expiresAt)) {
-    await invitationsRepo.updateInvitation(invitation.id, { status: 'EXPIRED' });
+  if (new Date() > new Date(magicToken.expiresAt)) {
     throw AppError.badRequest('This invitation token has expired');
   }
 
-  const normalizedInvitedEmail = invitation.email.toLowerCase();
-  const existingUser = await authRepo.findByEmail(normalizedInvitedEmail);
+  const boundTenantId = magicToken.target;
+  if (!boundTenantId) {
+    throw AppError.badRequest('Invitation token is not bound to a workspace');
+  }
+
+  const targetUser = await authRepo.findById(magicToken.userId);
+  if (!targetUser || targetUser.deletedAt) {
+    throw AppError.unauthorized('User not found');
+  }
+
+  if (targetUser.status === 'SUSPENDED' || targetUser.status === 'DEACTIVATED') {
+    throw AppError.forbidden(`Account is ${targetUser.status.toLowerCase()}`);
+  }
+
+  const normalizedInvitedEmail = targetUser.email.toLowerCase();
 
   // Mandatory SSO enforcement check
   await assertSsoNotEnforced({
     email: normalizedInvitedEmail,
-    userId: existingUser?.id,
-    targetTenantId: invitation.tenantId,
+    userId: targetUser.id,
+    targetTenantId: boundTenantId,
   });
 
-  let targetUserId: string;
+  const isPendingUser =
+    !targetUser.emailVerifiedAt ||
+    targetUser.status === 'PENDING_VERIFICATION';
+
   let userForTokens: PublicUser;
 
-  if (existingUser) {
-    // If the invitee already has an account, they MUST be logged in as that account to accept
+  if (isPendingUser || dto.password) {
+    // New user path setting their password
+    if (dto.password) {
+      if (dto.password.length < 8) {
+        throw AppError.badRequest('Password must be at least 8 characters');
+      }
+      const newHash = await bcrypt.hash(dto.password, 12);
+      await db
+        .update(users)
+        .set({
+          passwordHash: newHash,
+          firstName: dto.firstName?.trim() || targetUser.firstName,
+          lastName: dto.lastName?.trim() || targetUser.lastName,
+          emailVerifiedAt: new Date(),
+          status: 'ACTIVE',
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, targetUser.id));
+    } else {
+      await authRepo.markEmailVerified(targetUser.id);
+    }
+
+    const updatedUser = await authRepo.findPublicUserById(targetUser.id);
+    if (!updatedUser) throw AppError.internal('Failed to retrieve user status');
+    userForTokens = updatedUser;
+  } else {
+    // Existing user path
     if (!clientUser) {
       return {
         requiresLogin: true,
-        email: invitation.email,
+        email: targetUser.email,
         message: 'Account exists. Please log in with your credentials to accept this invitation.',
       };
     }
 
     if (clientUser.email.toLowerCase() !== normalizedInvitedEmail) {
       throw AppError.forbidden(
-        `You are currently logged in as ${clientUser.email}. Please switch to ${invitation.email} to accept this invitation.`,
+        `You are currently logged in as ${clientUser.email}. Please switch to ${targetUser.email} to accept this invitation.`,
       );
     }
 
-    targetUserId = existingUser.id;
     userForTokens = clientUser;
-  } else {
-    // New user path: requires name & password to set up new account
-    if (!dto.password || dto.password.length < 8) {
-      throw AppError.badRequest('Password of at least 8 characters is required to create your account');
-    }
-
-    const first =
-      dto.firstName?.trim() ||
-      invitation.firstName ||
-      normalizedInvitedEmail.split('@')[0] ||
-      'User';
-    const last =
-      dto.lastName?.trim() ||
-      invitation.lastName ||
-      'Member';
-    const passwordHash = await bcrypt.hash(dto.password, 12);
-
-    const createdUser = await invitationsRepo.createInvitedUser({
-      email: normalizedInvitedEmail,
-      firstName: first,
-      lastName: last,
-      passwordHash,
-    });
-
-    targetUserId = createdUser.id;
-    userForTokens = {
-      id: createdUser.id,
-      email: createdUser.email,
-      firstName: createdUser.firstName,
-      lastName: createdUser.lastName,
-      status: createdUser.status,
-      emailVerifiedAt: createdUser.emailVerifiedAt,
-      phoneNumber: createdUser.phoneNumber,
-      phoneVerifiedAt: createdUser.phoneVerifiedAt,
-      twoFactorEnabledAt: createdUser.twoFactorEnabledAt,
-      createdAt: createdUser.createdAt,
-    };
   }
 
-  // Atomically create/activate membership, assign role, and mark invitation ACCEPTED
-  await invitationsRepo.executeAcceptanceTransaction({
-    tenantId: invitation.tenantId,
-    userId: targetUserId,
-    roleId: invitation.roleId,
-    invitationId: invitation.id,
-    memberMetadata: {
-      memberCode: invitation.memberCode,
-      phone: invitation.phone,
-      jobTitle: invitation.jobTitle,
-      department: invitation.department,
-    },
-  });
+  // Activate tenant membership for this workspace
+  const memberships = await tenantsRepo.findMembershipsByUserId(targetUser.id);
+  let activeTenantFound = false;
 
-  // Invalidate RBAC cache
-  await rbacService.invalidateRbacCache(invitation.tenantId, targetUserId);
+  for (const m of memberships) {
+    if (m.tenantId === boundTenantId) {
+      activeTenantFound = true;
+      if (m.status === 'INVITED') {
+        await tenantsRepo.updateTenantMemberStatus(m.id, 'ACTIVE');
+        await rbacService.invalidateRbacCache(m.tenantId, targetUser.id);
+      }
+    }
+  }
+
+  if (!activeTenantFound) {
+    const defaultRoles = await rbacRepo.findRolesByTenant(boundTenantId);
+    const memberRole = defaultRoles.find((r) => r.name.toLowerCase() === 'member');
+    const createdMember = await tenantsRepo.addTenantMember({
+      tenantId: boundTenantId,
+      userId: targetUser.id,
+      status: 'ACTIVE',
+    });
+    if (memberRole) {
+      await rbacRepo.assignRoleToMember(createdMember.id, memberRole.id);
+    }
+    await rbacService.invalidateRbacCache(boundTenantId, targetUser.id);
+  }
+
+  // Mark verification token as used atomically
+  await db
+    .update(verificationTokens)
+    .set({ usedAt: new Date() })
+    .where(eq(verificationTokens.id, magicToken.id));
+
+  const tenant = await tenantsRepo.findTenantById(boundTenantId);
 
   await logSecurityEvent({
-    tenantId: invitation.tenantId,
-    userId: targetUserId,
+    tenantId: boundTenantId,
+    userId: targetUser.id,
     action: 'INVITATION.ACCEPTED',
-    entityType: 'TenantInvitation',
-    entityId: invitation.id,
-    metadata: { email: invitation.email, roleId: invitation.roleId },
+    entityType: 'TenantMember',
+    entityId: targetUser.id,
+    metadata: { email: normalizedInvitedEmail },
   });
 
   const tokens = await issueTokens(userForTokens);
@@ -409,8 +608,8 @@ export async function acceptTenantInvitation(
     success: true,
     message: 'Invitation accepted successfully',
     user: userForTokens,
-    activeTenantId: invitation.tenantId,
-    tenantSlug: invitation.tenantSlug,
+    activeTenantId: boundTenantId,
+    tenantSlug: tenant?.slug,
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
   };

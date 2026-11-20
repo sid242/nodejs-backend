@@ -22,8 +22,8 @@ export type CreateInvitationDto = z.infer<typeof createInvitationDto>;
 
 export const acceptInvitationDto = z.object({
   token: z.string().trim().min(1, 'Invitation token is required'),
-  firstName: z.string().trim().min(1, 'First name is required').max(50),
-  lastName: z.string().trim().min(1, 'Last name is required').max(50),
+  firstName: z.string().trim().max(50).optional(),
+  lastName: z.string().trim().max(50).optional(),
   password: z.string().min(8, 'Password must be at least 8 characters').optional(),
 });
 
