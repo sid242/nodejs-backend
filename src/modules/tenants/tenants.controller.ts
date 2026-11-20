@@ -29,10 +29,20 @@ export const getTenantContext = asyncHandler(async (req: Request, res: Response)
           provenance: { directRoles: [], groupRoles: [] },
         };
 
+  const isOwner =
+    req.membership?.roles?.includes('OWNER') ||
+    effective.roles?.includes('OWNER') ||
+    req.permissions?.includes('*');
+
+  const basePermissions = effective.permissions ?? req.permissions ?? [];
+  const finalPermissions = isOwner
+    ? Array.from(new Set(['*', ...basePermissions]))
+    : basePermissions;
+
   AppResponse.ok({
     tenant: req.tenant,
     membership: req.membership,
-    permissions: effective.permissions ?? req.permissions,
+    permissions: finalPermissions,
     provenance: effective.provenance,
   }).send(res);
 });

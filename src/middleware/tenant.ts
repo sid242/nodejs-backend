@@ -292,7 +292,6 @@ export async function resolveTenantContext(
     }
 
     req.permissions = effectivePermissions;
-    next();
     return runWithTenantDb(
       {
         tenantId: tenant.id,
