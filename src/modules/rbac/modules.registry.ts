@@ -1,6 +1,7 @@
 import { addressesModuleDefinition } from '@/modules/addresses/addresses.permissions';
 import { auditModuleDefinition } from '@/modules/audit/audit.permissions';
 import { billingModuleDefinition } from '@/modules/billing/billing.permissions';
+import { developersModuleDefinition } from '@/modules/developers/developers.permissions';
 import { filesModuleDefinition } from '@/modules/files/files.permissions';
 import { groupsModuleDefinition } from '@/modules/groups/groups.permissions';
 import { rbacModuleDefinition } from '@/modules/rbac/rbac.permissions';
@@ -20,4 +21,5 @@ export const SYSTEM_MODULE_DEFINITIONS: DomainModuleDefinition[] = [
   rbacModuleDefinition,
   auditModuleDefinition,
   addressesModuleDefinition,
+  developersModuleDefinition,
 ];

@@ -85,6 +85,24 @@ export const TENANT_TABLES: TenantTableRegistration[] = [
     tenantColumn: 'tenantId',
     dependsOn: ['EmailTemplate'],
   },
+  {
+    name: 'ApiKey',
+    table: schema.apiKeys,
+    tenantColumn: 'tenantId',
+    dependsOn: ['TenantMember'],
+  },
+  {
+    name: 'WebhookEndpoint',
+    table: schema.webhookEndpoints,
+    tenantColumn: 'tenantId',
+    dependsOn: ['TenantMember'],
+  },
+  {
+    name: 'WebhookDelivery',
+    table: schema.webhookDeliveries,
+    tenantColumn: 'tenantId',
+    dependsOn: ['WebhookEndpoint'],
+  },
 ];
 
 /**

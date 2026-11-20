@@ -9,6 +9,7 @@ export const QUEUES = {
   MAINTENANCE: 'maintenance',
   DB_OPS: 'db-ops',
   NOTIFICATION: 'notification',
+  WEBHOOK: 'webhook-delivery',
 } as const;
 
 // Producer connection (used by the API and the worker when it enqueues follow-up jobs).
@@ -34,12 +35,14 @@ export const fileQueue = make(QUEUES.FILE);
 export const maintenanceQueue = make(QUEUES.MAINTENANCE);
 export const dbOpsQueue = make(QUEUES.DB_OPS);
 export const notificationQueue = make(QUEUES.NOTIFICATION);
+export const webhookQueue = make(QUEUES.WEBHOOK);
 export const allQueues: Queue[] = [
   emailQueue,
   fileQueue,
   maintenanceQueue,
   dbOpsQueue,
   notificationQueue,
+  webhookQueue,
 ];
 
 export async function closeQueues(): Promise<void> {

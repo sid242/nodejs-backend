@@ -18,6 +18,7 @@ import { bullBoardRouter } from '@/queues/bull-board';
 import { auditSupportActions } from '@/middleware/support';
 import apiRoutes from '@/routes';
 import { ssoAuthRouter } from '@/modules/sso/sso.routes';
+import publicApiRouter from '@/modules/developers/public-api.routes';
 
 export function createApp(): Express {
   const app = express();
@@ -57,6 +58,7 @@ export function createApp(): Express {
 
   app.use('/api/v1', globalLimiter, apiRoutes);
   app.use('/sso', globalLimiter, ssoAuthRouter);
+  app.use('/v1', globalLimiter, publicApiRouter);
 
   app.use(notFound);
   app.use(errorHandler);

@@ -12,6 +12,7 @@ import * as billingDto from '@/modules/billing/billing.dto';
 import * as invitationsController from '@/modules/invitations/invitations.controller';
 import * as invitationsDto from '@/modules/invitations/invitations.dto';
 import { invitationsRouter } from '@/modules/invitations/invitations.routes';
+import developersRouter from '@/modules/developers/developers.routes';
 import { tenantScimManagementRouter, tenantSsoRouter } from '@/modules/sso/sso.routes';
 
 import * as controller from './tenants.controller';
@@ -406,5 +407,9 @@ router.delete(
 // Enterprise SSO & SCIM Directory Sync Management
 router.use('/:tenantId/sso', tenantSsoRouter);
 router.use('/:tenantId/scim', tenantScimManagementRouter);
+
+// Developer API Keys & Webhooks Management
+router.use('/:tenantId/developers', developersRouter);
+router.use('/:tenantId', developersRouter);
 
 export default router;

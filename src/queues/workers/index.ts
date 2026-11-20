@@ -10,6 +10,7 @@ import { processEmail } from '@/queues/workers/email.worker';
 import { processFile } from '@/queues/workers/file.worker';
 import { processMaintenance } from '@/queues/workers/maintenance.worker';
 import { processNotification } from '@/queues/workers/notification.worker';
+import { processWebhookDelivery } from '@/queues/workers/webhook.worker';
 
 function createWorker(
   name: string,
@@ -69,6 +70,9 @@ export function startWorkers(): Worker[] {
       concurrency: 2,
     }),
     createWorker(QUEUES.NOTIFICATION, processNotification as Processor, {
+      concurrency: 5,
+    }),
+    createWorker(QUEUES.WEBHOOK, processWebhookDelivery as Processor, {
       concurrency: 5,
     }),
   ];

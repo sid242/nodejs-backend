@@ -62,12 +62,21 @@ export interface ValidatedRequestData {
   params?: any;
 }
 
+export interface AuthenticatedApiKey {
+  id: string;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  tenantId: string;
+}
+
 declare global {
   namespace Express {
     interface Request {
       id?: string;
       user?: AuthenticatedUser;
       staff?: AuthenticatedStaff;
+      apiKey?: AuthenticatedApiKey;
       supportSession?: PlatformSupportSessionContext;
       isSupportSession?: boolean;
       impersonator?: ImpersonatorContext;

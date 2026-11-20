@@ -10,3 +10,4 @@ export * from './content';
 export * from './audit';
 export * from './location';
 export * from './notifications';
+export * from './developers';
