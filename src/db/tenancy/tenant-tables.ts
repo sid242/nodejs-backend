@@ -34,6 +34,7 @@ export const TENANT_TABLES: TenantTableRegistration[] = [
   { name: 'Lead', table: schema.leads, tenantColumn: 'tenantId' },
   { name: 'TenantSetting', table: schema.tenantSettings, tenantColumn: 'tenantId' },
   { name: 'TenantSecurityPolicy', table: schema.tenantSecurityPolicies, tenantColumn: 'tenantId' },
+  { name: 'EmailSuppression', table: schema.emailSuppressions, tenantColumn: 'tenantId' },
 
   // Level 1: Dependent on Level 0
   {
@@ -71,6 +72,18 @@ export const TENANT_TABLES: TenantTableRegistration[] = [
     table: schema.fileVersions,
     tenantColumn: 'tenantId',
     dependsOn: ['File'],
+  },
+  {
+    name: 'EmailTemplateVersion',
+    table: schema.emailTemplateVersions,
+    tenantColumn: 'tenantId',
+    dependsOn: ['EmailTemplate'],
+  },
+  {
+    name: 'EmailMessage',
+    table: schema.emailMessages,
+    tenantColumn: 'tenantId',
+    dependsOn: ['EmailTemplate'],
   },
 ];
 

@@ -120,8 +120,9 @@ export async function processEmail(job: Job): Promise<void> {
 
   if (job?.data?.tenantId) {
     const targetDb = await getTenantDb(job.data.tenantId);
-    return runWithTenantDb({ tenantId: job.data.tenantId, db: targetDb }, executeWork);
+    await runWithTenantDb({ tenantId: job.data.tenantId, db: targetDb }, executeWork);
+    return;
   }
 
-  return executeWork();
+  await executeWork();
 }

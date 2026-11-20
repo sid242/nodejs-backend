@@ -20,7 +20,11 @@ import { cache } from '@/lib/cache';
 import { addCorsCustomDomain, removeCorsCustomDomain } from '@/lib/cors';
 import { decrypt, encrypt } from '@/lib/crypto';
 import { AppError } from '@/lib/errors';
-import { invalidateTenantEmailCache, verifySmtpConnection } from '@/lib/mailer';
+import {
+  invalidateTenantEmailCache,
+  isPrivateOrReservedHost,
+  verifySmtpConnection,
+} from '@/lib/mailer';
 import { createUploadPost } from '@/lib/s3';
 import { safeFilename } from '@/lib/utils';
 import * as auditRepo from '@/modules/audit/audit.repository';
@@ -978,6 +982,11 @@ export async function getTenantEmailConfig(
     fromName: config?.fromName ?? null,
     replyTo: config?.replyTo ?? null,
     isEnabled: config.isEnabled,
+    lastTestedAt: config?.lastTestedAt ?? null,
+    lastTestStatus: config?.lastTestStatus ?? null,
+    dkimVerified: config?.dkimVerified ?? false,
+    spfVerified: config?.spfVerified ?? false,
+    dailyLimit: config?.dailyLimit ?? 1000,
     hasPassword: true,
     createdAt: config.createdAt,
     updatedAt: config.updatedAt,
@@ -989,6 +998,10 @@ export async function upsertTenantEmailConfig(
   operatorUserId: string,
   data: UpsertTenantEmailConfigDto,
 ): Promise<PublicTenantEmailConfig> {
+  if (isPrivateOrReservedHost(data?.host)) {
+    throw AppError.badRequest('SMTP host cannot be a private, loopback, or metadata address');
+  }
+
   const existing = await tenantEmailRepo.findTenantEmailConfig(tenantId);
 
   let passwordEncrypted: string;
@@ -1040,6 +1053,11 @@ export async function upsertTenantEmailConfig(
     fromName: record?.fromName ?? null,
     replyTo: record?.replyTo ?? null,
     isEnabled: record.isEnabled,
+    lastTestedAt: record?.lastTestedAt ?? null,
+    lastTestStatus: record?.lastTestStatus ?? null,
+    dkimVerified: record?.dkimVerified ?? false,
+    spfVerified: record?.spfVerified ?? false,
+    dailyLimit: record?.dailyLimit ?? 1000,
     hasPassword: true,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -1109,6 +1127,10 @@ export async function testTenantEmailConfig(
     throw AppError.badRequest('Host, username, and password are required to test connection');
   }
 
+  if (isPrivateOrReservedHost(host)) {
+    throw AppError.badRequest('SMTP host cannot be a private, loopback, or metadata address');
+  }
+
   const result = await verifySmtpConnection({
     host,
     port,
@@ -1116,6 +1138,15 @@ export async function testTenantEmailConfig(
     user,
     pass,
   });
+
+  try {
+    await tenantEmailRepo.updateTenantEmailConfigTestStatus(
+      tenantId,
+      result?.success ? 'SUCCESS' : (result?.message ?? 'FAILED'),
+    );
+  } catch {
+    // Non-blocking status update
+  }
 
   if (!result?.success) {
     return {

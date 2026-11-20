@@ -102,6 +102,22 @@ export const emailTemplateStatusEnum = pgEnum('EmailTemplateStatus', [
   'ARCHIVED',
 ]);
 
+export const emailDeliveryStatusEnum = pgEnum('EmailDeliveryStatus', [
+  'QUEUED',
+  'SENT',
+  'DELIVERED',
+  'BOUNCED',
+  'COMPLAINED',
+  'FAILED',
+]);
+
+export const emailSuppressionReasonEnum = pgEnum('EmailSuppressionReason', [
+  'BOUNCE',
+  'COMPLAINT',
+  'UNSUBSCRIBE',
+  'MANUAL',
+]);
+
 export const addressOwnerTypeEnum = pgEnum('AddressOwnerType', ['USER', 'TENANT', 'MEMBER']);
 
 export const addressTypeEnum = pgEnum('AddressType', [

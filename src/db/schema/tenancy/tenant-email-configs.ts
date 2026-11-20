@@ -27,6 +27,11 @@ export const tenantEmailConfigs = pgTable(
     fromName: text('fromName'),
     replyTo: text('replyTo'),
     isEnabled: boolean('isEnabled').notNull().default(true),
+    lastTestedAt: timestamp('lastTestedAt', { precision: 3, mode: 'date' }),
+    lastTestStatus: text('lastTestStatus'),
+    dkimVerified: boolean('dkimVerified').notNull().default(false),
+    spfVerified: boolean('spfVerified').notNull().default(false),
+    dailyLimit: integer('dailyLimit').notNull().default(1000),
     createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updatedAt', { precision: 3, mode: 'date' })
       .notNull()
@@ -52,6 +57,11 @@ export const publicTenantEmailConfig = {
   fromName: tenantEmailConfigs.fromName,
   replyTo: tenantEmailConfigs.replyTo,
   isEnabled: tenantEmailConfigs.isEnabled,
+  lastTestedAt: tenantEmailConfigs.lastTestedAt,
+  lastTestStatus: tenantEmailConfigs.lastTestStatus,
+  dkimVerified: tenantEmailConfigs.dkimVerified,
+  spfVerified: tenantEmailConfigs.spfVerified,
+  dailyLimit: tenantEmailConfigs.dailyLimit,
   createdAt: tenantEmailConfigs.createdAt,
   updatedAt: tenantEmailConfigs.updatedAt,
 };
@@ -67,6 +77,11 @@ export type PublicTenantEmailConfig = {
   fromName: string | null;
   replyTo: string | null;
   isEnabled: boolean;
+  lastTestedAt?: Date | null;
+  lastTestStatus?: string | null;
+  dkimVerified: boolean;
+  spfVerified: boolean;
+  dailyLimit: number;
   hasPassword?: boolean;
   createdAt: Date;
   updatedAt: Date;

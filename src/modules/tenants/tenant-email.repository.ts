@@ -41,6 +41,20 @@ export async function upsertTenantEmailConfig(
   return record!;
 }
 
+export async function updateTenantEmailConfigTestStatus(
+  tenantId: string,
+  status: string,
+): Promise<void> {
+  await db
+    .update(tenantEmailConfigs)
+    .set({
+      lastTestedAt: new Date(),
+      lastTestStatus: status,
+      updatedAt: new Date(),
+    })
+    .where(eq(tenantEmailConfigs.tenantId, tenantId));
+}
+
 export async function deleteTenantEmailConfig(tenantId: string): Promise<boolean> {
   const [deleted] = await db
     .delete(tenantEmailConfigs)
@@ -52,5 +66,6 @@ export async function deleteTenantEmailConfig(tenantId: string): Promise<boolean
 export const tenantEmailRepo = {
   findTenantEmailConfig,
   upsertTenantEmailConfig,
+  updateTenantEmailConfigTestStatus,
   deleteTenantEmailConfig,
 };
