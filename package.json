@@ -33,6 +33,7 @@
     "db:seed": "tsx --env-file=.env src/db/seed/demo.ts",
     "db:seed:demo": "tsx --env-file=.env src/db/seed/demo.ts",
     "db:clean": "tsx --env-file=.env src/scripts/clean-db.ts",
+    "db:reset": "tsx --env-file=.env src/scripts/reset-db.ts",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
