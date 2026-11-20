@@ -56,6 +56,17 @@ export const PLATFORM_PERMISSIONS = {
 
   // Notifications Platform Broadcast
   NOTIFICATIONS_BROADCAST: 'notifications:broadcast',
+
+  // Feature Flags Control Plane
+  FEATURE_FLAGS_READ: 'feature_flags:read',
+  FEATURE_FLAGS_MANAGE: 'feature_flags:manage',
+
+  // Announcements & Changelog Control Plane
+  ANNOUNCEMENTS_READ: 'announcements:read',
+  ANNOUNCEMENTS_MANAGE: 'announcements:manage',
+
+  // System Maintenance Control Plane
+  MAINTENANCE_MANAGE: 'maintenance:manage',
 } as const;
 
 export type PlatformPermissionKey =

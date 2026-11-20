@@ -16,6 +16,7 @@ import internalRoutes from '@/modules/internal/internal.routes';
 import { metricsMiddleware, metricsRouter } from '@/observability/metrics';
 import { bullBoardRouter } from '@/queues/bull-board';
 import { auditSupportActions } from '@/middleware/support';
+import { maintenanceMiddleware } from '@/middleware/maintenance';
 import apiRoutes from '@/routes';
 import { ssoAuthRouter } from '@/modules/sso/sso.routes';
 import publicApiRouter from '@/modules/developers/public-api.routes';
@@ -55,6 +56,7 @@ export function createApp(): Express {
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
   app.use(cookieParser());
   app.use(auditSupportActions);
+  app.use(maintenanceMiddleware);
 
   app.use('/api/v1', globalLimiter, apiRoutes);
   app.use('/sso', globalLimiter, ssoAuthRouter);

@@ -159,4 +159,39 @@ export const notificationDigestEnum = pgEnum('NotificationDigest', [
   'WEEKLY',
 ]);
 
+export const featureFlagTypeEnum = pgEnum('FeatureFlagType', [
+  'BOOLEAN',
+  'PERCENT',
+  'VARIANT',
+]);
+
+export const featureFlagTargetEnum = pgEnum('FeatureFlagTarget', [
+  'TENANT',
+  'PLAN',
+  'USER',
+  'PERCENT',
+  'ENV',
+]);
+
+export const announcementSeverityEnum = pgEnum('AnnouncementSeverity', [
+  'INFO',
+  'MAINTENANCE',
+  'INCIDENT',
+  'FEATURE',
+]);
+
+export const announcementAudienceEnum = pgEnum('AnnouncementAudience', [
+  'ALL',
+  'PLAN',
+  'TENANT',
+  'ROLE',
+]);
+
+export const announcementStatusEnum = pgEnum('AnnouncementStatus', [
+  'DRAFT',
+  'SCHEDULED',
+  'LIVE',
+  'ENDED',
+]);
+
 

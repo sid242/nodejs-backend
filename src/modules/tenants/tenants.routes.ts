@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 
 import { optionalAuth, requireAuth } from '@/middleware/auth';
 import { authLimiter, resolveLimiter } from '@/middleware/rate-limit';
@@ -10,8 +10,11 @@ import { tenantAccessRouter, tenantAuditRouter } from '@/modules/audit/audit.rou
 import * as billingController from '@/modules/billing/billing.controller';
 import * as billingDto from '@/modules/billing/billing.dto';
 import * as invitationsController from '@/modules/invitations/invitations.controller';
+import { asyncHandler } from '@/lib/async-handler';
+import { AppResponse } from '@/lib/responses';
 import * as invitationsDto from '@/modules/invitations/invitations.dto';
 import { invitationsRouter } from '@/modules/invitations/invitations.routes';
+import * as featureFlagsService from '@/modules/feature-flags/feature-flags.service';
 import developersRouter from '@/modules/developers/developers.routes';
 import { tenantScimManagementRouter, tenantSsoRouter } from '@/modules/sso/sso.routes';
 
@@ -88,6 +91,19 @@ router.post(
   requirePermission('billing:read'),
   validate({ body: billingDto.subscriptionChangeRequestDto }),
   billingController.requestSubscriptionChange,
+);
+
+router.get(
+  '/:tenantId/flags',
+  requireAuth,
+  requireTenant,
+  asyncHandler(async (req: Request, res: Response) => {
+    const flags = await featureFlagsService.evaluateAll({
+      tenantId: req.tenant?.id,
+      userId: req.user?.id,
+    });
+    return AppResponse.ok(flags).send(res);
+  }),
 );
 
 router.get(

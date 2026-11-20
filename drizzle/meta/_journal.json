@@ -379,6 +379,13 @@
       "when": 1795182054455,
       "tag": "0053_red_nightshade",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1795185843449,
+      "tag": "0054_fluffy_riptide",
+      "breakpoints": true
     }
   ]
 }
