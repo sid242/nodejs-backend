@@ -28,11 +28,7 @@ router.post(
   validate({ params: shareTokenParamDto, body: shareAccessDto }),
   controller.accessShare,
 );
-router.get(
-  '/shares/:token',
-  validate({ params: shareTokenParamDto }),
-  controller.accessShare,
-);
+router.get('/shares/:token', validate({ params: shareTokenParamDto }), controller.accessShare);
 
 // Protected routes
 router.use(requireAuth);
