@@ -67,6 +67,11 @@ export const PLATFORM_PERMISSIONS = {
 
   // System Maintenance Control Plane
   MAINTENANCE_MANAGE: 'maintenance:manage',
+
+  // Privacy, Legal Holds & Data Governance
+  LEGAL_HOLD_READ: 'tenant_legal_hold:read',
+  LEGAL_HOLD_MANAGE: 'tenant_legal_hold:manage',
+  PRIVACY_MANAGE: 'platform_privacy:manage',
 } as const;
 
 export type PlatformPermissionKey =
@@ -308,6 +313,27 @@ export const PLATFORM_PERMISSION_CATALOGUE: PlatformPermissionDefinition[] = [
     resource: 'notifications',
     action: 'broadcast',
   },
+  {
+    key: PLATFORM_PERMISSIONS.LEGAL_HOLD_READ,
+    name: 'View Tenant Legal Holds',
+    description: 'Inspect active and historical legal holds on tenant workspaces',
+    resource: 'tenant_legal_hold',
+    action: 'read',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.LEGAL_HOLD_MANAGE,
+    name: 'Manage Tenant Legal Holds',
+    description: 'Place or release legal holds on tenant workspaces preventing data deletion',
+    resource: 'tenant_legal_hold',
+    action: 'manage',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.PRIVACY_MANAGE,
+    name: 'Manage Data Privacy & Deletions',
+    description: 'Oversee DSAR export requests, account deletion requests, and tenant purges',
+    resource: 'platform_privacy',
+    action: 'manage',
+  },
 ];
 
 export const PLATFORM_ROLES = {
@@ -376,6 +402,7 @@ export const SYSTEM_PLATFORM_ROLES = {
       PLATFORM_PERMISSIONS.TENANTS_READ,
       PLATFORM_PERMISSIONS.BILLING_READ,
       PLATFORM_PERMISSIONS.HEALTH_READ,
+      PLATFORM_PERMISSIONS.LEGAL_HOLD_READ,
     ],
   },
 } as const;

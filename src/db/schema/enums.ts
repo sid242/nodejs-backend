@@ -194,4 +194,36 @@ export const announcementStatusEnum = pgEnum('AnnouncementStatus', [
   'ENDED',
 ]);
 
+export const consentTypeEnum = pgEnum('ConsentType', [
+  'TERMS',
+  'PRIVACY',
+  'MARKETING',
+  'COOKIES',
+]);
+
+export const dataExportScopeEnum = pgEnum('DataExportScope', [
+  'USER',
+  'TENANT',
+]);
+
+export const dataExportStatusEnum = pgEnum('DataExportStatus', [
+  'PENDING',
+  'PROCESSING',
+  'COMPLETED',
+  'FAILED',
+]);
+
+export const accountDeletionStatusEnum = pgEnum('AccountDeletionStatus', [
+  'COOLING_PERIOD',
+  'ANONYMIZED',
+  'CANCELED',
+]);
+
+export const tenantTombstoneReasonEnum = pgEnum('TenantTombstoneReason', [
+  'REQUESTED_BY_OWNER',
+  'INACTIVITY',
+  'TERMS_VIOLATION',
+  'LEGAL',
+]);
+
 

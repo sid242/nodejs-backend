@@ -16,6 +16,8 @@ import * as invitationsDto from '@/modules/invitations/invitations.dto';
 import { invitationsRouter } from '@/modules/invitations/invitations.routes';
 import * as featureFlagsService from '@/modules/feature-flags/feature-flags.service';
 import developersRouter from '@/modules/developers/developers.routes';
+import * as privacyController from '@/modules/privacy/privacy.controller';
+import * as privacyDto from '@/modules/privacy/privacy.dto';
 import { tenantScimManagementRouter, tenantSsoRouter } from '@/modules/sso/sso.routes';
 
 import * as controller from './tenants.controller';
@@ -427,5 +429,43 @@ router.use('/:tenantId/scim', tenantScimManagementRouter);
 // Developer API Keys & Webhooks Management
 router.use('/:tenantId/developers', developersRouter);
 router.use('/:tenantId', developersRouter);
+
+// Privacy, Workspace Data Export & Closure (GDPR / DPDP)
+router.post(
+  '/:tenantId/data-export',
+  requireAuth,
+  requireTenant,
+  requirePermission('tenants:export'),
+  privacyController.requestTenantDataExport,
+);
+router.get(
+  '/:tenantId/data-exports',
+  requireAuth,
+  requireTenant,
+  requirePermission('tenants:read'),
+  privacyController.listTenantDataExports,
+);
+router.post(
+  '/:tenantId/close',
+  requireAuth,
+  requireTenant,
+  requirePermission('tenants:close'),
+  validate({ body: privacyDto.requestTenantClosureDto }),
+  privacyController.requestTenantClosure,
+);
+router.post(
+  '/:tenantId/close/cancel',
+  requireAuth,
+  requireTenant,
+  requirePermission('tenants:close'),
+  privacyController.cancelTenantClosure,
+);
+router.get(
+  '/:tenantId/close',
+  requireAuth,
+  requireTenant,
+  requirePermission('tenants:read'),
+  privacyController.getTenantClosureStatus,
+);
 
 export default router;

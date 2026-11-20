@@ -139,4 +139,22 @@ export async function registerSchedulers(): Promise<void> {
     { pattern: '0 4 * * *' }, // daily at 04:00 UTC
     { name: 'cleanup-notifications' },
   );
+
+  await maintenanceQueue.upsertJobScheduler(
+    'retention-sweep-daily',
+    { pattern: '30 2 * * *' }, // daily at 02:30 UTC
+    { name: 'retention-sweep' },
+  );
+
+  await maintenanceQueue.upsertJobScheduler(
+    'process-account-deletions-daily',
+    { pattern: '30 3 * * *' }, // daily at 03:30 UTC
+    { name: 'process-account-deletions' },
+  );
+
+  await maintenanceQueue.upsertJobScheduler(
+    'process-tenant-purges-daily',
+    { pattern: '30 4 * * *' }, // daily at 04:30 UTC
+    { name: 'process-tenant-purges' },
+  );
 }

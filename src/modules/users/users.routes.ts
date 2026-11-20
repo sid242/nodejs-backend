@@ -4,6 +4,8 @@ import { requireAuth } from '@/middleware/auth';
 import { authLimiter } from '@/middleware/rate-limit';
 import { validate } from '@/middleware/validate';
 import * as controller from '@/modules/users/users.controller';
+import * as privacyController from '@/modules/privacy/privacy.controller';
+import * as privacyDto from '@/modules/privacy/privacy.dto';
 import {
   avatarUploadUrlDto,
   confirmEmailChangeDto,
@@ -34,5 +36,21 @@ router.post(
   validate({ body: confirmEmailChangeDto }),
   controller.confirmEmailChange,
 );
+
+// GDPR / DPDP Privacy & Data Subject Access Request (DSAR)
+router.post('/me/data-export', privacyController.requestUserDataExport);
+router.get('/me/data-exports', privacyController.listUserDataExports);
+router.post(
+  '/me/delete-request',
+  authLimiter,
+  validate({ body: privacyDto.requestAccountDeletionDto }),
+  privacyController.requestAccountDeletion,
+);
+router.post(
+  '/me/delete-request/cancel',
+  validate({ body: privacyDto.cancelAccountDeletionDto }),
+  privacyController.cancelAccountDeletion,
+);
+router.get('/me/delete-request', privacyController.getAccountDeletionStatus);
 
 export default router;

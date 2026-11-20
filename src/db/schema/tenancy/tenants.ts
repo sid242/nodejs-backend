@@ -33,6 +33,9 @@ export const tenants = pgTable(
     provisioningStep: text('provisioningStep'),
     provisioningError: text('provisioningError'),
     trialEndsAt: timestamp('trialEndsAt', { precision: 3, mode: 'date' }),
+    closedAt: timestamp('closedAt', { precision: 3, mode: 'date' }),
+    purgeScheduledAt: timestamp('purgeScheduledAt', { precision: 3, mode: 'date' }),
+    dataRegion: text('dataRegion').notNull().default('ap-south-1'),
 
     // Hybrid Shared / Dedicated Database Routing
     databaseMode: text('databaseMode').notNull().default('shared'), // 'shared' | 'dedicated'
@@ -54,6 +57,8 @@ export const tenants = pgTable(
     index('Tenant_databaseMode_idx').on(table.databaseMode),
     index('Tenant_country_idx').on(table.country),
     index('Tenant_provisioningStatus_idx').on(table.provisioningStatus),
+    index('Tenant_closedAt_idx').on(table.closedAt),
+    index('Tenant_purgeScheduledAt_idx').on(table.purgeScheduledAt),
     index('Tenant_createdAt_idx').on(table.createdAt),
     index('Tenant_deletedAt_idx').on(table.deletedAt),
   ],

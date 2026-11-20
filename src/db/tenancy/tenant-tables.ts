@@ -149,6 +149,12 @@ export const PRIMARY_ONLY_TABLES: string[] = [
   'NotificationPreference',
   'PushSubscription',
   'UserLoginEvent',
+  'ConsentRecord',
+  'LegalDocument',
+  'DataExportRequest',
+  'AccountDeletionRequest',
+  'TenantTombstone',
+  'TenantLegalHold',
 ];
 
 const tenantTableMap = new Map<string, TenantTableRegistration>(

@@ -25,6 +25,18 @@ export const tenantsModuleDefinition: DomainModuleDefinition = {
       action: 'delete',
       description: 'Permanently remove organization',
     },
+    {
+      key: 'tenants:export',
+      name: 'Export Workspace Data',
+      action: 'export',
+      description: 'Export complete organization and workspace data manifest',
+    },
+    {
+      key: 'tenants:close',
+      name: 'Close Workspace',
+      action: 'close',
+      description: 'Initiate workspace deactivation and 30-day purge grace period',
+    },
   ],
 };
 

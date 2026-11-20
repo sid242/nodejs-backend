@@ -156,5 +156,42 @@ export async function processMaintenance(job: Job): Promise<{ removed: number; f
     return { removed: 0, failed: brokenChains };
   }
 
+  if (job.name === 'export-user-data') {
+    const { processUserDataExport } = await import('@/modules/privacy/privacy.service');
+    await processUserDataExport(job.data.requestId, job.data.userId);
+    return { removed: 1, failed: 0 };
+  }
+
+  if (job.name === 'export-tenant-data') {
+    const { processTenantDataExport } = await import('@/modules/privacy/privacy.service');
+    await processTenantDataExport(job.data.requestId, job.data.tenantId);
+    return { removed: 1, failed: 0 };
+  }
+
+  if (job.name === 'retention-sweep') {
+    const { executeRetentionSweep } = await import('@/modules/privacy/privacy.service');
+    const results = await executeRetentionSweep();
+    return {
+      removed:
+        results.webhookDeliveriesCleaned +
+        results.notificationsCleaned +
+        results.emailMessagesCleaned +
+        results.staleExportsCleaned,
+      failed: 0,
+    };
+  }
+
+  if (job.name === 'process-account-deletions') {
+    const { processAccountDeletions } = await import('@/modules/privacy/privacy.service');
+    const results = await processAccountDeletions();
+    return { removed: results.anonymized, failed: results.skippedUnderHold };
+  }
+
+  if (job.name === 'process-tenant-purges') {
+    const { processTenantPurges } = await import('@/modules/privacy/privacy.service');
+    const results = await processTenantPurges();
+    return { removed: results.purged, failed: results.skippedUnderHold };
+  }
+
   throw new Error(`Unknown maintenance job: ${job.name}`);
 }

@@ -11,6 +11,8 @@ import * as groupsDto from '@/modules/groups/groups.dto';
 import * as platformGroupsController from '@/modules/groups/platform-groups.controller';
 import * as policiesController from '@/modules/policies/policies.controller';
 import * as policiesDto from '@/modules/policies/policies.dto';
+import * as privacyController from '@/modules/privacy/privacy.controller';
+import * as privacyDto from '@/modules/privacy/privacy.dto';
 import * as rbacController from '@/modules/rbac/rbac.controller';
 import * as rbacDto from '@/modules/rbac/rbac.dto';
 import * as tenantDto from '@/modules/tenants/tenants.dto';
@@ -297,6 +299,25 @@ router.post(
   requirePlatformPermission(PLATFORM_PERMISSIONS.TENANTS_MANAGE),
   validate({ body: tenantDto.overrideTenantCustomDomainDto }),
   controller.overrideTenantUrlSettings,
+);
+
+// Legal Holds Control Plane
+router.post(
+  '/tenants/:tenantId/legal-hold',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.LEGAL_HOLD_MANAGE),
+  validate({ body: privacyDto.placeLegalHoldDto }),
+  privacyController.placeLegalHold,
+);
+router.delete(
+  '/tenants/:tenantId/legal-hold',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.LEGAL_HOLD_MANAGE),
+  validate({ body: privacyDto.releaseLegalHoldDto }),
+  privacyController.releaseLegalHold,
+);
+router.get(
+  '/tenants/:tenantId/legal-hold',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.LEGAL_HOLD_READ),
+  privacyController.getLegalHold,
 );
 
 // ==========================================
