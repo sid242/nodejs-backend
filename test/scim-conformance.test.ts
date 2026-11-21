@@ -66,7 +66,7 @@ test('SCIM Conformance 2: ScimError conforms to RFC 7644 JSON specification', ()
 
 test('SCIM Conformance 3: SCIM Error Handler serializes RFC 7644 error envelope', () => {
   let statusCode = 0;
-  let headers: Record<string, string> = {};
+  const headers: Record<string, string> = {};
   let responseBody: any = null;
 
   const mockRes: any = {

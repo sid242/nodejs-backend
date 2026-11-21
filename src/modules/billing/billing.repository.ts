@@ -731,6 +731,53 @@ export async function createBillingWebhook(data: NewBillingWebhook): Promise<Bil
   return record!;
 }
 
+export async function recordWebhookReceived(data: {
+  provider: string;
+  eventId: string;
+  eventType: string;
+  payload: any;
+}): Promise<BillingWebhook | null> {
+  const [record] = await db
+    .insert(billingWebhooks)
+    .values({
+      provider: data.provider,
+      eventId: data.eventId,
+      eventType: data.eventType,
+      payload: data.payload,
+      status: 'RECEIVED',
+    })
+    .onConflictDoNothing({ target: [billingWebhooks.provider, billingWebhooks.eventId] })
+    .returning();
+
+  return record ?? null;
+}
+
+export async function updateBillingWebhookStatus(
+  id: string,
+  status: string,
+  errorMessage?: string | null,
+): Promise<void> {
+  await db
+    .update(billingWebhooks)
+    .set({
+      status,
+      errorMessage: errorMessage ?? null,
+      processedAt: new Date(),
+    })
+    .where(eq(billingWebhooks.id, id));
+}
+
+export async function findSubscriptionByProviderId(
+  providerSubscriptionId: string,
+): Promise<Subscription | null> {
+  const [record] = await db
+    .select()
+    .from(subscriptions)
+    .where(eq(subscriptions.providerSubscriptionId, providerSubscriptionId))
+    .limit(1);
+  return record ?? null;
+}
+
 // ==========================================
 // 6. Invoices Repository Operations
 // ==========================================
@@ -1125,6 +1172,9 @@ export const billingRepo = {
   setTenantUsageRecord,
   findBillingWebhook,
   createBillingWebhook,
+  recordWebhookReceived,
+  updateBillingWebhookStatus,
+  findSubscriptionByProviderId,
   generateInvoiceNumber,
   createInvoice,
   findInvoiceById,

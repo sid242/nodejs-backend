@@ -230,3 +230,21 @@ Before submitting or rolling out any backend or frontend modification:
 6. **Static Analysis & Build Verification**:
    - Backend: `npm run typecheck` and `npm run build` pass with 0 errors.
    - Frontend: `npm run typecheck`, `npm run lint:hrefs`, and `npm test` pass with 0 errors.
+
+---
+
+## 6. Code Quality & Engineering Standards Compliance
+
+All backend development must adhere to the engineering standards codified in:
+- `.agents/rules/code-quality-and-engineering-standards.md`
+- `docs/standards/BACKEND_STANDARDS.md`
+- `docs/standards/ENGINEERING_STANDARDS.md`
+- `docs/standards/DEPENDENCY_AND_TOOLING_POLICY.md`
+- `docs/standards/REFACTOR_ROADMAP.md`
+
+Key rules:
+- **Zero `any`**: Never introduce `any` or `as any`. Use `unknown` and narrow with Zod.
+- **No silent error swallowing**: No empty catch blocks.
+- **Control flow clarity**: Use guard clauses, typed lookup maps (`Record`), and exhaustive `switch` over nested conditionals.
+- **Defensive null handling**: Use `??` to preserve legitimate `0` and empty strings.
+

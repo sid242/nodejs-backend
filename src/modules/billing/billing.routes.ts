@@ -2,7 +2,7 @@ import { Router } from 'express';
 
 import { requireAuth } from '@/middleware/auth';
 import { requirePlatformAuth, requirePlatformPermission } from '@/middleware/platform';
-import { billingPublicLimiter } from '@/middleware/rate-limit';
+import { billingPublicLimiter, billingWebhookLimiter } from '@/middleware/rate-limit';
 import { requireTenant } from '@/middleware/tenant';
 import { validate } from '@/middleware/validate';
 import { PLATFORM_PERMISSIONS } from '@/modules/platform/platform.permissions';
@@ -15,7 +15,11 @@ const router: Router = Router();
 // ==========================================
 // 1. Webhooks (External Provider Ingress)
 // ==========================================
-router.post(['/webhooks', '/webhooks/razorpay'], controller.handleBillingWebhook);
+router.post(
+  ['/webhooks', '/webhooks/razorpay'],
+  billingWebhookLimiter,
+  controller.handleBillingWebhook,
+);
 
 // ==========================================
 // 2. Platform Staff Plans Catalog

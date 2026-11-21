@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 
 import { db } from '@/config/db';
 import { env } from '@/config/env';
+import { logger } from '@/config/logger';
 import { tenants, type PlanLimits } from '@/db/schema';
 import { cache } from '@/lib/cache';
 import { AppError } from '@/lib/errors';
@@ -804,113 +805,123 @@ export async function requestSubscriptionChange(
 // ==========================================
 
 export async function processBillingWebhook(dto: BillingWebhookDto) {
-  const existing = await billingRepo.findBillingWebhook(dto.provider, dto.eventId);
-  if (existing) {
-    return {
-      status: 'DUPLICATE_IGNORED',
-      idempotent: true,
-      eventId: dto.eventId,
-      processedAt: existing.processedAt,
-    };
-  }
-
   const { provider, eventId, eventType, payload } = dto;
 
-  // 1. Generic & Stripe style events
-  if (eventType === 'customer.subscription.updated' || eventType === 'subscription.updated') {
-    const tenantId = (payload as any)?.tenantId || (payload as any)?.metadata?.tenantId;
-    const planKey = (payload as any)?.planKey || (payload as any)?.plan?.key;
-    const status = (payload as any)?.status?.toUpperCase();
+  // 1. Atomic insert first with status 'RECEIVED' to lock eventId
+  const inserted = billingRepo.recordWebhookReceived
+    ? await billingRepo.recordWebhookReceived({
+        provider,
+        eventId,
+        eventType,
+        payload,
+      })
+    : await billingRepo.createBillingWebhook({
+        provider,
+        eventId,
+        eventType,
+        payload,
+        status: 'RECEIVED',
+      });
 
-    if (tenantId && planKey) {
-      const sub = await billingRepo.findTenantSubscription(tenantId);
-      const plan = await billingRepo.findPlanByKey(planKey);
-      if (sub && plan) {
-        await billingRepo.updateSubscription(sub.id, {
-          planId: plan.id,
-          status: status || sub.status,
-          currentPeriodEnd: (payload as any)?.currentPeriodEnd
-            ? new Date((payload as any).currentPeriodEnd)
-            : sub.currentPeriodEnd,
-        });
-        await onPlanChanged(tenantId, sub.planId, plan.key);
-      }
+  let webhookRecordId = '';
+  let activeRecord = inserted;
+  if (!inserted) {
+    const existing = await billingRepo.findBillingWebhook(provider, eventId);
+    if (existing && (existing.status === 'PROCESSED' || existing.status === 'RECEIVED')) {
+      return {
+        status: 'DUPLICATE_IGNORED',
+        idempotent: true,
+        eventId,
+        processedAt: existing.processedAt,
+        record: existing,
+      };
     }
-  } else if (
-    eventType === 'customer.subscription.deleted' ||
-    eventType === 'subscription.canceled'
-  ) {
-    const tenantId = (payload as any)?.tenantId || (payload as any)?.metadata?.tenantId;
-    if (tenantId) {
-      const sub = await billingRepo.findTenantSubscription(tenantId);
-      if (sub) {
-        // CANCELLATION MUST NOT DELETE TENANT DATA! Only update status to CANCELED
-        await billingRepo.updateSubscription(sub.id, {
-          status: 'CANCELED',
-        });
-        await invalidateTenantBillingCache(tenantId);
-      }
-    }
+    webhookRecordId = existing ? existing.id : '';
+    activeRecord = existing;
+  } else {
+    webhookRecordId = inserted.id;
   }
 
-  // 2. Razorpay specific webhook events
-  if (provider === 'razorpay') {
-    const pEntity = (payload as any)?.payload?.payment?.entity;
-    const oEntity = (payload as any)?.payload?.order?.entity;
-    const sEntity = (payload as any)?.payload?.subscription?.entity;
-    const rEntity = (payload as any)?.payload?.refund?.entity;
+  try {
+    // Only handle authenticated razorpay provider events
+    if (provider === 'razorpay') {
+      const pEntity = (payload as any)?.payload?.payment?.entity;
+      const oEntity = (payload as any)?.payload?.order?.entity;
+      const sEntity = (payload as any)?.payload?.subscription?.entity;
+      const rEntity = (payload as any)?.payload?.refund?.entity;
 
-    // Handle payment.captured / order.paid
-    if (eventType === 'payment.captured' || eventType === 'order.paid') {
-      const orderId = pEntity?.order_id ?? oEntity?.id;
-      const paymentId = pEntity?.id;
+      // Handle payment.captured / order.paid
+      if (eventType === 'payment.captured' || eventType === 'order.paid') {
+        const orderId = pEntity?.order_id ?? oEntity?.id;
+        const paymentId = pEntity?.id;
 
-      if (orderId) {
-        const localPayment = await billingRepo.findPaymentByOrderId(orderId);
-        if (localPayment && localPayment.status !== 'PAID') {
-          await billingRepo.updatePayment(localPayment.id, {
-            status: 'PAID',
-            providerPaymentId: paymentId ?? localPayment.providerPaymentId,
-            paidAt: new Date(),
-          });
+        // Resolve payment and tenant from DB, not from untrusted payload notes alone
+        const localPayment = orderId
+          ? await billingRepo.findPaymentByOrderId(orderId)
+          : paymentId
+            ? await billingRepo.findPaymentByPaymentId(paymentId)
+            : null;
 
-          // Ensure subscription is active if not already activated
-          const meta = localPayment.metadata as any;
-          if (meta?.planKey && localPayment.tenantId) {
-            const plan = await billingRepo.findPlanByKey(meta.planKey);
-            if (plan) {
-              const sub = await billingRepo.findTenantSubscription(localPayment.tenantId);
-              const intervalDays = meta.billingInterval === 'ANNUAL' ? 365 : 30;
-              const periodEnd = new Date(Date.now() + intervalDays * 86400000);
+        if (localPayment) {
+          // If notes are present, verify tenant matches
+          const notesTenantId = pEntity?.notes?.tenantId ?? oEntity?.notes?.tenantId;
+          if (notesTenantId && notesTenantId !== localPayment.tenantId) {
+            logger.warn(
+              { notesTenantId, localTenantId: localPayment.tenantId, orderId },
+              'Razorpay webhook tenant mismatch on payment',
+            );
+            throw AppError.badRequest('Webhook tenant identity mismatch');
+          }
 
-              if (sub) {
-                await billingRepo.updateSubscription(sub.id, {
-                  planId: plan.id,
-                  status: 'ACTIVE',
-                  currentPeriodStart: new Date(),
-                  currentPeriodEnd: periodEnd,
-                  provider: 'razorpay',
-                });
-              } else {
-                await billingRepo.createSubscription({
-                  tenantId: localPayment.tenantId,
-                  planId: plan.id,
-                  status: 'ACTIVE',
-                  currentPeriodStart: new Date(),
-                  currentPeriodEnd: periodEnd,
-                  provider: 'razorpay',
-                });
+          if (localPayment.status !== 'PAID') {
+            await billingRepo.updatePayment(localPayment.id, {
+              status: 'PAID',
+              providerPaymentId: paymentId ?? localPayment.providerPaymentId,
+              paidAt: new Date(),
+            });
+
+            // Ensure subscription is active if not already activated
+            const meta = localPayment.metadata as any;
+            if (meta?.planKey && localPayment.tenantId) {
+              const plan = await billingRepo.findPlanByKey(meta.planKey);
+              if (plan) {
+                const sub = await billingRepo.findTenantSubscription(localPayment.tenantId);
+                const intervalDays = meta.billingInterval === 'ANNUAL' ? 365 : 30;
+                const periodEnd = new Date(Date.now() + intervalDays * 86400000);
+
+                if (sub) {
+                  await billingRepo.updateSubscription(sub.id, {
+                    planId: plan.id,
+                    status: 'ACTIVE',
+                    currentPeriodStart: new Date(),
+                    currentPeriodEnd: periodEnd,
+                    provider: 'razorpay',
+                  });
+                } else {
+                  await billingRepo.createSubscription({
+                    tenantId: localPayment.tenantId,
+                    planId: plan.id,
+                    status: 'ACTIVE',
+                    currentPeriodStart: new Date(),
+                    currentPeriodEnd: periodEnd,
+                    provider: 'razorpay',
+                  });
+                }
+
+                await onPlanChanged(localPayment.tenantId, sub?.planId ?? '', plan.key);
               }
-
-              await onPlanChanged(localPayment.tenantId, sub?.planId ?? '', plan.key);
             }
           }
         }
-      }
-    } else if (eventType === 'payment.failed') {
-      const orderId = pEntity?.order_id ?? oEntity?.id;
-      if (orderId) {
-        const localPayment = await billingRepo.findPaymentByOrderId(orderId);
+      } else if (eventType === 'payment.failed') {
+        const orderId = pEntity?.order_id ?? oEntity?.id;
+        const paymentId = pEntity?.id;
+        const localPayment = orderId
+          ? await billingRepo.findPaymentByOrderId(orderId)
+          : paymentId
+            ? await billingRepo.findPaymentByPaymentId(paymentId)
+            : null;
+
         if (localPayment) {
           await billingRepo.updatePayment(localPayment.id, {
             status: 'FAILED',
@@ -918,106 +929,133 @@ export async function processBillingWebhook(dto: BillingWebhookDto) {
             failureDescription: pEntity?.error_description ?? 'Payment attempt failed',
           });
         }
-      }
-    } else if (
-      eventType === 'subscription.authenticated' ||
-      eventType === 'subscription.activated' ||
-      eventType === 'subscription.charged'
-    ) {
-      const rzpSubId = sEntity?.id;
-      const notes = sEntity?.notes ?? {};
-      const tenantId = notes.tenantId;
-      const planKey = notes.planKey;
+      } else if (
+        eventType === 'subscription.authenticated' ||
+        eventType === 'subscription.activated' ||
+        eventType === 'subscription.charged'
+      ) {
+        const rzpSubId = sEntity?.id;
+        const notes = sEntity?.notes ?? {};
+        const planKey = notes.planKey;
 
-      if (rzpSubId && tenantId) {
-        const sub = await billingRepo.findTenantSubscription(tenantId);
-        const plan = planKey ? await billingRepo.findPlanByKey(planKey) : null;
+        // Resolve subscription from DB first by providerSubscriptionId
+        const existingSub = rzpSubId
+          ? await billingRepo.findSubscriptionByProviderId(rzpSubId)
+          : null;
+        const tenantId = existingSub?.tenantId ?? notes.tenantId;
 
-        const currentPeriodStart = sEntity?.current_start
-          ? new Date(sEntity.current_start * 1000)
-          : new Date();
-        const currentPeriodEnd = sEntity?.current_end
-          ? new Date(sEntity.current_end * 1000)
-          : new Date(Date.now() + 30 * 86400000);
-
-        if (sub) {
-          await billingRepo.updateSubscription(sub.id, {
-            status: 'ACTIVE',
-            provider: 'razorpay',
-            providerSubscriptionId: rzpSubId,
-            currentPeriodStart,
-            currentPeriodEnd,
-            planId: plan?.id ?? sub.planId,
-          });
-        } else if (plan) {
-          await billingRepo.createSubscription({
-            tenantId,
-            planId: plan.id,
-            status: 'ACTIVE',
-            provider: 'razorpay',
-            providerSubscriptionId: rzpSubId,
-            currentPeriodStart,
-            currentPeriodEnd,
-          });
+        if (existingSub && notes.tenantId && existingSub.tenantId !== notes.tenantId) {
+          logger.warn(
+            { notesTenantId: notes.tenantId, existingTenantId: existingSub.tenantId, rzpSubId },
+            'Razorpay webhook tenant mismatch on subscription',
+          );
+          throw AppError.badRequest('Webhook tenant identity mismatch on subscription');
         }
 
-        if (plan) {
-          await onPlanChanged(tenantId, sub?.planId ?? '', plan.key);
-        } else {
-          await invalidateTenantBillingCache(tenantId);
+        if (rzpSubId && tenantId) {
+          const sub = existingSub ?? (await billingRepo.findTenantSubscription(tenantId));
+          const plan = planKey ? await billingRepo.findPlanByKey(planKey) : null;
+
+          const currentPeriodStart = sEntity?.current_start
+            ? new Date(sEntity.current_start * 1000)
+            : new Date();
+          const currentPeriodEnd = sEntity?.current_end
+            ? new Date(sEntity.current_end * 1000)
+            : new Date(Date.now() + 30 * 86400000);
+
+          if (sub) {
+            await billingRepo.updateSubscription(sub.id, {
+              status: 'ACTIVE',
+              provider: 'razorpay',
+              providerSubscriptionId: rzpSubId,
+              currentPeriodStart,
+              currentPeriodEnd,
+              planId: plan?.id ?? sub.planId,
+            });
+          } else if (plan) {
+            await billingRepo.createSubscription({
+              tenantId,
+              planId: plan.id,
+              status: 'ACTIVE',
+              provider: 'razorpay',
+              providerSubscriptionId: rzpSubId,
+              currentPeriodStart,
+              currentPeriodEnd,
+            });
+          }
+
+          if (plan) {
+            await onPlanChanged(tenantId, sub?.planId ?? '', plan.key);
+          } else {
+            await invalidateTenantBillingCache(tenantId);
+          }
         }
-      }
-    } else if (eventType === 'subscription.halted' || eventType === 'subscription.pending') {
-      const notes = sEntity?.notes ?? {};
-      const tenantId = notes.tenantId;
-      if (tenantId) {
-        const sub = await billingRepo.findTenantSubscription(tenantId);
-        if (sub) {
-          await billingRepo.updateSubscription(sub.id, {
-            status: 'PAST_DUE',
-          });
-          await invalidateTenantBillingCache(tenantId);
+      } else if (eventType === 'subscription.halted' || eventType === 'subscription.pending') {
+        const rzpSubId = sEntity?.id;
+        const notes = sEntity?.notes ?? {};
+        const sub = rzpSubId ? await billingRepo.findSubscriptionByProviderId(rzpSubId) : null;
+        const tenantId = sub?.tenantId ?? notes.tenantId;
+
+        if (tenantId) {
+          const activeSub = sub ?? (await billingRepo.findTenantSubscription(tenantId));
+          if (activeSub) {
+            await billingRepo.updateSubscription(activeSub.id, {
+              status: 'PAST_DUE',
+            });
+            await invalidateTenantBillingCache(tenantId);
+          }
         }
-      }
-    } else if (eventType === 'subscription.cancelled' || eventType === 'subscription.completed') {
-      const notes = sEntity?.notes ?? {};
-      const tenantId = notes.tenantId;
-      if (tenantId) {
-        const sub = await billingRepo.findTenantSubscription(tenantId);
-        if (sub) {
-          await billingRepo.updateSubscription(sub.id, {
-            status: 'CANCELED',
-          });
-          await invalidateTenantBillingCache(tenantId);
+      } else if (eventType === 'subscription.cancelled' || eventType === 'subscription.completed') {
+        const rzpSubId = sEntity?.id;
+        const notes = sEntity?.notes ?? {};
+        const sub = rzpSubId ? await billingRepo.findSubscriptionByProviderId(rzpSubId) : null;
+        const tenantId = sub?.tenantId ?? notes.tenantId;
+
+        if (tenantId) {
+          const activeSub = sub ?? (await billingRepo.findTenantSubscription(tenantId));
+          if (activeSub) {
+            await billingRepo.updateSubscription(activeSub.id, {
+              status: 'CANCELED',
+            });
+            await invalidateTenantBillingCache(tenantId);
+          }
         }
-      }
-    } else if (eventType === 'refund.processed') {
-      const refundId = rEntity?.id;
-      if (refundId) {
-        const localRefund = await billingRepo.findRefundByProviderRefundId(refundId);
-        if (localRefund) {
-          await billingRepo.updateRefund(localRefund.id, {
-            status: 'PROCESSED',
-            processedAt: new Date(),
-          });
+      } else if (eventType === 'refund.processed') {
+        const refundId = rEntity?.id;
+        if (refundId) {
+          const localRefund = await billingRepo.findRefundByProviderRefundId(refundId);
+          if (localRefund) {
+            await billingRepo.updateRefund(localRefund.id, {
+              status: 'PROCESSED',
+              processedAt: new Date(),
+            });
+          }
         }
       }
     }
+
+    if (webhookRecordId && billingRepo.updateBillingWebhookStatus) {
+      await billingRepo.updateBillingWebhookStatus(webhookRecordId, 'PROCESSED', null);
+    }
+
+    return {
+      status: 'PROCESSED',
+      idempotent: false,
+      eventId,
+      eventType,
+      record: activeRecord ?? { id: webhookRecordId, eventId, provider, eventType },
+    };
+  } catch (err: any) {
+    if (webhookRecordId) {
+      await billingRepo.updateBillingWebhookStatus(
+        webhookRecordId,
+        'FAILED',
+        err?.message || 'Webhook processing failed',
+      );
+    }
+    logger.error({ err, eventId, eventType }, 'Billing webhook processing failed');
+    throw AppError.internal('Webhook processing failed, retrying');
   }
-
-  const webhookRecord = await billingRepo.createBillingWebhook({
-    provider,
-    eventId,
-    eventType,
-    payload,
-    status: 'PROCESSED',
-  });
-
-  return {
-    status: 'PROCESSED',
-    idempotent: false,
-    record: webhookRecord,
-  };
 }
 
 // ==========================================

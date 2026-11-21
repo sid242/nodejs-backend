@@ -16,11 +16,19 @@ export function createRedis(
   name: string,
   { forBull = false, url = env.REDIS_URL }: CreateRedisOptions = {},
 ): Redis {
+  const isTest =
+    env.NODE_ENV === 'test' ||
+    process.argv.includes('--test') ||
+    process.execArgv.includes('--test');
   const client = new Redis(url, {
     connectionName: `${env.APP_NAME}:${name}`,
     maxRetriesPerRequest: forBull ? null : 2,
-    enableReadyCheck: true,
-    retryStrategy: (times: number) => Math.min(times * 200, 3000),
+    enableReadyCheck: !isTest,
+    lazyConnect: isTest,
+    retryStrategy: (times: number) => {
+      if (isTest) return null; // do not retry endlessly during test runs without live redis
+      return Math.min(times * 200, 3000);
+    },
   });
   client.on('error', (err: Error) => logger.error({ err, redis: name }, 'redis error'));
   client.on('ready', () => logger.info({ redis: name }, 'redis ready'));

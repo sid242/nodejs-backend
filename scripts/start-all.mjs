@@ -64,8 +64,8 @@ function shutdown(exitCode = 0) {
   // Hard exit fallback after 10s if processes don't exit cleanly
   setTimeout(() => {
     console.warn('[supervisor] Force-terminating remaining processes (SIGKILL)...');
-    try { server.kill('SIGKILL'); } catch {}
-    try { worker.kill('SIGKILL'); } catch {}
+    try { server.kill('SIGKILL'); } catch (_err) { /* ignore */ }
+    try { worker.kill('SIGKILL'); } catch (_err) { /* ignore */ }
     process.exit(exitCode);
   }, 10000).unref();
 }

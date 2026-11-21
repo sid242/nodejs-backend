@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 
 import { asyncHandler } from '@/lib/async-handler';
+import { AppError } from '@/lib/errors';
 import { AppResponse } from '@/lib/responses';
 
 import * as service from './billing.service';
@@ -173,19 +174,33 @@ export const removeTenantOverride = asyncHandler(async (req: Request, res: Respo
 // ==========================================
 
 export const handleBillingWebhook = asyncHandler(async (req: Request, res: Response) => {
-  let webhookPayload: any = req.body;
-  const razorpaySig = req.headers['x-razorpay-signature'];
-
-  if (razorpaySig) {
-    const { event } = parseAndVerifyRazorpayWebhook(req);
-    const eventIdHeader = req.headers['x-razorpay-event-id'] as string | undefined;
-    webhookPayload = {
-      provider: 'razorpay',
-      eventId: eventIdHeader || `rzp_${event.event}_${event.created_at}_${Date.now()}`,
-      eventType: event.event,
-      payload: event,
-    };
+  // 1. Mandatory Razorpay webhook signature header
+  const razorpaySig = req.headers['x-razorpay-signature'] as string | undefined;
+  if (!razorpaySig) {
+    throw AppError.unauthorized('Missing webhook signature');
   }
+
+  // 2. Mandatory Razorpay event ID header (never synthesize with Date.now())
+  const eventIdHeader = req.headers['x-razorpay-event-id'] as string | undefined;
+  if (!eventIdHeader) {
+    throw AppError.badRequest('Missing x-razorpay-event-id header');
+  }
+
+  // 3. Payload size safeguard (256kb limit)
+  if (req.rawBody && req.rawBody.length > 256 * 1024) {
+    throw AppError.badRequest('Webhook payload exceeds 256kb limit');
+  }
+
+  // 4. Verify HMAC SHA256 signature against raw body bytes
+  const { event } = parseAndVerifyRazorpayWebhook(req);
+
+  // 5. Build verified webhook payload without reading unverified body fields
+  const webhookPayload = {
+    provider: 'razorpay',
+    eventId: eventIdHeader,
+    eventType: event.event,
+    payload: event,
+  };
 
   const result = await service.processBillingWebhook(webhookPayload);
   return AppResponse.ok(result, 'Webhook processed').send(res);

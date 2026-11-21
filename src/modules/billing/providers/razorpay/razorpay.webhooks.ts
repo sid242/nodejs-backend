@@ -79,25 +79,21 @@ export function parseAndVerifyRazorpayWebhook(req: Request): {
   const signature = req.headers['x-razorpay-signature'] as string | undefined;
 
   if (!signature) {
-    throw AppError.badRequest('Missing X-Razorpay-Signature header');
+    throw AppError.unauthorized('Missing X-Razorpay-Signature header');
   }
 
-  // Use rawBody buffer captured by express.json verify middleware
+  // Require rawBody Buffer captured by express.json verify middleware.
+  // Never fallback to JSON.stringify(req.body) to prevent replay/tampering attacks.
   const rawBody = req.rawBody;
-  if (!rawBody || rawBody.length === 0) {
-    // If rawBody wasn't populated, fallback to JSON.stringify if body is parsed (less resilient, but safe if verified)
-    const bodyStr = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-    const valid = verifyWebhookSignature(bodyStr, signature);
-    if (!valid) {
-      logger.warn('Razorpay webhook signature verification failed (fallback string)');
-      throw AppError.badRequest('Invalid webhook signature');
-    }
-  } else {
-    const valid = verifyWebhookSignature(rawBody, signature);
-    if (!valid) {
-      logger.warn('Razorpay webhook signature verification failed');
-      throw AppError.badRequest('Invalid webhook signature');
-    }
+  if (!rawBody || !Buffer.isBuffer(rawBody) || rawBody.length === 0) {
+    logger.warn('Razorpay webhook verification failed: rawBody buffer is missing');
+    throw AppError.badRequest('Raw body required for webhook verification');
+  }
+
+  const valid = verifyWebhookSignature(rawBody, signature);
+  if (!valid) {
+    logger.warn('Razorpay webhook signature verification failed');
+    throw AppError.unauthorized('Invalid webhook signature');
   }
 
   const payload: RazorpayWebhookPayload =

@@ -186,6 +186,13 @@ export const billingPublicLimiter = make({
   windowMs: 60_000,
 });
 
+// Ingress webhook rate limiter for billing providers (Razorpay)
+export const billingWebhookLimiter = make({
+  name: 'billing-webhook',
+  limit: 120,
+  windowMs: 60_000,
+});
+
 // SCIM 2.0 directory sync rate limiter (RFC 7644 compliant 429 response)
 export const scimLimiter = rateLimit({
   windowMs: 60_000,

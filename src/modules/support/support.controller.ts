@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 
 import { asyncHandler } from '@/lib/async-handler';
+import { AppError } from '@/lib/errors';
 import { AppResponse } from '@/lib/responses';
 
 import type {
@@ -22,9 +23,10 @@ export const listTickets = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const createTicket = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) throw AppError.unauthorized('Authentication required');
   const tenantId = String(req.params.tenantId);
-  const userId = req.user?.id!;
-  const userName = req.user?.id ? `user-${req.user.id.slice(0, 8)}` : 'User';
+  const userId = req.user.id;
+  const userName = `user-${req.user.id.slice(0, 8)}`;
   const body = req.body as CreateTicketDto;
 
   const ticket = await supportService.createTicket(tenantId, userId, userName, body);
@@ -40,10 +42,11 @@ export const getTicket = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const addMessage = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) throw AppError.unauthorized('Authentication required');
   const tenantId = String(req.params.tenantId);
   const ticketId = String(req.params.ticketId);
-  const userId = req.user?.id!;
-  const userName = req.user?.id ? `user-${req.user.id.slice(0, 8)}` : 'User';
+  const userId = req.user.id;
+  const userName = `user-${req.user.id.slice(0, 8)}`;
   const body = req.body as AddTicketMessageDto;
 
   const message = await supportService.addTicketMessage(
