@@ -378,3 +378,31 @@ export const updateTenantSecurityPolicy = asyncHandler(async (req: Request, res:
   const policy = await tenantsService.updateTenantSecurityPolicy(tenantId, body, req.user!.id);
   AppResponse.ok(policy, 'Workspace security policy updated successfully').send(res);
 });
+
+// ─── Org Chart & Member Import ───────────────────────────────────────────────
+
+export const getTenantOrgChart = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenant?.id ?? String(req.params.tenantId);
+  const chart = await tenantsService.getTenantOrgChart(tenantId);
+  AppResponse.ok(chart, 'Workspace organizational hierarchy retrieved').send(res);
+});
+
+export const validateMemberImport = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenant?.id ?? String(req.params.tenantId);
+  const rows = req.valid?.body?.rows ?? req.body?.rows ?? [];
+  const result = await tenantsService.validateMemberImport(tenantId, rows);
+  AppResponse.ok(result, 'Import preview validated').send(res);
+});
+
+export const executeMemberImport = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenant?.id ?? String(req.params.tenantId);
+  const rows = req.valid?.body?.rows ?? req.body?.rows ?? [];
+  const sendInviteEmails = req.valid?.body?.sendInviteEmails ?? true;
+  const result = await tenantsService.executeMemberImport(
+    tenantId,
+    req.user!.id,
+    rows,
+    sendInviteEmails,
+  );
+  AppResponse.ok(result, 'Member batch imported successfully').send(res);
+});

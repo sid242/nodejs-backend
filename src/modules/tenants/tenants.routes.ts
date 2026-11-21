@@ -234,6 +234,32 @@ router.post(
   controller.bulkInviteMembers,
 );
 
+router.get(
+  '/:tenantId/members/org-chart',
+  requireAuth,
+  requireTenant,
+  requirePermission('members:read'),
+  controller.getTenantOrgChart,
+);
+
+router.post(
+  '/:tenantId/members/import/validate',
+  requireAuth,
+  requireTenant,
+  requirePermission('members:invite'),
+  validate({ body: dto.validateMemberImportDto }),
+  controller.validateMemberImport,
+);
+
+router.post(
+  '/:tenantId/members/import/execute',
+  requireAuth,
+  requireTenant,
+  requirePermission('members:invite'),
+  validate({ body: dto.executeMemberImportDto }),
+  controller.executeMemberImport,
+);
+
 router.post(
   '/:tenantId/members/:memberId/transfer-ownership',
   requireAuth,

@@ -2332,3 +2332,211 @@ export async function updateTenantSecurityPolicy(
 
   return updated;
 }
+
+// -----------------------------------------------------------------------------
+// Org Chart & Bulk Member Import
+// -----------------------------------------------------------------------------
+
+export interface OrgChartNode {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  avatarUrl: string | null;
+  role: string;
+  department: string | null;
+  jobTitle: string | null;
+  managerMemberId: string | null;
+  status: string;
+  directReportsCount: number;
+  directReports: OrgChartNode[];
+}
+
+export async function getTenantOrgChart(tenantId: string): Promise<{
+  roots: OrgChartNode[];
+  totalMembers: number;
+  departments: string[];
+}> {
+  const paginated = await tenantsRepo.findTenantMembersPaginated(tenantId, {
+    limit: 1000,
+    page: 1,
+    status: 'ACTIVE',
+  } as any);
+
+  const activeMembers = paginated.items;
+  const memberMap = new Map<string, OrgChartNode>();
+  const departmentsSet = new Set<string>();
+
+  for (const m of activeMembers) {
+    if (m.department) departmentsSet.add(m.department);
+    memberMap.set(m.id, {
+      id: m.id,
+      userId: m.userId,
+      name: m.name || m.email,
+      email: m.email,
+      avatarUrl: m.avatarUrl ?? null,
+      role: m.role || 'MEMBER',
+      department: m.department ?? null,
+      jobTitle: m.jobTitle ?? null,
+      managerMemberId: (m as any).managerMemberId ?? null,
+      status: m.status,
+      directReportsCount: 0,
+      directReports: [],
+    });
+  }
+
+  const roots: OrgChartNode[] = [];
+  for (const node of memberMap.values()) {
+    if (node.managerMemberId && memberMap.has(node.managerMemberId)) {
+      const parent = memberMap.get(node.managerMemberId)!;
+      parent.directReports.push(node);
+      parent.directReportsCount += 1;
+    } else {
+      roots.push(node);
+    }
+  }
+
+  return {
+    roots,
+    totalMembers: activeMembers.length,
+    departments: Array.from(departmentsSet).sort(),
+  };
+}
+
+export async function validateMemberImport(
+  tenantId: string,
+  rows: Array<{
+    email: string;
+    role?: string;
+    firstName?: string;
+    lastName?: string;
+    jobTitle?: string;
+    department?: string;
+    phone?: string;
+    managerEmail?: string | null;
+  }>,
+) {
+  const overview = await billingService.getTenantBillingOverview(tenantId);
+  const maxMembers = overview.limits.maxMembers;
+  const currentMembers = overview.usage.members;
+  const quotaAvailable = maxMembers !== null ? Math.max(0, maxMembers - currentMembers) : 999999;
+
+  const paginated = await tenantsRepo.findTenantMembersPaginated(tenantId, {
+    limit: 2000,
+    page: 1,
+  } as any);
+  const existingEmailSet = new Set(
+    paginated.items.map((m) => m.email?.toLowerCase()).filter(Boolean),
+  );
+
+  const seenEmails = new Set<string>();
+  const validationResults = rows.map((r, idx) => {
+    const emailNorm = r.email.toLowerCase().trim();
+    let status: 'VALID' | 'ERROR' | 'DUPLICATE' = 'VALID';
+    let error: string | undefined;
+
+    if (existingEmailSet.has(emailNorm)) {
+      status = 'DUPLICATE';
+      error = 'Already an existing member in this workspace';
+    } else if (seenEmails.has(emailNorm)) {
+      status = 'DUPLICATE';
+      error = 'Duplicate email within the import file';
+    } else {
+      seenEmails.add(emailNorm);
+    }
+
+    return {
+      row: idx + 1,
+      email: r.email,
+      role: r.role || 'MEMBER',
+      firstName: r.firstName,
+      lastName: r.lastName,
+      jobTitle: r.jobTitle,
+      department: r.department,
+      phone: r.phone,
+      managerEmail: r.managerEmail,
+      status,
+      error,
+    };
+  });
+
+  const validCount = validationResults.filter((r) => r.status === 'VALID').length;
+  const errorCount = validationResults.length - validCount;
+  const hasQuota = validCount <= quotaAvailable;
+
+  return {
+    valid: errorCount === 0 && hasQuota,
+    quotaAvailable,
+    totalRows: rows.length,
+    validCount,
+    errorCount,
+    exceedsQuota: !hasQuota,
+    rows: validationResults,
+  };
+}
+
+export async function executeMemberImport(
+  tenantId: string,
+  operatorUserId: string,
+  rows: Array<{
+    email: string;
+    role?: string;
+    firstName?: string;
+    lastName?: string;
+    jobTitle?: string;
+    department?: string;
+    phone?: string;
+    managerEmail?: string | null;
+  }>,
+  _sendInviteEmails = true,
+) {
+  const validation = await validateMemberImport(tenantId, rows);
+  if (validation.exceedsQuota) {
+    throw AppError.forbidden(
+      `Import exceeds seat quota. Only ${validation.quotaAvailable} seat(s) available.`,
+    );
+  }
+
+  const validRows = validation.rows.filter((r) => r.status === 'VALID');
+  const results: Array<{ email: string; status: 'IMPORTED' | 'FAILED'; error?: string }> = [];
+
+  for (const r of validRows) {
+    try {
+      await addMemberToTenant(tenantId, operatorUserId, {
+        email: r.email,
+        role: r.role,
+        firstName: r.firstName,
+        lastName: r.lastName,
+        jobTitle: r.jobTitle,
+        department: r.department,
+        phone: r.phone,
+      } as any);
+      results.push({ email: r.email, status: 'IMPORTED' });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Import failed';
+      results.push({ email: r.email, status: 'FAILED', error: msg });
+    }
+  }
+
+  const importedCount = results.filter((r) => r.status === 'IMPORTED').length;
+
+  await auditRepo.createAuditLog({
+    tenantId,
+    action: 'MEMBERS.BULK_IMPORTED',
+    entityType: 'TenantMember',
+    actorType: 'USER',
+    actorUserId: operatorUserId,
+    metadata: {
+      totalSubmitted: rows.length,
+      importedCount,
+      failedCount: results.length - importedCount,
+    },
+  });
+
+  return {
+    totalSubmitted: rows.length,
+    importedCount,
+    failedCount: results.length - importedCount,
+    results,
+  };
+}

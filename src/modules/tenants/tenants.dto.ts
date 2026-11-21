@@ -411,3 +411,28 @@ export const updateTenantSecurityPolicyDto = z.object({
 });
 
 export type UpdateTenantSecurityPolicyDto = z.infer<typeof updateTenantSecurityPolicyDto>;
+
+export const importMemberRowSchema = z.object({
+  email: z.string().trim().email(),
+  role: z.string().trim().default('MEMBER'),
+  firstName: z.string().trim().optional(),
+  lastName: z.string().trim().optional(),
+  jobTitle: z.string().trim().optional(),
+  department: z.string().trim().optional(),
+  phone: z.string().trim().optional(),
+  managerEmail: z.string().trim().email().optional().nullable(),
+});
+
+export const validateMemberImportDto = z.object({
+  rows: z.array(importMemberRowSchema).min(1).max(500),
+});
+
+export type ValidateMemberImportDto = z.infer<typeof validateMemberImportDto>;
+
+export const executeMemberImportDto = z.object({
+  rows: z.array(importMemberRowSchema).min(1).max(500),
+  sendInviteEmails: z.boolean().default(true),
+});
+
+export type ExecuteMemberImportDto = z.infer<typeof executeMemberImportDto>;
+
