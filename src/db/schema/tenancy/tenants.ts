@@ -37,6 +37,12 @@ export const tenants = pgTable(
     purgeScheduledAt: timestamp('purgeScheduledAt', { precision: 3, mode: 'date' }),
     dataRegion: text('dataRegion').notNull().default('ap-south-1'),
 
+    // Growth, Referral & Attribution
+    signupSource: text('signupSource'),
+    referralCode: text('referralCode'),
+    referredByTenantId: uuid('referredByTenantId'),
+    utm: jsonb('utm'),
+
     // Hybrid Shared / Dedicated Database Routing
     databaseMode: text('databaseMode').notNull().default('shared'), // 'shared' | 'dedicated'
     databaseKey: text('databaseKey').notNull().default('primary'), // trusted routing key
