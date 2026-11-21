@@ -15,3 +15,7 @@ export {
   renderStaffCredentialsEmail,
   type RenderStaffCredentialsEmailOptions,
 } from './staff-credentials';
+export {
+  renderStaffInviteEmail,
+  type RenderStaffInviteEmailOptions,
+} from './staff-invite';

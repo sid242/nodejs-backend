@@ -10,6 +10,7 @@ import {
   renderMagicLinkEmail,
   renderPasswordResetEmail,
   renderStaffCredentialsEmail,
+  renderStaffInviteEmail,
   renderTenantInviteEmail,
   renderVerifyEmail,
   renderWelcomeEmail,
@@ -105,6 +106,16 @@ export async function processEmail(job: Job): Promise<void> {
       }
       case 'staff-credentials': {
         const { subject, html } = renderStaffCredentialsEmail(data);
+        return sendEmail({
+          to: job?.data?.to,
+          subject,
+          html,
+          fromName: branding?.companyName,
+          replyTo: branding?.supportEmail || undefined,
+        });
+      }
+      case 'staff-invite': {
+        const { subject, html } = renderStaffInviteEmail(data);
         return sendEmail({
           to: job?.data?.to,
           subject,
