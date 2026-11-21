@@ -339,8 +339,13 @@ describe('SCIM 2.0 Directory Sync & Enterprise SSO Unit Tests', () => {
 
     it('removes member from workspace via DELETE /Users/:id', async () => {
       await scimService.deleteUser(enterpriseTenant.id, createdUserId);
+      await assert.rejects(() => scimService.getUser(enterpriseTenant.id, createdUserId), {
+        name: 'ScimError',
+        status: 404,
+      });
       const member = await tenantsRepo.findTenantMember(enterpriseTenant.id, createdUserId);
-      assert.strictEqual(member, null);
+      assert.equal(member?.status, 'SUSPENDED');
+      assert.ok(member?.deletedAt);
     });
   });
 });
