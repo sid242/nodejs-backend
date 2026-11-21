@@ -2,9 +2,27 @@ import { Request, Response } from 'express';
 
 import { asyncHandler } from '@/lib/async-handler';
 import { AppResponse } from '@/lib/responses';
+import { PBAC_REGISTRY } from '@/modules/pbac/pbac.registry';
 
-import { CreatePolicyDto, ListPoliciesQueryDto, UpdatePolicyDto } from './policies.dto';
+import {
+  CreatePolicyDto,
+  EvaluatePolicyDto,
+  ListPoliciesQueryDto,
+  UpdatePolicyDto,
+} from './policies.dto';
 import { policiesService } from './policies.service';
+
+export const getPolicyRegistry = asyncHandler(async (_req: Request, res: Response) => {
+  res.json(AppResponse.ok(PBAC_REGISTRY));
+});
+
+export const evaluateDryRun = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = req.tenant!.id;
+  const body = (req.valid?.body ?? req.body) as EvaluatePolicyDto;
+  const result = await policiesService.dryRunEvaluation(tenantId, body);
+
+  res.json(AppResponse.ok(result));
+});
 
 export const listPolicies = asyncHandler(async (req: Request, res: Response) => {
   const tenantId = req.tenant!.id;
@@ -48,7 +66,7 @@ export const updatePolicy = asyncHandler(async (req: Request, res: Response) => 
 export const deletePolicy = asyncHandler(async (req: Request, res: Response) => {
   const tenantId = req.tenant!.id;
   const policyId = (req.valid?.params?.policyId ?? req.params.policyId) as string;
-  await policiesService.deletePolicy(tenantId, policyId);
+  await policiesService.deletePolicy(tenantId, policyId, req.user?.id);
 
   res.json(AppResponse.ok(null, 'Policy deleted successfully'));
 });
@@ -59,7 +77,12 @@ export const attachPolicyToRole = asyncHandler(async (req: Request, res: Respons
     policyId: string;
     roleId: string;
   };
-  const result = await policiesService.attachPolicyToRole(tenantId, policyId, roleId);
+  const result = await policiesService.attachPolicyToRole(
+    tenantId,
+    policyId,
+    roleId,
+    req.user?.id,
+  );
 
   res.json(AppResponse.ok(null, result.message));
 });
@@ -70,7 +93,12 @@ export const detachPolicyFromRole = asyncHandler(async (req: Request, res: Respo
     policyId: string;
     roleId: string;
   };
-  const result = await policiesService.detachPolicyFromRole(tenantId, policyId, roleId);
+  const result = await policiesService.detachPolicyFromRole(
+    tenantId,
+    policyId,
+    roleId,
+    req.user?.id,
+  );
 
   res.json(AppResponse.ok(null, result.message));
 });

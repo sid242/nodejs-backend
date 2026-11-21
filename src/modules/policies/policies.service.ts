@@ -1,10 +1,53 @@
+import { logger } from '@/config/logger';
 import { Policy } from '@/db/schema/access/policies';
 import { AppError } from '@/lib/errors';
+import { createAuditLog } from '@/modules/audit/audit.repository';
+import { evaluateConditionTree, evaluatePolicies } from '@/modules/pbac/pbac.evaluator';
 import { pbacService } from '@/modules/pbac/pbac.service';
+import {
+  ActorContext,
+  EvaluationResult,
+  PolicyConditionTree,
+  PolicyEvaluationContext,
+} from '@/modules/pbac/pbac.types';
 import { rbacRepo } from '@/modules/rbac/rbac.repository';
 
-import { CreatePolicyDto, ListPoliciesQueryDto, UpdatePolicyDto } from './policies.dto';
+import {
+  CreatePolicyDto,
+  EvaluatePolicyDto,
+  ListPoliciesQueryDto,
+  UpdatePolicyDto,
+} from './policies.dto';
 import { policiesRepo } from './policies.repository';
+
+async function safeAuditLog(data: {
+  tenantId?: string | null;
+  action: string;
+  actorUserId?: string | null;
+  entityId: string;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    await createAuditLog({
+      tenantId: data.tenantId ?? null,
+      action: data.action,
+      entityType: 'policy',
+      entityId: data.entityId,
+      actorUserId: data.actorUserId ?? null,
+      source: 'web',
+      result: 'success',
+      metadata: data.metadata,
+    });
+  } catch (err) {
+    logger.warn(
+      {
+        error: err,
+        action: data.action,
+      },
+      'Failed to record audit log for policy operation',
+    );
+  }
+}
 
 export class PoliciesService {
   async listPolicies(
@@ -28,7 +71,17 @@ export class PoliciesService {
       throw AppError.conflict(`Policy with name '${data.name}' already exists in this workspace`);
     }
 
-    return policiesRepo.createPolicy(tenantId, data, userId);
+    const created = await policiesRepo.createPolicy(tenantId, data, userId);
+
+    await safeAuditLog({
+      tenantId,
+      action: 'policy.created',
+      actorUserId: userId,
+      entityId: created.id,
+      metadata: { before: null, after: created },
+    });
+
+    return created;
   }
 
   async updatePolicy(
@@ -37,7 +90,7 @@ export class PoliciesService {
     data: UpdatePolicyDto,
     userId?: string,
   ): Promise<Policy> {
-    await this.getPolicyById(tenantId, policyId);
+    const before = await this.getPolicyById(tenantId, policyId);
 
     if (data.name) {
       const existing = await policiesRepo.findPolicyByName(tenantId, data.name);
@@ -57,11 +110,19 @@ export class PoliciesService {
       linkedRoles.map((r) => pbacService.invalidateRolePoliciesCache(tenantId, r.id)),
     );
 
+    await safeAuditLog({
+      tenantId,
+      action: 'policy.updated',
+      actorUserId: userId,
+      entityId: policyId,
+      metadata: { before, after: updated },
+    });
+
     return updated;
   }
 
-  async deletePolicy(tenantId: string, policyId: string): Promise<void> {
-    await this.getPolicyById(tenantId, policyId);
+  async deletePolicy(tenantId: string, policyId: string, userId?: string): Promise<void> {
+    const before = await this.getPolicyById(tenantId, policyId);
 
     const linkedRoles = await policiesRepo.getRolesByPolicyId(tenantId, policyId);
     const deleted = await policiesRepo.deletePolicy(tenantId, policyId);
@@ -73,12 +134,21 @@ export class PoliciesService {
     await Promise.all(
       linkedRoles.map((r) => pbacService.invalidateRolePoliciesCache(tenantId, r.id)),
     );
+
+    await safeAuditLog({
+      tenantId,
+      action: 'policy.deleted',
+      actorUserId: userId,
+      entityId: policyId,
+      metadata: { before, after: null },
+    });
   }
 
   async attachPolicyToRole(
     tenantId: string,
     policyId: string,
     roleId: string,
+    userId?: string,
   ): Promise<{ message: string }> {
     const policy = await this.getPolicyById(tenantId, policyId);
     const role = await rbacRepo.findRoleById(roleId);
@@ -93,6 +163,14 @@ export class PoliciesService {
     await policiesRepo.attachPolicyToRole(tenantId, roleId, policy.id);
     await pbacService.invalidateRolePoliciesCache(tenantId, roleId);
 
+    await safeAuditLog({
+      tenantId,
+      action: 'policy.attached_to_role',
+      actorUserId: userId,
+      entityId: policyId,
+      metadata: { roleId, roleName: role.name },
+    });
+
     return { message: `Policy '${policy.name}' attached to role '${role.name}' successfully` };
   }
 
@@ -100,6 +178,7 @@ export class PoliciesService {
     tenantId: string,
     policyId: string,
     roleId: string,
+    userId?: string,
   ): Promise<{ message: string }> {
     const policy = await this.getPolicyById(tenantId, policyId);
     const role = await rbacRepo.findRoleById(roleId);
@@ -110,6 +189,14 @@ export class PoliciesService {
     await policiesRepo.detachPolicyFromRole(tenantId, roleId, policy.id);
     await pbacService.invalidateRolePoliciesCache(tenantId, roleId);
 
+    await safeAuditLog({
+      tenantId,
+      action: 'policy.detached_from_role',
+      actorUserId: userId,
+      entityId: policyId,
+      metadata: { roleId, roleName: role.name },
+    });
+
     return { message: `Policy '${policy.name}' detached from role '${role.name}' successfully` };
   }
 
@@ -119,6 +206,71 @@ export class PoliciesService {
       throw AppError.notFound('Role not found');
     }
     return policiesRepo.getPoliciesByRoleId(tenantId, roleId);
+  }
+
+  /**
+   * Dry-run evaluation endpoint for UI testing panel.
+   * Tests policies or candidate conditions without persisting.
+   */
+  async dryRunEvaluation(tenantId: string, input: EvaluatePolicyDto): Promise<EvaluationResult> {
+    const actor: ActorContext = {
+      userId: input.actor?.userId ?? 'dry-run-user',
+      memberId: input.actor?.memberId ?? 'dry-run-member',
+      roleKeys: input.actor?.roleKeys ?? [],
+      departmentId: input.actor?.departmentId ?? null,
+      regionId: input.actor?.regionId ?? null,
+      attributes: input.actor?.attributes ?? {},
+    };
+
+    const context: PolicyEvaluationContext = {
+      actor,
+      resource: input.record ?? {},
+      env: { currentTime: new Date() },
+    };
+
+    // If an ad-hoc condition tree was provided, test it directly
+    if (input.conditions) {
+      const matched = evaluateConditionTree(input.conditions as PolicyConditionTree, context);
+      return {
+        allowed: matched,
+        effect: matched ? 'allow' : 'deny',
+        traces: [
+          {
+            policyId: input.policyId ?? 'dry-run-adhoc',
+            policyName: 'Dry Run Condition Test',
+            effect: 'allow',
+            priority: 0,
+            matched,
+            reason: matched ? 'Condition satisfied' : 'Condition not satisfied',
+          },
+        ],
+      };
+    }
+
+    if (input.policyId) {
+      const policy = await this.getPolicyById(tenantId, input.policyId);
+      return evaluatePolicies([policy], context);
+    }
+
+    if (input.roleId) {
+      const policies = await this.getPoliciesForRole(tenantId, input.roleId);
+      const filtered = policies.filter(
+        (p) =>
+          (p.resource === input.resource || p.resource === '*') &&
+          (p.action === input.action || p.action === '*'),
+      );
+      return evaluatePolicies(filtered, context);
+    }
+
+    // Default: evaluate all active tenant policies matching resource & action
+    const allTenantPolicies = await this.listPolicies(tenantId, {
+      resource: input.resource,
+      action: input.action,
+      isActive: true,
+      page: 1,
+      limit: 100,
+    });
+    return evaluatePolicies(allTenantPolicies.items, context);
   }
 
   // ==========================================
@@ -151,7 +303,7 @@ export class PoliciesService {
   async updatePlatformPolicy(
     policyId: string,
     data: UpdatePolicyDto,
-    staffId?: string,
+    _staffId?: string,
   ): Promise<Policy> {
     await this.getPlatformPolicyById(policyId);
 

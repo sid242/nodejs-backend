@@ -14,6 +14,7 @@ import { tenantDb } from '@/db/tenancy/context';
 import { cache } from '@/lib/cache';
 import { AppError } from '@/lib/errors';
 import * as auditRepo from '@/modules/audit/audit.repository';
+import { pbacService } from '@/modules/pbac/pbac.service';
 import { tenantsRepo } from '@/modules/tenants/tenants.repository';
 
 import { SYSTEM_MODULE_DEFINITIONS } from './modules.registry';
@@ -368,6 +369,9 @@ export async function deleteTenantRole(tenantId: string, roleId: string): Promis
 
   await rbacRepo.deleteRole(roleId);
   await invalidateRbacCache(tenantId);
+  if (tenantId) {
+    await pbacService.invalidateRolePoliciesCache(tenantId, roleId);
+  }
 }
 
 export async function listRoles(
