@@ -75,6 +75,11 @@ export const PLATFORM_PERMISSIONS = {
 
   // Platform Analytics & Metrics
   METRICS_READ: 'platform_metrics:read',
+
+  // Support Tickets & Feedback Oversight
+  SUPPORT_TICKETS_READ: 'support_tickets:read',
+  SUPPORT_TICKETS_MANAGE: 'support_tickets:manage',
+  FEEDBACK_READ: 'feedback:read',
 } as const;
 
 export type PlatformPermissionKey =

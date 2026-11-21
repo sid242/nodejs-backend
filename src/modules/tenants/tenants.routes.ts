@@ -17,9 +17,11 @@ import { invitationsRouter } from '@/modules/invitations/invitations.routes';
 import * as featureFlagsService from '@/modules/feature-flags/feature-flags.service';
 import developersRouter from '@/modules/developers/developers.routes';
 import { tenantAnalyticsRouter } from '@/modules/analytics/analytics.routes';
+import { onboardingRouter } from '@/modules/onboarding/onboarding.routes';
 import * as privacyController from '@/modules/privacy/privacy.controller';
 import * as privacyDto from '@/modules/privacy/privacy.dto';
 import { tenantScimManagementRouter, tenantSsoRouter } from '@/modules/sso/sso.routes';
+import { tenantSupportRouter } from '@/modules/support/support.routes';
 
 import * as controller from './tenants.controller';
 import * as dto from './tenants.dto';
@@ -471,5 +473,11 @@ router.get(
 
 // Analytics, Usage Metering, Activity & Reports
 router.use('/:tenantId', tenantAnalyticsRouter);
+
+// Onboarding & Activation
+router.use('/:tenantId/onboarding', onboardingRouter);
+
+// Customer Support Tickets
+router.use('/:tenantId/support', tenantSupportRouter);
 
 export default router;

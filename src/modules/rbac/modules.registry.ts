@@ -7,6 +7,10 @@ import { filesModuleDefinition } from '@/modules/files/files.permissions';
 import { groupsModuleDefinition } from '@/modules/groups/groups.permissions';
 import { rbacModuleDefinition } from '@/modules/rbac/rbac.permissions';
 import {
+  onboardingModuleDefinition,
+  supportModuleDefinition,
+} from '@/modules/onboarding/onboarding.permissions';
+import {
   membersModuleDefinition,
   tenantsModuleDefinition,
 } from '@/modules/tenants/tenants.permissions';
@@ -24,4 +28,6 @@ export const SYSTEM_MODULE_DEFINITIONS: DomainModuleDefinition[] = [
   addressesModuleDefinition,
   developersModuleDefinition,
   analyticsModuleDefinition,
+  onboardingModuleDefinition,
+  supportModuleDefinition,
 ];

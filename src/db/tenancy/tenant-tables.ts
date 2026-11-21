@@ -113,6 +113,24 @@ export const TENANT_TABLES: TenantTableRegistration[] = [
     tenantColumn: 'tenantId',
     dependsOn: ['ReportDefinition'],
   },
+  {
+    name: 'OnboardingProgress',
+    table: schema.onboardingProgress,
+    tenantColumn: 'tenantId',
+    dependsOn: [],
+  },
+  {
+    name: 'SupportTicket',
+    table: schema.supportTickets,
+    tenantColumn: 'tenantId',
+    dependsOn: [],
+  },
+  {
+    name: 'SupportTicketMessage',
+    table: schema.supportTicketMessages,
+    tenantColumn: 'tenantId',
+    dependsOn: ['SupportTicket'],
+  },
 ];
 
 /**
@@ -166,6 +184,7 @@ export const PRIMARY_ONLY_TABLES: string[] = [
   'TenantTombstone',
   'TenantLegalHold',
   'PlatformMetricsDaily',
+  'FeedbackItem',
 ];
 
 const tenantTableMap = new Map<string, TenantTableRegistration>(

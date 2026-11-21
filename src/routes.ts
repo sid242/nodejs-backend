@@ -23,6 +23,7 @@ import rbacRoutes from '@/modules/rbac/rbac.routes';
 import { scimRouter } from '@/modules/scim/scim.routes';
 import searchRoutes from '@/modules/search/search.routes';
 import { ssoAuthRouter } from '@/modules/sso/sso.routes';
+import { feedbackRouter, platformSupportRouter } from '@/modules/support/support.routes';
 import tenantRoutes from '@/modules/tenants/tenants.routes';
 import userRoutes from '@/modules/users/users.routes';
 
@@ -51,7 +52,9 @@ router.use('/announcements', announcementsRoutes);
 router.use('/platform/maintenance', maintenanceRoutes);
 router.use('/platform/privacy', platformPrivacyRouter);
 router.use('/platform/metrics', platformMetricsRouter);
+router.use('/platform/support', platformSupportRouter);
 router.use('/consent', consentRouter);
+router.use('/feedback', feedbackRouter);
 router.use('/geo', geoRoutes);
 router.use('/addresses', addressRoutes);
 router.get('/public/plans', billingController.listPublicPlans);
