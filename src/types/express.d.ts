@@ -15,6 +15,7 @@ export interface AuthenticatedStaff {
   jobTitle?: string | null;
   roleId: string;
   roleKey: string;
+  roleName?: string;
   permissions: string[];
 }
 

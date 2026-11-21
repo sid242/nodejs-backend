@@ -75,6 +75,7 @@ export async function requirePlatformAuth(
         jobTitle: staffMember.jobTitle,
         roleId: staffMember.roleId,
         roleKey: staffMember.roleKey ?? 'STAFF',
+        roleName: staffMember.roleName ?? staffMember.roleKey ?? 'Staff',
         permissions,
       };
 
@@ -96,6 +97,7 @@ export async function requirePlatformAuth(
               jobTitle: staffMember.jobTitle,
               roleId: staffMember.roleId,
               roleKey: staffMember.roleKey ?? 'STAFF',
+              roleName: staffMember.roleName ?? staffMember.roleKey ?? 'Staff',
               permissions,
             };
             req.isSupportSession = true;
