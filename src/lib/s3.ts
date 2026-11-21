@@ -2,6 +2,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  PutBucketPolicyCommand,
   PutObjectCommand,
   S3Client,
   type DeleteObjectCommandOutput,
@@ -152,3 +153,40 @@ export const putObject = (
       Metadata: metadata,
     }),
   );
+
+let policyEnsured = false;
+
+/**
+ * Ensures public read access to avatars, tenants, and branding assets in MinIO / S3.
+ * Gracefully ignores errors in managed production environments where policies are IAM-locked.
+ */
+export async function ensurePublicBucketPolicies(): Promise<void> {
+  if (policyEnsured) return;
+  try {
+    const policy = {
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Sid: 'PublicReadAvatarsAndTenants',
+          Effect: 'Allow',
+          Principal: '*',
+          Action: ['s3:GetObject'],
+          Resource: [
+            `arn:aws:s3:::${env.S3_BUCKET}/tenants/*`,
+            `arn:aws:s3:::${env.S3_BUCKET}/avatars/*`,
+            `arn:aws:s3:::${env.S3_BUCKET}/branding/*`,
+          ],
+        },
+      ],
+    };
+    await s3.send(
+      new PutBucketPolicyCommand({
+        Bucket: env.S3_BUCKET,
+        Policy: JSON.stringify(policy),
+      }),
+    );
+    policyEnsured = true;
+  } catch {
+    // Graceful no-op if IAM policy prevents PutBucketPolicy or in managed cloud environments
+  }
+}

@@ -6,6 +6,7 @@ import { env } from '@/config/env';
 import { logger } from '@/config/logger';
 import { closeRedisClients } from '@/config/redis';
 import { drainDedicatedPools, initTenantDbInvalidationSubscriber } from '@/lib/db-manager';
+import { ensurePublicBucketPolicies } from '@/lib/s3';
 import { state } from '@/lib/state';
 import { initSentry } from '@/observability/sentry';
 import { closeQueues } from '@/queues/index';
@@ -13,6 +14,7 @@ import { initSocket } from '@/sockets/index';
 
 initSentry();
 initTenantDbInvalidationSubscriber();
+void ensurePublicBucketPolicies();
 
 const server = http.createServer(createApp());
 const sockets = initSocket(server);

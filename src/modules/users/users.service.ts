@@ -5,7 +5,7 @@ import { env } from '@/config/env';
 import { users, type PublicUser } from '@/db/schema/index';
 import { cache } from '@/lib/cache';
 import { AppError } from '@/lib/errors';
-import { createUploadPost } from '@/lib/s3';
+import { createUploadPost, ensurePublicBucketPolicies } from '@/lib/s3';
 import { safeFilename } from '@/lib/utils';
 import { revokeAllUserTokens } from '@/modules/auth/tokens';
 import * as loginEventsRepo from '@/modules/auth/user-login-events.repository';
@@ -132,6 +132,8 @@ export function buildS3PublicUrl(key: string): string {
 export async function getAvatarUploadUrl(userId: string, dto: AvatarUploadUrlDto) {
   const user = await userRepo.findById(userId);
   if (!user) throw AppError.notFound('User not found');
+
+  await ensurePublicBucketPolicies();
 
   const sanitized = safeFilename(dto.filename || 'avatar.png');
   const key = `avatars/${userId}/${Date.now()}-${sanitized}`;
