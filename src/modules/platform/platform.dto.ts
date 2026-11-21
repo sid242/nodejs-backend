@@ -66,8 +66,8 @@ export const acceptStaffInviteDto = z.object({
 export type AcceptStaffInviteDto = z.infer<typeof acceptStaffInviteDto>;
 
 export const loginStaffDto = z.object({
-  email: z.string().trim().email(),
-  password: z.string().min(1, 'Password is required'),
+  email: z.string().trim().email().max(254),
+  password: z.string().min(1, 'Password is required').max(128),
 });
 export type LoginStaffDto = z.infer<typeof loginStaffDto>;
 

@@ -52,13 +52,13 @@ import type {
   VerifySubscriptionPaymentDto,
 } from './billing.dto';
 import { billingRepo } from './billing.repository';
+import { calculateGstBreakdown } from './billing.tax';
 import {
   DEFAULT_ENTITLEMENT_DEFINITIONS,
   DEFAULT_PLAN_ENTITLEMENT_VALUES,
 } from './entitlements.defaults';
 import { DEFAULT_PLAN_KEY, DEFAULT_PLANS } from './plans.defaults';
 import { razorpayGateway } from './providers/razorpay';
-import { calculateGstBreakdown } from './billing.tax';
 
 const CACHE_KEYS = {
   PUBLIC_PLANS: 'plans:public',
@@ -748,6 +748,7 @@ export async function getTenantBillingOverview(tenantId: string) {
   const entitlements = await getTenantEntitlements(tenantId);
   const usage = await billingRepo.getTenantUsage(tenantId);
   const events = await billingRepo.findSubscriptionEvents(tenantId);
+  const maxMembers = entitlements.limits.maxMembers;
 
   return {
     subscription: sub,
@@ -757,7 +758,12 @@ export async function getTenantBillingOverview(tenantId: string) {
       limits: entitlements.limits,
       effectiveModules: entitlements.effectiveModules,
     },
-    usage,
+    usage: {
+      ...usage,
+      activeMembers: usage.activeMembers ?? usage.members,
+      maxMembers,
+      remainingSeats: maxMembers === null ? null : Math.max(0, maxMembers - usage.members),
+    },
     limits: entitlements.limits,
     entitlements: entitlements.entitlements,
     recentEvents: events.slice(0, 5),

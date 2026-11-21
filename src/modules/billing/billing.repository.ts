@@ -64,6 +64,7 @@ export interface SubscriptionWithPlan extends Subscription {
 
 export interface TenantUsage {
   members: number;
+  activeMembers?: number;
   storageBytes: number;
   customRoles: number;
   metrics?: Record<string, number>;
@@ -80,7 +81,11 @@ export interface InvoiceWithDetails extends Invoice {
 
 export async function findPlanByKey(key: string, tx?: any): Promise<PlanWithModules | null> {
   const client = tx ?? db;
-  const [record] = await client.select().from(plans).where(eq(plans.key, key.toUpperCase())).limit(1);
+  const [record] = await client
+    .select()
+    .from(plans)
+    .where(eq(plans.key, key.toUpperCase()))
+    .limit(1);
 
   if (!record) return null;
   const modules = await getPlanModuleKeys(record.id);
@@ -677,6 +682,7 @@ export async function getTenantUsage(tenantId: string): Promise<TenantUsage> {
 
   return {
     members: membersCount,
+    activeMembers: Number(activeMembersRow?.total ?? 0),
     storageBytes,
     customRoles: customRolesCount,
     metrics,
@@ -1072,9 +1078,7 @@ export async function findRecentCreatedPayment(
   return matched ?? null;
 }
 
-export async function expireStaleCreatedPayments(
-  maxAgeMs = 24 * 60 * 60 * 1000,
-): Promise<number> {
+export async function expireStaleCreatedPayments(maxAgeMs = 24 * 60 * 60 * 1000): Promise<number> {
   const cutoff = new Date(Date.now() - maxAgeMs);
   const rows = await db
     .update(payments)

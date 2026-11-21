@@ -13,8 +13,8 @@ export const registerDto = z.object({
 export type RegisterDto = z.infer<typeof registerDto>;
 
 export const loginDto = z.object({
-  email: emailSchema,
-  password: passwordSchema,
+  email: z.string().trim().email().max(254),
+  password: z.string().min(1).max(128),
 });
 
 export type LoginDto = z.infer<typeof loginDto>;
@@ -106,7 +106,10 @@ export type DisableTwoFactorDto = z.infer<typeof disableTwoFactorDto>;
 
 export const verifyTwoFactorChallengeDto = z.object({
   challengeToken: z.string().min(1),
-  code: z.string().min(6).max(10), // 6-digit TOTP or 10-char recovery code
+  code: z
+    .string()
+    .trim()
+    .regex(/^(?:\d{6}|[a-z0-9]{10})$/i, 'Enter a valid verification or recovery code'),
 });
 
 export type VerifyTwoFactorChallengeDto = z.infer<typeof verifyTwoFactorChallengeDto>;
@@ -150,4 +153,3 @@ export const redeemHandoffDto = z.object({
 });
 
 export type RedeemHandoffDto = z.infer<typeof redeemHandoffDto>;
-
