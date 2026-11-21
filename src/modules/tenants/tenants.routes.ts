@@ -16,6 +16,7 @@ import * as invitationsDto from '@/modules/invitations/invitations.dto';
 import { invitationsRouter } from '@/modules/invitations/invitations.routes';
 import * as featureFlagsService from '@/modules/feature-flags/feature-flags.service';
 import developersRouter from '@/modules/developers/developers.routes';
+import { tenantAnalyticsRouter } from '@/modules/analytics/analytics.routes';
 import * as privacyController from '@/modules/privacy/privacy.controller';
 import * as privacyDto from '@/modules/privacy/privacy.dto';
 import { tenantScimManagementRouter, tenantSsoRouter } from '@/modules/sso/sso.routes';
@@ -467,5 +468,8 @@ router.get(
   requirePermission('tenants:read'),
   privacyController.getTenantClosureStatus,
 );
+
+// Analytics, Usage Metering, Activity & Reports
+router.use('/:tenantId', tenantAnalyticsRouter);
 
 export default router;

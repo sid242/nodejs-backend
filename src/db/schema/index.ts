@@ -13,3 +13,4 @@ export * from './notifications';
 export * from './developers';
 export * from './system';
 export * from './privacy';
+export * from './analytics';

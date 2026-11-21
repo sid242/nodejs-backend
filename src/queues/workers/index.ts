@@ -157,4 +157,10 @@ export async function registerSchedulers(): Promise<void> {
     { pattern: '30 4 * * *' }, // daily at 04:30 UTC
     { name: 'process-tenant-purges' },
   );
+
+  await maintenanceQueue.upsertJobScheduler(
+    'aggregate-platform-metrics-daily',
+    { pattern: '0 1 * * *' }, // daily at 01:00 UTC
+    { name: 'aggregate-platform-metrics' },
+  );
 }

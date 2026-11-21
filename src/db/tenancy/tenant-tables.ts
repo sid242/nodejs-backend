@@ -35,6 +35,10 @@ export const TENANT_TABLES: TenantTableRegistration[] = [
   { name: 'TenantSetting', table: schema.tenantSettings, tenantColumn: 'tenantId' },
   { name: 'TenantSecurityPolicy', table: schema.tenantSecurityPolicies, tenantColumn: 'tenantId' },
   { name: 'EmailSuppression', table: schema.emailSuppressions, tenantColumn: 'tenantId' },
+  { name: 'UsageEvent', table: schema.usageEvents, tenantColumn: 'tenantId' },
+  { name: 'UsageDaily', table: schema.usageDaily, tenantColumn: 'tenantId' },
+  { name: 'ActivityFeed', table: schema.activityFeed, tenantColumn: 'tenantId' },
+  { name: 'ReportDefinition', table: schema.reportDefinitions, tenantColumn: 'tenantId' },
 
   // Level 1: Dependent on Level 0
   {
@@ -103,6 +107,12 @@ export const TENANT_TABLES: TenantTableRegistration[] = [
     tenantColumn: 'tenantId',
     dependsOn: ['WebhookEndpoint'],
   },
+  {
+    name: 'ReportRun',
+    table: schema.reportRuns,
+    tenantColumn: 'tenantId',
+    dependsOn: ['ReportDefinition'],
+  },
 ];
 
 /**
@@ -155,6 +165,7 @@ export const PRIMARY_ONLY_TABLES: string[] = [
   'AccountDeletionRequest',
   'TenantTombstone',
   'TenantLegalHold',
+  'PlatformMetricsDaily',
 ];
 
 const tenantTableMap = new Map<string, TenantTableRegistration>(

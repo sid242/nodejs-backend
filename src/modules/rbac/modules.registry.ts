@@ -1,4 +1,5 @@
 import { addressesModuleDefinition } from '@/modules/addresses/addresses.permissions';
+import { analyticsModuleDefinition } from '@/modules/analytics/analytics.permissions';
 import { auditModuleDefinition } from '@/modules/audit/audit.permissions';
 import { billingModuleDefinition } from '@/modules/billing/billing.permissions';
 import { developersModuleDefinition } from '@/modules/developers/developers.permissions';
@@ -22,4 +23,5 @@ export const SYSTEM_MODULE_DEFINITIONS: DomainModuleDefinition[] = [
   auditModuleDefinition,
   addressesModuleDefinition,
   developersModuleDefinition,
+  analyticsModuleDefinition,
 ];

@@ -393,6 +393,13 @@
       "when": 1795187126098,
       "tag": "0055_ordinary_naoko",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1795236021288,
+      "tag": "0056_slim_clea",
+      "breakpoints": true
     }
   ]
 }

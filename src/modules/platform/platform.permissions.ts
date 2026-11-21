@@ -72,6 +72,9 @@ export const PLATFORM_PERMISSIONS = {
   LEGAL_HOLD_READ: 'tenant_legal_hold:read',
   LEGAL_HOLD_MANAGE: 'tenant_legal_hold:manage',
   PRIVACY_MANAGE: 'platform_privacy:manage',
+
+  // Platform Analytics & Metrics
+  METRICS_READ: 'platform_metrics:read',
 } as const;
 
 export type PlatformPermissionKey =
@@ -333,6 +336,13 @@ export const PLATFORM_PERMISSION_CATALOGUE: PlatformPermissionDefinition[] = [
     description: 'Oversee DSAR export requests, account deletion requests, and tenant purges',
     resource: 'platform_privacy',
     action: 'manage',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.METRICS_READ,
+    name: 'View Platform Metrics',
+    description: 'Inspect executive KPIs, MRR/ARR, tenant growth, and platform storage usage',
+    resource: 'platform_metrics',
+    action: 'read',
   },
 ];
 

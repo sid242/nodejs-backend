@@ -193,5 +193,11 @@ export async function processMaintenance(job: Job): Promise<{ removed: number; f
     return { removed: results.purged, failed: results.skippedUnderHold };
   }
 
+  if (job.name === 'aggregate-platform-metrics') {
+    const { aggregateDailyPlatformSnapshot } = await import('@/modules/analytics/analytics.service');
+    const result = await aggregateDailyPlatformSnapshot();
+    return { removed: 1, failed: 0 };
+  }
+
   throw new Error(`Unknown maintenance job: ${job.name}`);
 }
