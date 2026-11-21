@@ -8,6 +8,7 @@ import { db } from '@/config/db';
 import { env } from '@/config/env';
 import {
   tenantBrandings,
+  tenantSsoConfigs,
   userGroupMembers,
   type PublicTenant,
   type PublicTenantBranding,
@@ -1217,6 +1218,7 @@ export interface PublicTenantResolution {
     id: string;
     name: string;
     slug: string;
+    ssoConfigured?: boolean;
   };
   branding?: {
     companyName: string;
@@ -1308,6 +1310,13 @@ export async function resolvePublicTenant(options: {
       const entitlements = await billingService.getTenantEntitlements(tenant.id);
       const effective = getEffectiveUrlMode(tenant, branding, entitlements, env);
 
+      const [ssoConfig] = await db
+        .select({ status: tenantSsoConfigs.status })
+        .from(tenantSsoConfigs)
+        .where(eq(tenantSsoConfigs.tenantId, tenant.id))
+        .limit(1);
+      const ssoConfigured = ssoConfig?.status === 'ACTIVE';
+
       const result: PublicTenantResolution = {
         kind: 'tenant',
         tenantId: tenant.id,
@@ -1320,6 +1329,7 @@ export async function resolvePublicTenant(options: {
           id: tenant.id,
           name: tenant.name,
           slug: tenant.slug,
+          ssoConfigured,
         },
         branding: {
           companyName: branding?.companyName ?? tenant.name,
@@ -1430,6 +1440,13 @@ export async function resolvePublicTenant(options: {
           return result;
         }
 
+        const [subSsoConfig] = await db
+          .select({ status: tenantSsoConfigs.status })
+          .from(tenantSsoConfigs)
+          .where(eq(tenantSsoConfigs.tenantId, tenant.id))
+          .limit(1);
+        const subSsoConfigured = subSsoConfig?.status === 'ACTIVE';
+
         const result: PublicTenantResolution = {
           kind: 'tenant',
           tenantId: tenant.id,
@@ -1442,6 +1459,7 @@ export async function resolvePublicTenant(options: {
             id: tenant.id,
             name: tenant.name,
             slug: tenant.slug,
+            ssoConfigured: subSsoConfigured,
           },
           branding: {
             companyName: branding?.companyName ?? tenant.name,
@@ -1497,6 +1515,13 @@ export async function resolvePublicTenant(options: {
           return result;
         }
 
+        const [cdSsoConfig] = await db
+          .select({ status: tenantSsoConfigs.status })
+          .from(tenantSsoConfigs)
+          .where(eq(tenantSsoConfigs.tenantId, tenant.id))
+          .limit(1);
+        const cdSsoConfigured = cdSsoConfig?.status === 'ACTIVE';
+
         const result: PublicTenantResolution = {
           kind: 'tenant',
           tenantId: tenant.id,
@@ -1507,6 +1532,7 @@ export async function resolvePublicTenant(options: {
             id: tenant.id,
             name: tenant.name,
             slug: tenant.slug,
+            ssoConfigured: cdSsoConfigured,
           },
           branding: {
             companyName: branding.companyName ?? tenant.name,

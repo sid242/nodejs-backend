@@ -184,6 +184,7 @@ export async function getDownloadUrl(
 
   const url = await createDownloadUrl(file.key, 300, {
     filename: file.filename,
+    contentType: file.contentType,
     disposition,
   });
 

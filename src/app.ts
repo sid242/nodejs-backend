@@ -17,6 +17,7 @@ import { metricsMiddleware, metricsRouter } from '@/observability/metrics';
 import { bullBoardRouter } from '@/queues/bull-board';
 import { auditSupportActions } from '@/middleware/support';
 import { maintenanceMiddleware } from '@/middleware/maintenance';
+import { requestContextMiddleware } from '@/lib/request-context';
 import apiRoutes from '@/routes';
 import { ssoAuthRouter } from '@/modules/sso/sso.routes';
 import publicApiRouter from '@/modules/developers/public-api.routes';
@@ -27,6 +28,7 @@ export function createApp(): Express {
   app.disable('x-powered-by');
   app.set('trust proxy', env.TRUST_PROXY); // correct client IP behind ALB/nginx (needed for rate limiting)
 
+  app.use(requestContextMiddleware);
   app.use(httpLogger);
   app.use(metricsMiddleware);
 

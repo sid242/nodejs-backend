@@ -276,6 +276,8 @@ export async function previewInvitation(token: string) {
 
     return {
       email: invitation.email,
+      firstName: invitation.firstName ?? existingUser?.firstName ?? undefined,
+      lastName: invitation.lastName ?? existingUser?.lastName ?? undefined,
       tenantName: invitation.tenantName ?? 'Workspace',
       tenantSlug: invitation.tenantSlug,
       roleName: invitation.roleName ?? 'Member',
@@ -326,6 +328,8 @@ export async function previewInvitation(token: string) {
 
     return {
       email: user.email,
+      firstName: user.firstName ?? undefined,
+      lastName: user.lastName ?? undefined,
       tenantName: tenant?.name ?? 'Workspace',
       tenantSlug: tenant?.slug,
       roleName,
