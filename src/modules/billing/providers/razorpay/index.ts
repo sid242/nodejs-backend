@@ -6,8 +6,12 @@ import { AppError } from '@/lib/errors';
 import { billingRepo } from '@/modules/billing/billing.repository';
 
 import type { BillingProvider, CheckoutResult, WebhookResult } from '../../provider';
-import { createRazorpayOrder, fetchRazorpayPayment } from './razorpay.orders';
-import { createRazorpayRefund } from './razorpay.refunds';
+import {
+  createRazorpayOrder,
+  fetchRazorpayOrder,
+  fetchRazorpayPayment,
+} from './razorpay.orders';
+import { createRazorpayRefund, fetchRazorpayRefund } from './razorpay.refunds';
 import {
   verifyOrderPaymentSignature,
   verifySubscriptionPaymentSignature,
@@ -29,8 +33,10 @@ export * from './razorpay.webhooks';
 
 export const razorpayGateway = {
   createRazorpayOrder,
+  fetchRazorpayOrder,
   fetchRazorpayPayment,
   createRazorpayRefund,
+  fetchRazorpayRefund,
   verifyOrderPaymentSignature,
   verifySubscriptionPaymentSignature,
   cancelRazorpaySubscription,

@@ -1,7 +1,4 @@
-import { logger } from '@/config/logger';
-import { AppError } from '@/lib/errors';
-
-import { getRazorpayClient } from './razorpay.client';
+import { executeGatewayCall, getRazorpayClient } from './razorpay.client';
 
 export interface CreateOrderParams {
   amountMinor: number;
@@ -24,51 +21,68 @@ export interface RazorpayOrderResult {
   created_at: number;
 }
 
+export interface RazorpayPaymentResult {
+  id: string;
+  entity: string;
+  amount: number;
+  currency: string;
+  status: string;
+  order_id: string | null;
+  invoice_id: string | null;
+  international: boolean;
+  method: string;
+  amount_refunded: number;
+  refund_status: string | null;
+  captured: boolean;
+  description?: string | null;
+  card_id?: string | null;
+  bank?: string | null;
+  wallet?: string | null;
+  vpa?: string | null;
+  email?: string;
+  contact?: string;
+  notes: Record<string, string>;
+  fee?: number;
+  tax?: number;
+  error_code?: string | null;
+  error_description?: string | null;
+  created_at: number;
+}
+
 export async function createRazorpayOrder(params: CreateOrderParams): Promise<RazorpayOrderResult> {
-  const razorpay = getRazorpayClient();
-
-  try {
-    const order = await razorpay.orders.create({
-      amount: params.amountMinor,
-      currency: params.currency,
-      receipt: params.receipt,
-      notes: params.notes ?? {},
-    });
-
-    return order as unknown as RazorpayOrderResult;
-  } catch (error: any) {
-    logger.error(
-      { error, params: { ...params, notes: undefined } },
-      'Failed to create Razorpay order',
-    );
-    throw AppError.badRequest(
-      error?.error?.description ??
-        error?.message ??
-        'Failed to initialize payment order with payment gateway',
-    );
-  }
+  return executeGatewayCall(
+    async () => {
+      const razorpay = getRazorpayClient();
+      const order = await razorpay.orders.create({
+        amount: params.amountMinor,
+        currency: params.currency,
+        receipt: params.receipt,
+        notes: params.notes ?? {},
+      });
+      return order as unknown as RazorpayOrderResult;
+    },
+    { operationName: 'Create Razorpay order' },
+  );
 }
 
 export async function fetchRazorpayOrder(orderId: string): Promise<RazorpayOrderResult> {
-  const razorpay = getRazorpayClient();
-
-  try {
-    const order = await razorpay.orders.fetch(orderId);
-    return order as unknown as RazorpayOrderResult;
-  } catch (error: any) {
-    logger.error({ error, orderId }, 'Failed to fetch Razorpay order');
-    throw AppError.notFound('Payment order not found in payment gateway');
-  }
+  return executeGatewayCall(
+    async () => {
+      const razorpay = getRazorpayClient();
+      const order = await razorpay.orders.fetch(orderId);
+      return order as unknown as RazorpayOrderResult;
+    },
+    { isGet: true, operationName: 'Fetch Razorpay order' },
+  );
 }
 
-export async function fetchRazorpayPayment(paymentId: string): Promise<any> {
-  const razorpay = getRazorpayClient();
-
-  try {
-    const payment = await razorpay.payments.fetch(paymentId);
-    return payment;
-  } catch (error: any) {
-    logger.error({ error, paymentId }, 'Failed to fetch Razorpay payment');
-    throw AppError.notFound('Payment not found in payment gateway');
-  }
+export async function fetchRazorpayPayment(paymentId: string): Promise<RazorpayPaymentResult> {
+  return executeGatewayCall(
+    async () => {
+      const razorpay = getRazorpayClient();
+      const payment = await razorpay.payments.fetch(paymentId);
+      return payment as unknown as RazorpayPaymentResult;
+    },
+    { isGet: true, operationName: 'Fetch Razorpay payment' },
+  );
 }

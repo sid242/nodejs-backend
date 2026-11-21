@@ -58,6 +58,7 @@ import {
 } from './entitlements.defaults';
 import { DEFAULT_PLAN_KEY, DEFAULT_PLANS } from './plans.defaults';
 import { razorpayGateway } from './providers/razorpay';
+import { calculateGstBreakdown } from './billing.tax';
 
 const CACHE_KEYS = {
   PUBLIC_PLANS: 'plans:public',
@@ -112,11 +113,8 @@ export async function onPlanChanged(
   oldPlanKey: string | null,
   newPlanKey: string,
 ): Promise<void> {
-  // Sync Tenant.plan denormalized column
-  await db
-    .update(tenants)
-    .set({ plan: newPlanKey, updatedAt: new Date() })
-    .where(eq(tenants.id, tenantId));
+  // Sync Tenant.plan denormalized column via repository
+  await tenantsRepo.updateTenant(tenantId, { plan: newPlanKey });
 
   // Invalidate all billing and resolution caches
   await invalidateTenantBillingCache(tenantId);
@@ -904,6 +902,22 @@ export async function processBillingWebhook(dto: BillingWebhookDto) {
             });
           }
         }
+      } else if (eventType === 'payment.authorized') {
+        const orderId = pEntity?.order_id ?? oEntity?.id;
+        const paymentId = pEntity?.id;
+        const localPayment = orderId
+          ? await billingRepo.findPaymentByOrderId(orderId)
+          : paymentId
+            ? await billingRepo.findPaymentByPaymentId(paymentId)
+            : null;
+
+        if (localPayment && localPayment.status === 'CREATED') {
+          await billingRepo.updatePayment(localPayment.id, {
+            status: 'AUTHORIZED',
+            providerPaymentId: paymentId ?? localPayment.providerPaymentId,
+            paymentMethod: pEntity?.method ?? localPayment.paymentMethod,
+          });
+        }
       } else if (eventType === 'payment.failed') {
         const orderId = pEntity?.order_id ?? oEntity?.id;
         const paymentId = pEntity?.id;
@@ -996,6 +1010,10 @@ export async function processBillingWebhook(dto: BillingWebhookDto) {
         const tenantId = sub?.tenantId ?? notes.tenantId;
 
         if (tenantId) {
+          logger.warn(
+            { tenantId, rzpSubId, eventType },
+            'Subscription halted or pending payment; dunning alert recorded',
+          );
           const activeSub = sub ?? (await billingRepo.findTenantSubscription(tenantId));
           if (activeSub) {
             await billingRepo.updateSubscription(activeSub.id, {
@@ -1019,6 +1037,27 @@ export async function processBillingWebhook(dto: BillingWebhookDto) {
             await invalidateTenantBillingCache(tenantId);
           }
         }
+      } else if (eventType === 'refund.created') {
+        const refundId = rEntity?.id;
+        const paymentId = rEntity?.payment_id;
+        if (refundId) {
+          const localRefund = await billingRepo.findRefundByProviderRefundId(refundId);
+          if (!localRefund && paymentId) {
+            const payment = await billingRepo.findPaymentByPaymentId(paymentId);
+            if (payment) {
+              await billingRepo.createRefund({
+                tenantId: payment.tenantId,
+                paymentId: payment.id,
+                provider: 'razorpay',
+                providerRefundId: refundId,
+                amountMinor: Number(rEntity?.amount ?? 0),
+                currency: rEntity?.currency ?? payment.currency,
+                status: 'INITIATED',
+                requestedBy: 'razorpay_webhook',
+              });
+            }
+          }
+        }
       } else if (eventType === 'refund.processed') {
         const refundId = rEntity?.id;
         if (refundId) {
@@ -1028,6 +1067,36 @@ export async function processBillingWebhook(dto: BillingWebhookDto) {
               status: 'PROCESSED',
               processedAt: new Date(),
             });
+          }
+        }
+      } else if (eventType === 'refund.failed') {
+        const refundId = rEntity?.id;
+        if (refundId) {
+          const localRefund = await billingRepo.findRefundByProviderRefundId(refundId);
+          if (localRefund) {
+            await billingRepo.updateRefund(localRefund.id, {
+              status: 'FAILED',
+            });
+            // Recalculate parent payment status based on remaining valid refunds
+            const allRefunds = await billingRepo.findRefundsByPaymentId(localRefund.paymentId);
+            const validRefundedSum = allRefunds
+              .filter(
+                (r) => r.id !== localRefund.id && ['INITIATED', 'PROCESSED'].includes(r.status),
+              )
+              .reduce((sum, r) => sum + r.amountMinor, 0);
+
+            const payment = await billingRepo.findPaymentById(localRefund.paymentId);
+            if (payment) {
+              let newStatus: 'PAID' | 'PARTIALLY_REFUNDED' | 'REFUNDED' = 'PAID';
+              if (validRefundedSum >= payment.amountMinor) {
+                newStatus = 'REFUNDED';
+              } else if (validRefundedSum > 0) {
+                newStatus = 'PARTIALLY_REFUNDED';
+              }
+              await billingRepo.updatePayment(payment.id, {
+                status: newStatus,
+              });
+            }
           }
         }
       }
@@ -1390,7 +1459,9 @@ export async function activatePaidOrder(
         .where(eq(payments.id, updatedPayment.id));
     }
 
-    // Auto-generate invoice
+    // Auto-generate invoice with GST breakdown
+    const gst = calculateGstBreakdown(payment.amountMinor, payment.currency, false);
+    const tenant = await tenantsRepo.findTenantById(payment.tenantId);
     const generatedInv = await billingRepo.generateInvoiceNumber(now.getFullYear(), tx);
     const [invoice] = await tx
       .insert(invoices)
@@ -1401,9 +1472,15 @@ export async function activatePaidOrder(
         invoiceNumber: generatedInv.invoiceNumber,
         invoiceYear: generatedInv.year,
         invoiceSeq: generatedInv.seq,
-        amountCents: payment.amountMinor,
-        taxCents: 0,
+        amountCents: gst.subtotalMinor,
+        taxCents: gst.taxMinor,
         totalCents: payment.amountMinor,
+        subtotalMinor: gst.subtotalMinor,
+        taxBreakdown: gst.taxBreakdown,
+        customerSnapshot: {
+          name: tenant?.name ?? 'Workspace',
+          email: tenant?.slug ? `${tenant.slug}@example.com` : '',
+        },
         currency: payment.currency,
         status: 'PAID',
         paidAt: now,
@@ -1413,8 +1490,8 @@ export async function activatePaidOrder(
           {
             description: `${plan.name} Plan (${isAnnual ? 'Annual' : 'Monthly'})`,
             quantity: 1,
-            unitPriceCents: payment.amountMinor,
-            totalCents: payment.amountMinor,
+            unitPriceCents: gst.subtotalMinor,
+            totalCents: gst.subtotalMinor,
           },
         ],
       })
@@ -1870,7 +1947,9 @@ export async function verifyTenantSubscriptionPayment(
       tx,
     );
 
-    // Auto-generate invoice
+    // Auto-generate invoice with GST breakdown
+    const gst = calculateGstBreakdown(rzpAmount, paidPayment.currency, false);
+    const tenant = await tenantsRepo.findTenantById(tenantId);
     const generatedInv = await billingRepo.generateInvoiceNumber(new Date().getFullYear(), tx);
     const [invoice] = await tx
       .insert(invoices)
@@ -1881,9 +1960,15 @@ export async function verifyTenantSubscriptionPayment(
         invoiceNumber: generatedInv.invoiceNumber,
         invoiceYear: generatedInv.year,
         invoiceSeq: generatedInv.seq,
-        amountCents: rzpAmount,
-        taxCents: 0,
+        amountCents: gst.subtotalMinor,
+        taxCents: gst.taxMinor,
         totalCents: rzpAmount,
+        subtotalMinor: gst.subtotalMinor,
+        taxBreakdown: gst.taxBreakdown,
+        customerSnapshot: {
+          name: tenant?.name ?? 'Workspace',
+          email: activeSub.billingEmail ?? (tenant?.slug ? `${tenant.slug}@example.com` : ''),
+        },
         currency: paidPayment.currency,
         status: 'PAID',
         paidAt: new Date(),
@@ -1893,8 +1978,8 @@ export async function verifyTenantSubscriptionPayment(
           {
             description: `${plan.name} Plan (${isAnnual ? 'Annual' : 'Monthly'})`,
             quantity: 1,
-            unitPriceCents: rzpAmount,
-            totalCents: rzpAmount,
+            unitPriceCents: gst.subtotalMinor,
+            totalCents: gst.subtotalMinor,
           },
         ],
       })
@@ -2013,51 +2098,138 @@ export async function issuePaymentRefund(
   dto: IssueRefundDto,
   requestId?: string,
 ) {
-  const payment = await billingRepo.findPaymentById(paymentId);
-  if (!payment) throw AppError.notFound('Payment not found');
+  // 1. Transaction with FOR UPDATE lock on the payment record
+  const { payment, localRefund, isFullRefund, refundAmount } = await db.transaction(async (tx) => {
+    const [lockedPayment] = await tx
+      .select()
+      .from(payments)
+      .where(eq(payments.id, paymentId))
+      .for('update')
+      .limit(1);
 
-  if (payment.status !== 'PAID') {
-    throw AppError.badRequest(`Cannot refund a payment with status "${payment.status}"`);
-  }
+    if (!lockedPayment) throw AppError.notFound('Payment not found');
 
-  if (!payment.providerPaymentId) {
-    throw AppError.badRequest('Payment does not have a gateway payment ID to refund');
-  }
+    if (lockedPayment.status !== 'PAID' && lockedPayment.status !== 'PARTIALLY_REFUNDED') {
+      throw AppError.badRequest(
+        `Cannot refund a payment with status "${lockedPayment.status}". Only PAID or PARTIALLY_REFUNDED payments can be refunded.`,
+      );
+    }
 
-  const refundAmount = dto.amountMinor ?? payment.amountMinor;
+    if (!lockedPayment.providerPaymentId) {
+      throw AppError.badRequest('Payment does not have a gateway payment ID to refund');
+    }
 
-  // 1. Call Razorpay Refund API
-  const rzpRefund = await razorpayGateway.createRazorpayRefund({
-    paymentId: payment.providerPaymentId,
-    amountMinor: refundAmount,
-    notes: {
-      reason: dto.reason,
-      refundedBy: actorStaffId,
-      paymentId: payment.id,
-    },
+    const requestedAmount = dto.amountMinor ?? lockedPayment.amountMinor;
+    if (requestedAmount <= 0) {
+      throw AppError.badRequest('Refund amount must be greater than 0');
+    }
+
+    // 2. Sum existing active/pending refunds for this payment
+    const existingRefunds = await billingRepo.findRefundsByPaymentId(lockedPayment.id, tx);
+    const existingRefundedSum = existingRefunds
+      .filter((r) => ['INITIATED', 'PROCESSED', 'PENDING'].includes(r.status))
+      .reduce((acc, r) => acc + r.amountMinor, 0);
+
+    const remainingRefundable = lockedPayment.amountMinor - existingRefundedSum;
+    if (requestedAmount > remainingRefundable) {
+      throw AppError.badRequest(
+        `Refund amount (${requestedAmount}) exceeds remaining refundable balance (${remainingRefundable})`,
+      );
+    }
+
+    // 3. Create local refund row with status PENDING first
+    const createdRefund = await billingRepo.createRefund(
+      {
+        tenantId: lockedPayment.tenantId,
+        paymentId: lockedPayment.id,
+        provider: 'razorpay',
+        amountMinor: requestedAmount,
+        currency: lockedPayment.currency,
+        status: 'PENDING',
+        reason: dto.reason,
+        requestedBy: actorStaffId,
+      },
+      tx,
+    );
+
+    const willBeFullRefund = existingRefundedSum + requestedAmount >= lockedPayment.amountMinor;
+
+    return {
+      payment: lockedPayment,
+      localRefund: createdRefund,
+      isFullRefund: willBeFullRefund,
+      refundAmount: requestedAmount,
+    };
   });
 
-  // 2. Persist local refund record
-  const localRefund = await billingRepo.createRefund({
-    tenantId: payment.tenantId,
-    paymentId: payment.id,
-    provider: 'razorpay',
+  // 4. Call payment gateway outside the row lock
+  const receipt = `rfnd_${localRefund.id.replace(/-/g, '').slice(0, 16)}`;
+  let rzpRefund: { id: string; status: string };
+  try {
+    rzpRefund = await razorpayGateway.createRazorpayRefund({
+      paymentId: payment.providerPaymentId!,
+      amountMinor: refundAmount,
+      receipt,
+      notes: {
+        reason: dto.reason,
+        refundedBy: actorStaffId,
+        paymentId: payment.id,
+        localRefundId: localRefund.id,
+      },
+    });
+  } catch (err: unknown) {
+    // Gateway failed: mark local refund as FAILED and rethrow
+    await billingRepo.updateRefund(localRefund.id, {
+      status: 'FAILED',
+    });
+    throw err;
+  }
+
+  // 5. Update local refund record with gateway details
+  const isProcessed = rzpRefund.status === 'processed';
+  const updatedRefund = await billingRepo.updateRefund(localRefund.id, {
     providerRefundId: rzpRefund.id,
-    amountMinor: refundAmount,
-    currency: payment.currency,
-    status: rzpRefund.status === 'processed' ? 'PROCESSED' : 'INITIATED',
-    reason: dto.reason,
-    requestedBy: actorStaffId,
-    processedAt: rzpRefund.status === 'processed' ? new Date() : undefined,
+    status: isProcessed ? 'PROCESSED' : 'INITIATED',
+    processedAt: isProcessed ? new Date() : undefined,
   });
 
-  // 3. Update payment status
-  const isFullRefund = refundAmount >= payment.amountMinor;
+  // 6. Update payment status based on total refunds
   await billingRepo.updatePayment(payment.id, {
     status: isFullRefund ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
   });
 
-  // 4. Operator audit log
+  // 7. Policy on full refund: downgrade workspace to FREE plan and log downgrade
+  if (isFullRefund) {
+    const freePlan = await billingRepo.findPlanByKey(DEFAULT_PLAN_KEY);
+    const sub = await billingRepo.findTenantSubscription(payment.tenantId);
+    if (freePlan && sub && sub.planId !== freePlan.id) {
+      const oldPlan = await billingRepo.findPlanById(sub.planId);
+      await billingRepo.updateSubscription(sub.id, {
+        planId: freePlan.id,
+        status: 'ACTIVE',
+        cancelAtPeriodEnd: false,
+      });
+      await onPlanChanged(payment.tenantId, oldPlan?.key ?? null, freePlan.key);
+      await invalidateTenantBillingCache(payment.tenantId);
+    }
+
+    await platformRepo.logPlatformAction({
+      actorStaffId,
+      action: 'payment.full_refund_downgrade',
+      targetType: 'tenant',
+      targetId: payment.tenantId,
+      tenantId: payment.tenantId,
+      metadata: {
+        paymentId: payment.id,
+        refundId: localRefund.id,
+        amountMinor: refundAmount,
+        downgradedTo: DEFAULT_PLAN_KEY,
+      },
+      requestId,
+    });
+  }
+
+  // 8. Operator audit log for the refund
   await platformRepo.logPlatformAction({
     actorStaffId,
     action: 'payment.refunded',
@@ -2069,11 +2241,12 @@ export async function issuePaymentRefund(
       amountMinor: refundAmount,
       reason: dto.reason,
       providerRefundId: rzpRefund.id,
+      isFullRefund,
     },
     requestId,
   });
 
-  return localRefund;
+  return updatedRefund ?? localRefund;
 }
 
 export async function overrideTenantEntitlements(

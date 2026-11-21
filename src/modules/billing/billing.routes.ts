@@ -26,7 +26,7 @@ router.post(
 // 2. Platform Staff Plans Catalog
 // ==========================================
 router.get(
-  ['/platform', '/platform/plans'],
+  '/platform/plans',
   requirePlatformAuth,
   requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_READ),
   validate({ query: dto.listPlansQueryDto }),
@@ -34,7 +34,7 @@ router.get(
 );
 
 router.post(
-  ['/platform', '/platform/plans'],
+  '/platform/plans',
   requirePlatformAuth,
   requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_MANAGE),
   validate({ body: dto.createPlanDto }),
@@ -42,7 +42,7 @@ router.post(
 );
 
 router.patch(
-  ['/platform/:id', '/platform/plans/:id'],
+  '/platform/plans/:id',
   requirePlatformAuth,
   requirePlatformPermission(PLATFORM_PERMISSIONS.BILLING_MANAGE),
   validate({ params: dto.planIdParamDto, body: dto.updatePlanDto }),

@@ -1,7 +1,7 @@
 import { logger } from '@/config/logger';
 import { AppError } from '@/lib/errors';
 
-import { getRazorpayClient } from './razorpay.client';
+import { executeGatewayCall, getRazorpayClient } from './razorpay.client';
 
 export interface CreateSubscriptionPlanParams {
   period: 'daily' | 'weekly' | 'monthly' | 'yearly';
@@ -49,30 +49,25 @@ export interface RazorpaySubscriptionResult {
 export async function createRazorpayPlan(
   params: CreateSubscriptionPlanParams,
 ): Promise<{ id: string; name: string; amount: number; currency: string }> {
-  const razorpay = getRazorpayClient();
+  return executeGatewayCall(
+    async () => {
+      const razorpay = getRazorpayClient();
+      const plan = await razorpay.plans.create({
+        period: params.period,
+        interval: params.interval,
+        item: {
+          name: params.name,
+          amount: params.amountMinor,
+          currency: params.currency,
+          description: params.description,
+        },
+        notes: params.notes ?? {},
+      });
 
-  try {
-    const plan = await razorpay.plans.create({
-      period: params.period,
-      interval: params.interval,
-      item: {
-        name: params.name,
-        amount: params.amountMinor,
-        currency: params.currency,
-        description: params.description,
-      },
-      notes: params.notes ?? {},
-    });
-
-    return plan as any;
-  } catch (error: any) {
-    logger.error({ error, params }, 'Failed to create Razorpay plan');
-    throw AppError.badRequest(
-      error?.error?.description ??
-        error?.message ??
-        'Failed to initialize subscription plan with payment gateway',
-    );
-  }
+      return plan as unknown as { id: string; name: string; amount: number; currency: string };
+    },
+    { operationName: 'Create Razorpay plan' },
+  );
 }
 
 /**
@@ -81,30 +76,22 @@ export async function createRazorpayPlan(
 export async function createRazorpaySubscription(
   params: CreateSubscriptionParams,
 ): Promise<RazorpaySubscriptionResult> {
-  const razorpay = getRazorpayClient();
+  return executeGatewayCall(
+    async () => {
+      const razorpay = getRazorpayClient();
+      const subscription = await razorpay.subscriptions.create({
+        plan_id: params.planId,
+        total_count: params.totalCount,
+        quantity: params.quantity ?? 1,
+        customer_notify: params.customerNotify ?? 1,
+        start_at: params.startAt,
+        notes: params.notes ?? {},
+      });
 
-  try {
-    const subscription = await razorpay.subscriptions.create({
-      plan_id: params.planId,
-      total_count: params.totalCount,
-      quantity: params.quantity ?? 1,
-      customer_notify: params.customerNotify ?? 1,
-      start_at: params.startAt,
-      notes: params.notes ?? {},
-    });
-
-    return subscription as unknown as RazorpaySubscriptionResult;
-  } catch (error: any) {
-    logger.error(
-      { error, params: { ...params, notes: undefined } },
-      'Failed to create Razorpay subscription',
-    );
-    throw AppError.badRequest(
-      error?.error?.description ??
-        error?.message ??
-        'Failed to initialize subscription with payment gateway',
-    );
-  }
+      return subscription as unknown as RazorpaySubscriptionResult;
+    },
+    { operationName: 'Create Razorpay subscription' },
+  );
 }
 
 /**
@@ -113,39 +100,73 @@ export async function createRazorpaySubscription(
 export async function fetchRazorpaySubscription(
   subscriptionId: string,
 ): Promise<RazorpaySubscriptionResult> {
-  const razorpay = getRazorpayClient();
-
-  try {
-    const subscription = await razorpay.subscriptions.fetch(subscriptionId);
-    return subscription as unknown as RazorpaySubscriptionResult;
-  } catch (error: any) {
-    logger.error({ error, subscriptionId }, 'Failed to fetch Razorpay subscription');
-    throw AppError.notFound('Subscription not found in payment gateway');
-  }
+  return executeGatewayCall(
+    async () => {
+      const razorpay = getRazorpayClient();
+      const subscription = await razorpay.subscriptions.fetch(subscriptionId);
+      return subscription as unknown as RazorpaySubscriptionResult;
+    },
+    { isGet: true, operationName: 'Fetch Razorpay subscription' },
+  );
 }
 
 /**
  * Cancels a subscription in Razorpay.
  * cancelAtCycleEnd: false = cancel immediately; true = cancel at current period end.
+ * Redundant cancellation requests ("already cancelled") are treated as idempotent success.
  */
 export async function cancelRazorpaySubscription(
   subscriptionId: string,
   cancelAtCycleEnd = false,
 ): Promise<RazorpaySubscriptionResult> {
-  const razorpay = getRazorpayClient();
-
   try {
-    const result = await razorpay.subscriptions.cancel(subscriptionId, cancelAtCycleEnd);
-    return result as unknown as RazorpaySubscriptionResult;
-  } catch (error: any) {
-    logger.error(
-      { error, subscriptionId, cancelAtCycleEnd },
-      'Failed to cancel Razorpay subscription',
+    return await executeGatewayCall(
+      async () => {
+        const razorpay = getRazorpayClient();
+        const result = await razorpay.subscriptions.cancel(subscriptionId, cancelAtCycleEnd);
+        return result as unknown as RazorpaySubscriptionResult;
+      },
+      { operationName: 'Cancel Razorpay subscription' },
     );
-    throw AppError.badRequest(
-      error?.error?.description ??
-        error?.message ??
-        'Failed to cancel subscription in payment gateway',
-    );
+  } catch (error: unknown) {
+    let msg = '';
+    if (error instanceof AppError && error.details) {
+      msg = String((error.details as Record<string, unknown>).originalError ?? '');
+    } else if (error && typeof error === 'object') {
+      const rec = error as Record<string, unknown>;
+      msg = String(rec.message ?? '');
+      if (rec.error && typeof rec.error === 'object') {
+        msg += ' ' + String((rec.error as Record<string, unknown>).description ?? '');
+      }
+    }
+    const lowerMsg = msg.toLowerCase();
+    if (
+      lowerMsg.includes('already cancelled') ||
+      lowerMsg.includes('already canceled') ||
+      lowerMsg.includes('in cancelled state') ||
+      lowerMsg.includes('in canceled state')
+    ) {
+      logger.info({ subscriptionId }, 'Razorpay subscription already cancelled, treating as success');
+      return {
+        id: subscriptionId,
+        entity: 'subscription',
+        plan_id: '',
+        status: 'cancelled',
+        current_start: null,
+        current_end: null,
+        ended_at: Math.floor(Date.now() / 1000),
+        quantity: 1,
+        notes: {},
+        charge_at: null,
+        start_at: null,
+        end_at: null,
+        auth_attempts: 0,
+        total_count: 0,
+        paid_count: 0,
+        customer_notify: false,
+        created_at: Math.floor(Date.now() / 1000),
+      };
+    }
+    throw error;
   }
 }

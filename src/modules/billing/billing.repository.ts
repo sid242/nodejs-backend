@@ -1167,21 +1167,25 @@ export async function listPaymentsForPlatform(
 // 8. Refunds Repository Operations
 // ==========================================
 
-export async function createRefund(data: NewRefund): Promise<Refund> {
-  const [record] = await db.insert(refunds).values(data).returning();
+export async function createRefund(data: NewRefund, tx?: any): Promise<Refund> {
+  const client = tx ?? db;
+  const [record] = await client.insert(refunds).values(data).returning();
   if (!record) throw new Error('Failed to create refund record');
   return record;
 }
 
-export async function findRefundById(id: string): Promise<Refund | null> {
-  const [record] = await db.select().from(refunds).where(eq(refunds.id, id)).limit(1);
+export async function findRefundById(id: string, tx?: any): Promise<Refund | null> {
+  const client = tx ?? db;
+  const [record] = await client.select().from(refunds).where(eq(refunds.id, id)).limit(1);
   return record ?? null;
 }
 
 export async function findRefundByProviderRefundId(
   providerRefundId: string,
+  tx?: any,
 ): Promise<Refund | null> {
-  const [record] = await db
+  const client = tx ?? db;
+  const [record] = await client
     .select()
     .from(refunds)
     .where(eq(refunds.providerRefundId, providerRefundId))
@@ -1189,24 +1193,31 @@ export async function findRefundByProviderRefundId(
   return record ?? null;
 }
 
-export async function findRefundsByPaymentId(paymentId: string): Promise<Refund[]> {
-  return db
+export async function findRefundsByPaymentId(paymentId: string, tx?: any): Promise<Refund[]> {
+  const client = tx ?? db;
+  return client
     .select()
     .from(refunds)
     .where(eq(refunds.paymentId, paymentId))
     .orderBy(desc(refunds.createdAt));
 }
 
-export async function findRefundsByTenantId(tenantId: string): Promise<Refund[]> {
-  return db
+export async function findRefundsByTenantId(tenantId: string, tx?: any): Promise<Refund[]> {
+  const client = tx ?? db;
+  return client
     .select()
     .from(refunds)
     .where(eq(refunds.tenantId, tenantId))
     .orderBy(desc(refunds.createdAt));
 }
 
-export async function updateRefund(id: string, data: Partial<NewRefund>): Promise<Refund | null> {
-  const [record] = await db
+export async function updateRefund(
+  id: string,
+  data: Partial<NewRefund>,
+  tx?: any,
+): Promise<Refund | null> {
+  const client = tx ?? db;
+  const [record] = await client
     .update(refunds)
     .set({ ...data, updatedAt: new Date() })
     .where(eq(refunds.id, id))
