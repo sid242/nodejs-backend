@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, lte, or, sql } from 'drizzle-orm';
 
 import { primaryDbHandle } from '@/db/tenancy/context';
 import {
@@ -22,7 +22,7 @@ export async function findActiveAnnouncements(): Promise<Announcement[]> {
       and(
         eq(announcements.status, 'LIVE'),
         lte(announcements.startsAt, now),
-        or(isNull(announcements.endsAt), sql`${announcements.endsAt} >= ${now}`),
+        or(isNull(announcements.endsAt), gte(announcements.endsAt, now)),
       ),
     )
     .orderBy(desc(announcements.startsAt));
