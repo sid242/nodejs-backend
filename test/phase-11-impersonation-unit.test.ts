@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
-import { eq, inArray } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import { closeDb, db } from '../src/config/db';
 import { closeRedisClients } from '../src/config/redis';
@@ -19,13 +19,8 @@ import {
   users,
 } from '../src/db/schema/index';
 import { AppError } from '../src/lib/errors';
-import {
-  auditSupportActions,
-  requireSupportOrUser,
-} from '../src/middleware/support';
-import {
-  issueSupportToken,
-} from '../src/modules/auth/tokens';
+import { auditSupportActions, requireSupportOrUser } from '../src/middleware/support';
+import { issueSupportToken } from '../src/modules/auth/tokens';
 import { PLATFORM_PERMISSIONS } from '../src/modules/platform/platform.permissions';
 import * as platformRepo from '../src/modules/platform/platform.repository';
 import * as platformService from '../src/modules/platform/platform.service';
@@ -46,33 +41,7 @@ let superAdminRoleId: string;
 let supportAgentRoleId: string;
 
 after(async () => {
-  // Cleanup test entities
-  if (testTenantId) {
-    await db.delete(platformSupportSessions).where(eq(platformSupportSessions.tenantId, testTenantId));
-    await db.delete(auditLogs).where(eq(auditLogs.tenantId, testTenantId));
-    const memberIds = [targetMemberId, ownerMemberId, inactiveMemberId].filter(Boolean);
-    if (memberIds.length > 0) {
-      await db.delete(tenantMemberRoles).where(inArray(tenantMemberRoles.memberId, memberIds));
-    }
-    await db.delete(tenantMembers).where(eq(tenantMembers.tenantId, testTenantId));
-    await db.delete(roles).where(eq(roles.tenantId, testTenantId));
-    await db.delete(tenants).where(eq(tenants.id, testTenantId));
-  }
-  if (regularStaffId) {
-    await db.delete(platformStaff).where(eq(platformStaff.id, regularStaffId));
-  }
-  if (superAdminStaffId) {
-    await db.delete(platformStaff).where(eq(platformStaff.id, superAdminStaffId));
-  }
-  if (supportAgentRoleId) {
-    await db.delete(platformRolePermissions).where(eq(platformRolePermissions.roleId, supportAgentRoleId));
-    await db.delete(platformRoles).where(eq(platformRoles.id, supportAgentRoleId));
-  }
-  const userIds = [targetUserId, ownerUserId, inactiveUserId].filter(Boolean);
-  if (userIds.length > 0) {
-    await db.delete(users).where(inArray(users.id, userIds));
-  }
-
+  // The disposable test database owns these fixtures and their immutable audit history.
   await Promise.allSettled([closeRedisClients(), closeDb()]);
   setTimeout(() => process.exit(0), 300).unref();
 });
@@ -227,12 +196,10 @@ before(async () => {
   assert.ok(ownerMem);
   ownerMemberId = ownerMem.id;
 
-  await db
-    .insert(tenantMemberRoles)
-    .values({
-      memberId: ownerMemberId,
-      roleId: ownerRole.id,
-    });
+  await db.insert(tenantMemberRoles).values({
+    memberId: ownerMemberId,
+    roleId: ownerRole.id,
+  });
 
   // 8. Create active member user & membership
   const [target] = await db
@@ -259,12 +226,10 @@ before(async () => {
   assert.ok(targetMem);
   targetMemberId = targetMem.id;
 
-  await db
-    .insert(tenantMemberRoles)
-    .values({
-      memberId: targetMemberId,
-      roleId: memberRole.id,
-    });
+  await db.insert(tenantMemberRoles).values({
+    memberId: targetMemberId,
+    roleId: memberRole.id,
+  });
 
   // 9. Create suspended/inactive member user & membership
   const [inactive] = await db
@@ -291,16 +256,14 @@ before(async () => {
   assert.ok(inactiveMem);
   inactiveMemberId = inactiveMem.id;
 
-  await db
-    .insert(tenantMemberRoles)
-    .values({
-      memberId: inactiveMemberId,
-      roleId: memberRole.id,
-    });
+  await db.insert(tenantMemberRoles).values({
+    memberId: inactiveMemberId,
+    roleId: memberRole.id,
+  });
 });
 
 // Test 1: Unauthorized staff cannot start privileged support session
-test('Test 1: Staff without tenant_support::write cannot start FULL scope support session', async () => {
+test('Test 1: Staff without tenant_support:write cannot start FULL scope support session', async () => {
   await assert.rejects(
     async () => {
       await platformService.startSupportSession(regularStaffId, testTenantId, {
@@ -314,13 +277,13 @@ test('Test 1: Staff without tenant_support::write cannot start FULL scope suppor
     (err: any) => {
       assert.ok(err instanceof AppError);
       assert.equal(err.status, 403);
-      assert.match(err.message, /Requires tenant_support::write permission/i);
+      assert.match(err.message, /Requires tenant_support:write permission/i);
       return true;
     },
   );
 });
 
-test('Test 1b: Staff without tenant_support::impersonate cannot start AS_MEMBER support session', async () => {
+test('Test 1b: Staff without tenant_support:impersonate cannot start AS_MEMBER support session', async () => {
   await assert.rejects(
     async () => {
       await platformService.startSupportSession(regularStaffId, testTenantId, {
@@ -335,7 +298,7 @@ test('Test 1b: Staff without tenant_support::impersonate cannot start AS_MEMBER 
     (err: any) => {
       assert.ok(err instanceof AppError);
       assert.equal(err.status, 403);
-      assert.match(err.message, /Requires tenant_support::impersonate permission/i);
+      assert.match(err.message, /Requires tenant_support:impersonate permission/i);
       return true;
     },
   );
@@ -425,7 +388,10 @@ test('Test 3: Non-SuperAdmin cannot target workspace Owner with AS_MEMBER impers
     (err: any) => {
       assert.ok(err instanceof AppError);
       assert.equal(err.status, 403);
-      assert.match(err.message, /Only Super Admin may initiate a support session targeting a workspace Owner/i);
+      assert.match(
+        err.message,
+        /Only Super Admin may initiate a support session targeting a workspace Owner/i,
+      );
       return true;
     },
   );
@@ -562,18 +528,14 @@ test('Test 6: Expired support session is automatically marked EXPIRED and reject
 
 // Test 7: Terminated session immediately denies subsequent requests
 test('Test 7: Terminated session immediately denies subsequent requests', async () => {
-  const activeSession = await platformService.startSupportSession(
-    superAdminStaffId,
-    testTenantId,
-    {
-      mode: 'TENANT_SCOPED',
-      scope: 'READ_ONLY',
-      reason: 'Standard maintenance inspection',
-      ticketRef: 'TICKET-10492',
-      durationMinutes: 30,
-      acknowledgement: true,
-    },
-  );
+  const activeSession = await platformService.startSupportSession(superAdminStaffId, testTenantId, {
+    mode: 'TENANT_SCOPED',
+    scope: 'READ_ONLY',
+    reason: 'Standard maintenance inspection',
+    ticketRef: 'TICKET-10492',
+    durationMinutes: 30,
+    acknowledgement: true,
+  });
 
   // Enter session to obtain token
   const enterResult = await platformService.enterSupportSession(
@@ -592,10 +554,7 @@ test('Test 7: Terminated session immediately denies subsequent requests', async 
   // Verify enter fails now
   await assert.rejects(
     async () => {
-      await platformService.enterSupportSession(
-        superAdminStaffId,
-        activeSession.sessionId,
-      );
+      await platformService.enterSupportSession(superAdminStaffId, activeSession.sessionId);
     },
     (err: any) => {
       assert.ok(err instanceof AppError);
@@ -623,19 +582,15 @@ test('Test 7: Terminated session immediately denies subsequent requests', async 
 // Test 8: Audit dual-actor attribution preserves staff actor, target user, and source: IMPERSONATION
 test('Test 8: Audit dual-actor attribution preserves actorStaffId, targetUserId, and source: IMPERSONATION', async () => {
   // Start an AS_MEMBER session targeting targetUserId
-  const session = await platformService.startSupportSession(
-    superAdminStaffId,
-    testTenantId,
-    {
-      mode: 'AS_MEMBER',
-      scope: 'FULL',
-      targetUserId,
-      reason: 'Diagnose user permissions issue',
-      ticketRef: 'TICKET-7731',
-      durationMinutes: 45,
-      acknowledgement: true,
-    },
-  );
+  const session = await platformService.startSupportSession(superAdminStaffId, testTenantId, {
+    mode: 'AS_MEMBER',
+    scope: 'FULL',
+    targetUserId,
+    reason: 'Diagnose user permissions issue',
+    ticketRef: 'TICKET-7731',
+    durationMinutes: 45,
+    acknowledgement: true,
+  });
 
   // Simulate a mutating HTTP request going through auditSupportActions middleware
   const finishCallbacks: Array<() => Promise<void> | void> = [];

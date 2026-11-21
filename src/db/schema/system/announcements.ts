@@ -1,9 +1,23 @@
-import { boolean, index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
-import { announcementAudienceEnum, announcementSeverityEnum, announcementStatusEnum } from '../enums';
-import { platformStaff } from '../platform/platform-staff';
+import {
+  announcementAudienceEnum,
+  announcementSeverityEnum,
+  announcementStatusEnum,
+} from '../enums';
 import { users } from '../identity/users';
+import { platformStaff } from '../platform/platform-staff';
 
+// scope: primary
 export const announcements = pgTable(
   'Announcement',
   {
@@ -36,6 +50,7 @@ export const announcements = pgTable(
 export type Announcement = typeof announcements.$inferSelect;
 export type NewAnnouncement = typeof announcements.$inferInsert;
 
+// scope: primary
 export const announcementDismissals = pgTable(
   'AnnouncementDismissal',
   {
@@ -49,7 +64,10 @@ export const announcementDismissals = pgTable(
     dismissedAt: timestamp('dismissedAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex('AnnouncementDismissal_announcement_user_idx').on(table.announcementId, table.userId),
+    uniqueIndex('AnnouncementDismissal_announcement_user_idx').on(
+      table.announcementId,
+      table.userId,
+    ),
     index('AnnouncementDismissal_userId_idx').on(table.userId),
   ],
 );
@@ -57,6 +75,7 @@ export const announcementDismissals = pgTable(
 export type AnnouncementDismissal = typeof announcementDismissals.$inferSelect;
 export type NewAnnouncementDismissal = typeof announcementDismissals.$inferInsert;
 
+// scope: primary
 export const changelogEntries = pgTable(
   'ChangelogEntry',
   {

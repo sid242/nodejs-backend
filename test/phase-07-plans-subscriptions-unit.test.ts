@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, beforeEach, describe, it } from 'node:test';
 
 import { closeDb } from '@/config/db';
@@ -200,24 +201,26 @@ describe('Phase 07: Plans, Entitlements and Subscriptions Unit Tests', () => {
       const origFindPlanEnts = billingRepo.findPlanEntitlements;
       const origFindOverrides = billingRepo.findTenantEntitlementOverrides;
 
-      billingRepo.findTenantSubscriptionWithPlan = async () => ({
-        id: 'sub-1',
-        tenantId: testTenantId,
-        planId: mockPlanId,
-        status: 'ACTIVE',
-        seatCount: 5,
-        plan: {
-          id: mockPlanId,
-          key: 'PRO',
-          name: 'Pro Tier',
-          limits: { maxMembers: 25, maxStorageBytes: 20 * 1024 * 1024 * 1024, maxCustomRoles: 5 },
-          modules: ['files', 'rbac', 'billing', 'groups'],
-          entitlements: DEFAULT_PLAN_ENTITLEMENT_VALUES['PRO'],
-        },
-      } as any);
+      billingRepo.findTenantSubscriptionWithPlan = async () =>
+        ({
+          id: 'sub-1',
+          tenantId: testTenantId,
+          planId: mockPlanId,
+          status: 'ACTIVE',
+          seatCount: 5,
+          plan: {
+            id: mockPlanId,
+            key: 'PRO',
+            name: 'Pro Tier',
+            limits: { maxMembers: 25, maxStorageBytes: 20 * 1024 * 1024 * 1024, maxCustomRoles: 5 },
+            modules: ['files', 'rbac', 'billing', 'groups'],
+            entitlements: DEFAULT_PLAN_ENTITLEMENT_VALUES['PRO'],
+          },
+        }) as any;
 
       billingRepo.findEntitlementDefinitions = async () => DEFAULT_ENTITLEMENT_DEFINITIONS as any;
-      billingRepo.findPlanEntitlements = async () => (DEFAULT_PLAN_ENTITLEMENT_VALUES['PRO'] ?? {}) as any;
+      billingRepo.findPlanEntitlements = async () =>
+        (DEFAULT_PLAN_ENTITLEMENT_VALUES['PRO'] ?? {}) as any;
       billingRepo.findTenantEntitlementOverrides = async () => [];
 
       try {
@@ -247,44 +250,47 @@ describe('Phase 07: Plans, Entitlements and Subscriptions Unit Tests', () => {
       const origFindPlanEnts = billingRepo.findPlanEntitlements;
       const origFindOverrides = billingRepo.findTenantEntitlementOverrides;
 
-      billingRepo.findTenantSubscriptionWithPlan = async () => ({
-        id: 'sub-1',
-        tenantId: testTenantId,
-        planId: mockPlanId,
-        status: 'ACTIVE',
-        seatCount: 5,
-        plan: {
-          id: mockPlanId,
-          key: 'FREE',
-          name: 'Free Tier',
-          limits: { maxMembers: 5, maxStorageBytes: 1024 * 1024 * 1024, maxCustomRoles: 0 },
-          modules: ['files', 'rbac'],
-          entitlements: DEFAULT_PLAN_ENTITLEMENT_VALUES['FREE'],
-        },
-      } as any);
+      billingRepo.findTenantSubscriptionWithPlan = async () =>
+        ({
+          id: 'sub-1',
+          tenantId: testTenantId,
+          planId: mockPlanId,
+          status: 'ACTIVE',
+          seatCount: 5,
+          plan: {
+            id: mockPlanId,
+            key: 'FREE',
+            name: 'Free Tier',
+            limits: { maxMembers: 5, maxStorageBytes: 1024 * 1024 * 1024, maxCustomRoles: 0 },
+            modules: ['files', 'rbac'],
+            entitlements: DEFAULT_PLAN_ENTITLEMENT_VALUES['FREE'],
+          },
+        }) as any;
 
       billingRepo.findEntitlementDefinitions = async () => DEFAULT_ENTITLEMENT_DEFINITIONS as any;
-      billingRepo.findPlanEntitlements = async () => (DEFAULT_PLAN_ENTITLEMENT_VALUES['FREE'] ?? {}) as any;
-      billingRepo.findTenantEntitlementOverrides = async () => [
-        {
-          id: 'ov-1',
-          tenantId: testTenantId,
-          entitlementKey: 'members.max',
-          value: 100,
-          expiresAt: new Date(Date.now() + 86400000 * 30),
-          reason: 'VIP partner override',
-          createdBy: mockStaffId,
-        },
-        {
-          id: 'ov-2',
-          tenantId: testTenantId,
-          entitlementKey: 'groups.enabled',
-          value: true,
-          expiresAt: null,
-          reason: 'Beta feature flag override',
-          createdBy: mockStaffId,
-        },
-      ] as any;
+      billingRepo.findPlanEntitlements = async () =>
+        (DEFAULT_PLAN_ENTITLEMENT_VALUES['FREE'] ?? {}) as any;
+      billingRepo.findTenantEntitlementOverrides = async () =>
+        [
+          {
+            id: 'ov-1',
+            tenantId: testTenantId,
+            entitlementKey: 'members.max',
+            value: 100,
+            expiresAt: new Date(Date.now() + 86400000 * 30),
+            reason: 'VIP partner override',
+            createdBy: mockStaffId,
+          },
+          {
+            id: 'ov-2',
+            tenantId: testTenantId,
+            entitlementKey: 'groups.enabled',
+            value: true,
+            expiresAt: null,
+            reason: 'Beta feature flag override',
+            createdBy: mockStaffId,
+          },
+        ] as any;
 
       try {
         const result = await billingService.getTenantEntitlements(testTenantId);
@@ -320,24 +326,25 @@ describe('Phase 07: Plans, Entitlements and Subscriptions Unit Tests', () => {
       const origFindOverrides = billingRepo.findTenantEntitlementOverrides;
       const origGetUsage = billingRepo.getTenantUsage;
 
-      billingRepo.findTenantSubscriptionWithPlan = async () => ({
-        id: 'sub-quota-1',
-        tenantId: testTenantId,
-        planId: mockPlanId,
-        status: 'ACTIVE',
-        seatCount: 1,
-        plan: {
-          id: mockPlanId,
-          key: 'PRO',
-          name: 'Pro',
-          limits: { maxMembers: 25, maxStorageBytes: 20 * 1024 * 1024 * 1024, maxCustomRoles: 5 },
-          modules: ['files'],
-          entitlements: {
-            'members.max': 10,
-            'groups.enabled': true,
+      billingRepo.findTenantSubscriptionWithPlan = async () =>
+        ({
+          id: 'sub-quota-1',
+          tenantId: testTenantId,
+          planId: mockPlanId,
+          status: 'ACTIVE',
+          seatCount: 1,
+          plan: {
+            id: mockPlanId,
+            key: 'PRO',
+            name: 'Pro',
+            limits: { maxMembers: 25, maxStorageBytes: 20 * 1024 * 1024 * 1024, maxCustomRoles: 5 },
+            modules: ['files'],
+            entitlements: {
+              'members.max': 10,
+              'groups.enabled': true,
+            },
           },
-        },
-      } as any);
+        }) as any;
 
       billingRepo.findEntitlementDefinitions = async () => DEFAULT_ENTITLEMENT_DEFINITIONS as any;
       billingRepo.findPlanEntitlements = async () => ({
@@ -381,21 +388,22 @@ describe('Phase 07: Plans, Entitlements and Subscriptions Unit Tests', () => {
       const origFindOverrides = billingRepo.findTenantEntitlementOverrides;
       const origGetUsage = billingRepo.getTenantUsage;
 
-      billingRepo.findTenantSubscriptionWithPlan = async () => ({
-        id: 'sub-quota-2',
-        tenantId: testTenantId,
-        planId: mockPlanId,
-        status: 'ACTIVE',
-        seatCount: 1,
-        plan: {
-          id: mockPlanId,
-          key: 'FREE',
-          name: 'Free',
-          limits: { maxMembers: 5, maxStorageBytes: 1024 * 1024 * 1024, maxCustomRoles: 0 },
-          modules: ['files'],
-          entitlements: { 'members.max': 5 },
-        },
-      } as any);
+      billingRepo.findTenantSubscriptionWithPlan = async () =>
+        ({
+          id: 'sub-quota-2',
+          tenantId: testTenantId,
+          planId: mockPlanId,
+          status: 'ACTIVE',
+          seatCount: 1,
+          plan: {
+            id: mockPlanId,
+            key: 'FREE',
+            name: 'Free',
+            limits: { maxMembers: 5, maxStorageBytes: 1024 * 1024 * 1024, maxCustomRoles: 0 },
+            modules: ['files'],
+            entitlements: { 'members.max': 5 },
+          },
+        }) as any;
 
       billingRepo.findEntitlementDefinitions = async () => DEFAULT_ENTITLEMENT_DEFINITIONS as any;
       billingRepo.findPlanEntitlements = async () => ({ 'members.max': 5 });
@@ -440,21 +448,22 @@ describe('Phase 07: Plans, Entitlements and Subscriptions Unit Tests', () => {
       const origFindPlanEnts = billingRepo.findPlanEntitlements;
       const origFindOverrides = billingRepo.findTenantEntitlementOverrides;
 
-      billingRepo.findTenantSubscriptionWithPlan = async () => ({
-        id: 'sub-quota-3',
-        tenantId: testTenantId,
-        planId: mockPlanId,
-        status: 'ACTIVE',
-        seatCount: 1,
-        plan: {
-          id: mockPlanId,
-          key: 'FREE',
-          name: 'Free',
-          limits: { maxMembers: 5, maxStorageBytes: 1024 * 1024 * 1024, maxCustomRoles: 0 },
-          modules: ['files'],
-          entitlements: { 'groups.enabled': false },
-        },
-      } as any);
+      billingRepo.findTenantSubscriptionWithPlan = async () =>
+        ({
+          id: 'sub-quota-3',
+          tenantId: testTenantId,
+          planId: mockPlanId,
+          status: 'ACTIVE',
+          seatCount: 1,
+          plan: {
+            id: mockPlanId,
+            key: 'FREE',
+            name: 'Free',
+            limits: { maxMembers: 5, maxStorageBytes: 1024 * 1024 * 1024, maxCustomRoles: 0 },
+            modules: ['files'],
+            entitlements: { 'groups.enabled': false },
+          },
+        }) as any;
 
       billingRepo.findEntitlementDefinitions = async () => DEFAULT_ENTITLEMENT_DEFINITIONS as any;
       billingRepo.findPlanEntitlements = async () => ({ 'groups.enabled': false });
@@ -491,25 +500,26 @@ describe('Phase 07: Plans, Entitlements and Subscriptions Unit Tests', () => {
       const origFindOverrides = billingRepo.findTenantEntitlementOverrides;
       const origGetUsage = billingRepo.getTenantUsage;
 
-      billingRepo.findTenantSubscriptionWithPlan = async () => ({
-        id: 'sub-quota-4',
-        tenantId: testTenantId,
-        planId: mockPlanId,
-        status: 'ACTIVE',
-        seatCount: 1,
-        plan: {
-          id: mockPlanId,
-          key: 'PRO',
-          name: 'Pro',
-          limits: { maxMembers: 25, maxStorageBytes: 20 * 1024 * 1024 * 1024, maxCustomRoles: 5 },
-          modules: ['files'],
-          entitlements: {
-            'members.max': 25,
-            'storage.gb': 20,
-            'custom_roles.max': 5,
+      billingRepo.findTenantSubscriptionWithPlan = async () =>
+        ({
+          id: 'sub-quota-4',
+          tenantId: testTenantId,
+          planId: mockPlanId,
+          status: 'ACTIVE',
+          seatCount: 1,
+          plan: {
+            id: mockPlanId,
+            key: 'PRO',
+            name: 'Pro',
+            limits: { maxMembers: 25, maxStorageBytes: 20 * 1024 * 1024 * 1024, maxCustomRoles: 5 },
+            modules: ['files'],
+            entitlements: {
+              'members.max': 25,
+              'storage.gb': 20,
+              'custom_roles.max': 5,
+            },
           },
-        },
-      } as any);
+        }) as any;
 
       billingRepo.findEntitlementDefinitions = async () => DEFAULT_ENTITLEMENT_DEFINITIONS as any;
       billingRepo.findPlanEntitlements = async () => ({
@@ -564,16 +574,17 @@ describe('Phase 07: Plans, Entitlements and Subscriptions Unit Tests', () => {
       });
 
       try {
+        const eventId = randomUUID();
         const result = await billingService.processBillingWebhook({
           provider: 'stripe',
-          eventId: 'evt_new_unique_101',
+          eventId,
           eventType: 'customer.subscription.updated',
           payload: { tenantId: mockTenantId, planKey: 'PRO' },
         });
 
         assert.equal(result.status, 'PROCESSED');
         assert.equal(result.idempotent, false);
-        assert.equal(result.record?.eventId, 'evt_new_unique_101');
+        assert.equal(result.record?.eventId, eventId);
       } finally {
         billingRepo.findBillingWebhook = origFindWebhook;
         billingRepo.createBillingWebhook = origCreateWebhook;
@@ -584,21 +595,24 @@ describe('Phase 07: Plans, Entitlements and Subscriptions Unit Tests', () => {
 
     it('safely ignores duplicate webhook delivery without side effects', async () => {
       const origFindWebhook = billingRepo.findBillingWebhook;
-      const origCreateWebhook = billingRepo.createBillingWebhook;
-      let createCalled = false;
+      const origRecordWebhook = billingRepo.recordWebhookReceived;
+      const origUpdateWebhook = billingRepo.updateBillingWebhookStatus;
+      let updated = false;
 
-      billingRepo.findBillingWebhook = async (provider: string, eventId: string) => ({
-        id: 'wh-existing',
-        provider,
-        eventId,
-        eventType: 'customer.subscription.updated',
-        status: 'PROCESSED',
-        processedAt: new Date('2026-11-04T10:00:00Z'),
-      } as any);
+      billingRepo.recordWebhookReceived = async () => null;
+      billingRepo.findBillingWebhook = async (provider: string, eventId: string) =>
+        ({
+          id: 'wh-existing',
+          provider,
+          eventId,
+          eventType: 'customer.subscription.updated',
+          status: 'PROCESSED',
+          processedAt: new Date('2026-11-04T10:00:00Z'),
+        }) as any;
 
-      billingRepo.createBillingWebhook = (async () => {
-        createCalled = true;
-      }) as any;
+      billingRepo.updateBillingWebhookStatus = async () => {
+        updated = true;
+      };
 
       try {
         const result = await billingService.processBillingWebhook({
@@ -611,29 +625,27 @@ describe('Phase 07: Plans, Entitlements and Subscriptions Unit Tests', () => {
         assert.equal(result.status, 'DUPLICATE_IGNORED');
         assert.equal(result.idempotent, true);
         assert.equal(result.eventId, 'evt_already_processed_999');
-        assert.equal(createCalled, false, 'Duplicate webhook must not create a new DB record');
+        assert.equal(updated, false, 'Duplicate webhook must not update the processed record');
       } finally {
         billingRepo.findBillingWebhook = origFindWebhook;
-        billingRepo.createBillingWebhook = origCreateWebhook;
+        billingRepo.recordWebhookReceived = origRecordWebhook;
+        billingRepo.updateBillingWebhookStatus = origUpdateWebhook;
       }
     });
   });
 
   describe('6. Non-Destructive Subscription Cancellation & Invariants', () => {
     it('cancels subscription without deleting workspace tenant data', async () => {
-      const origFindWebhook = billingRepo.findBillingWebhook;
-      const origCreateWebhook = billingRepo.createBillingWebhook;
-      const origFindSub = billingRepo.findTenantSubscription;
+      const origFindSub = billingRepo.findSubscriptionByProviderId;
       const origUpdateSub = billingRepo.updateSubscription;
       let updatedStatus = '';
 
-      billingRepo.findBillingWebhook = async () => null;
-      billingRepo.createBillingWebhook = async (data: any) => ({ id: 'wh-del', ...data } as any);
-      billingRepo.findTenantSubscription = async () => ({
-        id: 'sub-active',
-        tenantId: mockTenantId,
-        status: 'ACTIVE',
-      } as any);
+      billingRepo.findSubscriptionByProviderId = async () =>
+        ({
+          id: 'sub-active',
+          tenantId: mockTenantId,
+          status: 'ACTIVE',
+        }) as any;
       billingRepo.updateSubscription = async (_id: string, updates: any) => {
         updatedStatus = updates.status;
         return { id: _id, ...updates } as any;
@@ -641,19 +653,17 @@ describe('Phase 07: Plans, Entitlements and Subscriptions Unit Tests', () => {
 
       try {
         const result = await billingService.processBillingWebhook({
-          provider: 'stripe',
-          eventId: 'evt_cancel_subscription_888',
-          eventType: 'customer.subscription.deleted',
-          payload: { tenantId: mockTenantId },
+          provider: 'razorpay',
+          eventId: randomUUID(),
+          eventType: 'subscription.cancelled',
+          payload: { payload: { subscription: { entity: { id: 'sub-provider-test' } } } },
         });
 
         assert.equal(result.status, 'PROCESSED');
         assert.equal(updatedStatus, 'CANCELED', 'Subscription status must be set to CANCELED');
         // Tenant record was NOT deleted
       } finally {
-        billingRepo.findBillingWebhook = origFindWebhook;
-        billingRepo.createBillingWebhook = origCreateWebhook;
-        billingRepo.findTenantSubscription = origFindSub;
+        billingRepo.findSubscriptionByProviderId = origFindSub;
         billingRepo.updateSubscription = origUpdateSub;
       }
     });

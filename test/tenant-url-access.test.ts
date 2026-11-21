@@ -5,15 +5,15 @@ import { closeDb } from '../src/config/db';
 import { env } from '../src/config/env';
 import { closeRedisClients } from '../src/config/redis';
 import {
-  isOriginAllowed,
   addCorsCustomDomain,
-  removeCorsCustomDomain,
+  isOriginAllowed,
   isPrivateNetworkHostname,
+  removeCorsCustomDomain,
 } from '../src/lib/cors';
-import { tenantSlugSchema, isReservedSlug } from '../src/modules/tenants/tenants.dto';
+import { getEffectiveUrlMode } from '../src/modules/tenants/tenant-url.service';
+import { isReservedSlug, tenantSlugSchema } from '../src/modules/tenants/tenants.dto';
 import { tenantsRepo } from '../src/modules/tenants/tenants.repository';
 import * as tenantsService from '../src/modules/tenants/tenants.service';
-import { getEffectiveUrlMode } from '../src/modules/tenants/tenant-url.service';
 
 after(async () => {
   await Promise.allSettled([closeRedisClients(), closeDb()]);
@@ -72,7 +72,12 @@ test('getEffectiveUrlMode computes correct canonical URLs and plan-based fallbac
   });
 
   // 1. FREE Plan: Always path-only fallback
-  const freeTenant = { id: 't1', slug: 'free-org', status: 'ACTIVE' as const, urlStyle: 'subdomain' };
+  const freeTenant = {
+    id: 't1',
+    slug: 'free-org',
+    status: 'ACTIVE' as const,
+    urlStyle: 'subdomain',
+  };
   const freeEntitlements = {
     limits: mockLimits({ path: true, subdomain: false, customDomain: false }),
     subscriptionStatus: 'ACTIVE',
@@ -84,7 +89,12 @@ test('getEffectiveUrlMode computes correct canonical URLs and plan-based fallbac
   assert.equal(freeResult.reason, 'PLAN');
 
   // 2. PRO Plan: Subdomain preferred & allowed
-  const proTenant = { id: 't2', slug: 'pro-team', status: 'ACTIVE' as const, urlStyle: 'subdomain' };
+  const proTenant = {
+    id: 't2',
+    slug: 'pro-team',
+    status: 'ACTIVE' as const,
+    urlStyle: 'subdomain',
+  };
   const proEntitlements = {
     limits: mockLimits({ path: true, subdomain: true, customDomain: false }),
     subscriptionStatus: 'ACTIVE',
@@ -96,7 +106,12 @@ test('getEffectiveUrlMode computes correct canonical URLs and plan-based fallbac
   assert.equal(proResult.reason, undefined);
 
   // 3. ENTERPRISE Plan with unverified custom domain -> falls back to subdomain
-  const entTenant = { id: 't3', slug: 'big-corp', status: 'ACTIVE' as const, urlStyle: 'customDomain' };
+  const entTenant = {
+    id: 't3',
+    slug: 'big-corp',
+    status: 'ACTIVE' as const,
+    urlStyle: 'customDomain',
+  };
   const entEntitlements = {
     limits: mockLimits({ path: true, subdomain: true, customDomain: true }),
     subscriptionStatus: 'ACTIVE',
@@ -131,7 +146,12 @@ test('getEffectiveUrlMode computes correct canonical URLs and plan-based fallbac
   assert.equal(entVerifiedResult.reason, undefined);
 
   // 5. Suspended tenant loses non-path access / marks reason SUSPENDED
-  const suspendedTenant = { id: 't4', slug: 'bad-actor', status: 'SUSPENDED' as const, urlStyle: 'path' };
+  const suspendedTenant = {
+    id: 't4',
+    slug: 'bad-actor',
+    status: 'SUSPENDED' as const,
+    urlStyle: 'path',
+  };
   const suspendedResult = getEffectiveUrlMode(
     suspendedTenant,
     verifiedBranding,
@@ -172,8 +192,9 @@ test('Dynamic CORS origin validation allows verified domains and subdomains', as
   assert.equal(isPrivateNetworkHostname('attacker.com'), false);
 
   // Origin evaluation for mobile testing
-  assert.equal(await isOriginAllowed('http://192.168.1.45:3001'), true);
-  assert.equal(await isOriginAllowed('http://10.0.0.5:3000'), true);
+  const allowsLan = env.NODE_ENV === 'development' && env.CORS_ALLOW_LAN;
+  assert.equal(await isOriginAllowed('http://192.168.1.45:3001'), allowsLan);
+  assert.equal(await isOriginAllowed('http://10.0.0.5:3000'), allowsLan);
   assert.equal(await isOriginAllowed('http://malicious-external-site.com'), false);
 });
 
