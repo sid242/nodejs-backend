@@ -82,6 +82,25 @@ export async function processMaintenance(job: Job): Promise<{ removed: number; f
     return { removed: pastDueOverGrace.length, failed: 0 };
   }
 
+  if (job.name === 'expire-stale-payments') {
+    const cutoff = new Date(Date.now() - 24 * 3600 * 1000);
+    const expiredPayments = await db
+      .update(schema.payments)
+      .set({
+        status: 'FAILED',
+        failureCode: 'EXPIRED',
+        failureDescription: 'Payment checkout order expired after 24 hours',
+        updatedAt: new Date(),
+      })
+      .where(and(eq(schema.payments.status, 'CREATED'), lt(schema.payments.createdAt, cutoff)))
+      .returning();
+
+    if (expiredPayments.length > 0) {
+      logger.info({ count: expiredPayments.length }, 'Expired stale CREATED payments');
+    }
+    return { removed: expiredPayments.length, failed: 0 };
+  }
+
   if (job.name === 'cleanup-stale-db-operations') {
     const twoHoursAgo = new Date(Date.now() - 2 * 3600 * 1000);
     const staleOps = await db

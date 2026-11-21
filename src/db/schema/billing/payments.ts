@@ -53,7 +53,7 @@ export const payments = pgTable(
     index('Payment_tenantId_idx').on(table.tenantId),
     index('Payment_subscriptionId_idx').on(table.subscriptionId),
     index('Payment_status_idx').on(table.status),
-    index('Payment_providerPaymentId_idx').on(table.providerPaymentId),
+    uniqueIndex('Payment_providerPaymentId_unique').on(table.providerPaymentId),
     index('Payment_createdAt_idx').on(table.createdAt),
   ],
 );

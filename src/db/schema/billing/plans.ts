@@ -50,6 +50,8 @@ export const plans = pgTable(
     version: integer('version').notNull().default(1),
     ctaLabel: text('ctaLabel').default('Get Started'),
     sortOrder: integer('sortOrder').notNull().default(0),
+    razorpayPlanIdMonthly: text('razorpayPlanIdMonthly'),
+    razorpayPlanIdYearly: text('razorpayPlanIdYearly'),
     createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updatedAt', { precision: 3, mode: 'date' })
       .notNull()

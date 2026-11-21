@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { requireAuth } from '@/middleware/auth';
 import { requirePlatformAuth, requirePlatformPermission } from '@/middleware/platform';
 import { billingPublicLimiter, billingWebhookLimiter } from '@/middleware/rate-limit';
+import { requirePermission } from '@/middleware/rbac';
 import { requireTenant } from '@/middleware/tenant';
 import { validate } from '@/middleware/validate';
 import { PLATFORM_PERMISSIONS } from '@/modules/platform/platform.permissions';
@@ -179,14 +180,27 @@ router.post(
 // ==========================================
 // 6. Tenant Subscription & Billing
 // ==========================================
-router.get('/subscription', requireAuth, requireTenant, controller.getTenantBillingOverview);
+router.get(
+  '/subscription',
+  requireAuth,
+  requireTenant,
+  requirePermission('billing:read'),
+  controller.getTenantBillingOverview,
+);
 
-router.get('/entitlements', requireAuth, requireTenant, controller.getTenantEntitlements);
+router.get(
+  '/entitlements',
+  requireAuth,
+  requireTenant,
+  requirePermission('billing:read'),
+  controller.getTenantEntitlements,
+);
 
 router.post(
   ['/subscription/change', '/subscription/change-request'],
   requireAuth,
   requireTenant,
+  requirePermission('billing:manage'),
   validate({ body: dto.subscriptionChangeRequestDto }),
   controller.requestSubscriptionChange,
 );
@@ -195,6 +209,7 @@ router.post(
   '/checkout/order',
   requireAuth,
   requireTenant,
+  requirePermission('billing:manage'),
   validate({ body: dto.checkoutOrderDto }),
   controller.createCheckoutOrder,
 );
@@ -203,6 +218,7 @@ router.post(
   '/checkout/verify',
   requireAuth,
   requireTenant,
+  requirePermission('billing:manage'),
   validate({ body: dto.verifyOrderPaymentDto }),
   controller.verifyOrderPayment,
 );
@@ -211,6 +227,7 @@ router.post(
   '/subscriptions',
   requireAuth,
   requireTenant,
+  requirePermission('billing:manage'),
   validate({ body: dto.checkoutSubscriptionDto }),
   controller.createSubscriptionCheckout,
 );
@@ -219,6 +236,7 @@ router.post(
   '/subscriptions/verify',
   requireAuth,
   requireTenant,
+  requirePermission('billing:manage'),
   validate({ body: dto.verifySubscriptionPaymentDto }),
   controller.verifySubscriptionPayment,
 );
@@ -227,6 +245,7 @@ router.post(
   '/subscriptions/cancel',
   requireAuth,
   requireTenant,
+  requirePermission('billing:manage'),
   validate({ body: dto.cancelSubscriptionDto }),
   controller.cancelSubscription,
 );
@@ -235,6 +254,7 @@ router.get(
   '/payments',
   requireAuth,
   requireTenant,
+  requirePermission('billing:read'),
   validate({ query: dto.listPaymentsQueryDto }),
   controller.listTenantPayments,
 );
@@ -243,6 +263,7 @@ router.get(
   '/payments/:id',
   requireAuth,
   requireTenant,
+  requirePermission('billing:read'),
   validate({ params: dto.paymentIdParamDto }),
   controller.getTenantPaymentById,
 );
@@ -251,15 +272,24 @@ router.get(
   '/invoices',
   requireAuth,
   requireTenant,
+  requirePermission('billing:read'),
   validate({ query: dto.listInvoicesQueryDto }),
   controller.getTenantInvoices,
 );
 
-router.get('/invoices/:invoiceId', requireAuth, requireTenant, controller.getTenantInvoiceById);
+router.get(
+  '/invoices/:invoiceId',
+  requireAuth,
+  requireTenant,
+  requirePermission('billing:read'),
+  controller.getTenantInvoiceById,
+);
+
 router.get(
   '/invoices/:invoiceId/download',
   requireAuth,
   requireTenant,
+  requirePermission('billing:read'),
   controller.downloadTenantInvoice,
 );
 

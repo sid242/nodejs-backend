@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gt, inArray, isNotNull, lt, sql } from 'drizzle-orm';
 
 import { db } from '@/config/db';
 import {
@@ -78,8 +78,9 @@ export interface InvoiceWithDetails extends Invoice {
 // 1. Plan Repository Operations
 // ==========================================
 
-export async function findPlanByKey(key: string): Promise<PlanWithModules | null> {
-  const [record] = await db.select().from(plans).where(eq(plans.key, key.toUpperCase())).limit(1);
+export async function findPlanByKey(key: string, tx?: any): Promise<PlanWithModules | null> {
+  const client = tx ?? db;
+  const [record] = await client.select().from(plans).where(eq(plans.key, key.toUpperCase())).limit(1);
 
   if (!record) return null;
   const modules = await getPlanModuleKeys(record.id);
@@ -90,8 +91,9 @@ export async function findPlanByKey(key: string): Promise<PlanWithModules | null
   return { ...record, modules, entitlements };
 }
 
-export async function findPlanById(id: string): Promise<PlanWithModules | null> {
-  const [record] = await db.select().from(plans).where(eq(plans.id, id)).limit(1);
+export async function findPlanById(id: string, tx?: any): Promise<PlanWithModules | null> {
+  const client = tx ?? db;
+  const [record] = await client.select().from(plans).where(eq(plans.id, id)).limit(1);
   if (!record) return null;
   const modules = await getPlanModuleKeys(record.id);
   const planEnts = await findPlanEntitlements(record.id);
@@ -494,8 +496,10 @@ export async function createSubscription(data: NewSubscription, tx?: any): Promi
 export async function updateSubscription(
   id: string,
   data: Partial<NewSubscription>,
+  tx?: any,
 ): Promise<Subscription | null> {
-  const [record] = await db
+  const client = tx ?? db;
+  const [record] = await client
     .update(subscriptions)
     .set({ ...data, updatedAt: new Date() })
     .where(eq(subscriptions.id, id))
@@ -784,8 +788,10 @@ export async function findSubscriptionByProviderId(
 
 export async function generateInvoiceNumber(
   year: number = new Date().getFullYear(),
+  tx?: any,
 ): Promise<{ year: number; seq: number; invoiceNumber: string }> {
-  const [row] = await db
+  const client = tx ?? db;
+  const [row] = await client
     .insert(invoiceSequences)
     .values({ year, nextSeq: 2 })
     .onConflictDoUpdate({
@@ -807,14 +813,16 @@ export async function createInvoice(
   data: Omit<NewInvoice, 'id' | 'invoiceNumber' | 'totalCents' | 'createdAt' | 'updatedAt'> & {
     invoiceNumber?: string;
   },
+  tx?: any,
 ): Promise<Invoice> {
+  const client = tx ?? db;
   const currentYear = new Date().getFullYear();
   let invoiceNumber = data.invoiceNumber;
   let invoiceYear = data.invoiceYear ?? currentYear;
   let invoiceSeq = data.invoiceSeq;
 
   if (!invoiceNumber) {
-    const generated = await generateInvoiceNumber(invoiceYear);
+    const generated = await generateInvoiceNumber(invoiceYear, client);
     invoiceNumber = generated.invoiceNumber;
     invoiceYear = generated.year;
     invoiceSeq = generated.seq;
@@ -824,7 +832,7 @@ export async function createInvoice(
   const taxCents = Number(data.taxCents ?? 0);
   const totalCents = amountCents + taxCents;
 
-  const [record] = await db
+  const [record] = await client
     .insert(invoices)
     .values({
       ...data,
@@ -960,9 +968,38 @@ export async function updateInvoiceStatus(
 // 7. Payments Repository Operations
 // ==========================================
 
-export async function createPayment(data: NewPayment): Promise<Payment> {
-  const [record] = await db.insert(payments).values(data).returning();
+export async function createPayment(data: NewPayment, tx?: any): Promise<Payment> {
+  const client = tx ?? db;
+  const [record] = await client.insert(payments).values(data).returning();
   if (!record) throw new Error('Failed to create payment record');
+  return record;
+}
+
+export async function upsertPayment(data: NewPayment, tx?: any): Promise<Payment> {
+  const client = tx ?? db;
+  if (!data.providerPaymentId) {
+    return createPayment(data, client);
+  }
+
+  const [record] = await client
+    .insert(payments)
+    .values(data)
+    .onConflictDoUpdate({
+      target: payments.providerPaymentId,
+      set: {
+        status: data.status,
+        amountMinor: data.amountMinor,
+        currency: data.currency,
+        paymentMethod: data.paymentMethod,
+        providerSignature: data.providerSignature,
+        paidAt: data.paidAt,
+        metadata: data.metadata,
+        updatedAt: new Date(),
+      },
+    })
+    .returning();
+
+  if (!record) throw new Error('Failed to upsert payment record');
   return record;
 }
 
@@ -992,13 +1029,65 @@ export async function findPaymentByPaymentId(paymentId: string): Promise<Payment
 export async function updatePayment(
   id: string,
   data: Partial<NewPayment>,
+  tx?: any,
 ): Promise<Payment | null> {
-  const [record] = await db
+  const client = tx ?? db;
+  const [record] = await client
     .update(payments)
     .set({ ...data, updatedAt: new Date() })
     .where(eq(payments.id, id))
     .returning();
   return record ?? null;
+}
+
+export async function findRecentCreatedPayment(
+  tenantId: string,
+  planKey: string,
+  billingInterval: string,
+  maxAgeMs = 15 * 60 * 1000,
+): Promise<Payment | null> {
+  const cutoff = new Date(Date.now() - maxAgeMs);
+  const rows = await db
+    .select()
+    .from(payments)
+    .where(
+      and(
+        eq(payments.tenantId, tenantId),
+        eq(payments.status, 'CREATED'),
+        isNotNull(payments.providerOrderId),
+        gt(payments.createdAt, cutoff),
+      ),
+    )
+    .orderBy(desc(payments.createdAt))
+    .limit(5);
+
+  const matched = rows.find((p) => {
+    const meta = (p.metadata ?? {}) as Record<string, any>;
+    return (
+      (meta.planKey ?? '').toUpperCase() === planKey.toUpperCase() &&
+      (meta.billingInterval ?? '').toUpperCase() === billingInterval.toUpperCase()
+    );
+  });
+
+  return matched ?? null;
+}
+
+export async function expireStaleCreatedPayments(
+  maxAgeMs = 24 * 60 * 60 * 1000,
+): Promise<number> {
+  const cutoff = new Date(Date.now() - maxAgeMs);
+  const rows = await db
+    .update(payments)
+    .set({
+      status: 'FAILED',
+      failureCode: 'EXPIRED',
+      failureDescription: 'Payment checkout order expired after 24 hours',
+      updatedAt: new Date(),
+    })
+    .where(and(eq(payments.status, 'CREATED'), lt(payments.createdAt, cutoff)))
+    .returning({ id: payments.id });
+
+  return rows.length;
 }
 
 export async function findPaymentsByTenantId(
@@ -1182,6 +1271,9 @@ export const billingRepo = {
   listInvoicesForPlatform,
   updateInvoiceStatus,
   createPayment,
+  upsertPayment,
+  findRecentCreatedPayment,
+  expireStaleCreatedPayments,
   findPaymentById,
   findPaymentByOrderId,
   findPaymentByPaymentId,

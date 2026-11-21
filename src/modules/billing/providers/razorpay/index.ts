@@ -6,8 +6,18 @@ import { AppError } from '@/lib/errors';
 import { billingRepo } from '@/modules/billing/billing.repository';
 
 import type { BillingProvider, CheckoutResult, WebhookResult } from '../../provider';
-import { createRazorpayOrder } from './razorpay.orders';
-import { cancelRazorpaySubscription } from './razorpay.subscriptions';
+import { createRazorpayOrder, fetchRazorpayPayment } from './razorpay.orders';
+import { createRazorpayRefund } from './razorpay.refunds';
+import {
+  verifyOrderPaymentSignature,
+  verifySubscriptionPaymentSignature,
+} from './razorpay.signature';
+import {
+  cancelRazorpaySubscription,
+  createRazorpayPlan,
+  createRazorpaySubscription,
+  fetchRazorpaySubscription,
+} from './razorpay.subscriptions';
 import { parseAndVerifyRazorpayWebhook } from './razorpay.webhooks';
 
 export * from './razorpay.client';
@@ -16,6 +26,18 @@ export * from './razorpay.refunds';
 export * from './razorpay.signature';
 export * from './razorpay.subscriptions';
 export * from './razorpay.webhooks';
+
+export const razorpayGateway = {
+  createRazorpayOrder,
+  fetchRazorpayPayment,
+  createRazorpayRefund,
+  verifyOrderPaymentSignature,
+  verifySubscriptionPaymentSignature,
+  cancelRazorpaySubscription,
+  createRazorpayPlan,
+  createRazorpaySubscription,
+  fetchRazorpaySubscription,
+};
 
 export class RazorpayBillingProvider implements BillingProvider {
   public readonly name = 'razorpay';

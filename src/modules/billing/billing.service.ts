@@ -1,9 +1,18 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import { db } from '@/config/db';
 import { env } from '@/config/env';
 import { logger } from '@/config/logger';
-import { tenants, type PlanLimits } from '@/db/schema';
+import {
+  invoices,
+  payments,
+  subscriptionEvents,
+  subscriptions,
+  tenants,
+  type Payment,
+  type PlanLimits,
+  type Subscription,
+} from '@/db/schema';
 import { cache } from '@/lib/cache';
 import { AppError } from '@/lib/errors';
 import { createDownloadUrl } from '@/lib/s3';
@@ -15,7 +24,7 @@ import {
   type EffectiveUrlModeResult,
   type TenantUrlMode,
 } from '@/modules/tenants/tenant-url.service';
-import * as tenantsRepo from '@/modules/tenants/tenants.repository';
+import { tenantsRepo } from '@/modules/tenants/tenants.repository';
 import { emailQueue } from '@/queues/index';
 import { emitToUser } from '@/sockets/emitter';
 
@@ -48,16 +57,7 @@ import {
   DEFAULT_PLAN_ENTITLEMENT_VALUES,
 } from './entitlements.defaults';
 import { DEFAULT_PLAN_KEY, DEFAULT_PLANS } from './plans.defaults';
-import {
-  cancelRazorpaySubscription,
-  createRazorpayOrder,
-  createRazorpayPlan,
-  createRazorpayRefund,
-  createRazorpaySubscription,
-  fetchRazorpayPayment,
-  verifyOrderPaymentSignature,
-  verifySubscriptionPaymentSignature,
-} from './providers/razorpay';
+import { razorpayGateway } from './providers/razorpay';
 
 const CACHE_KEYS = {
   PUBLIC_PLANS: 'plans:public',
@@ -109,7 +109,7 @@ export async function invalidateTenantBillingCache(tenantId: string): Promise<vo
  */
 export async function onPlanChanged(
   tenantId: string,
-  oldPlanKey: string,
+  oldPlanKey: string | null,
   newPlanKey: string,
 ): Promise<void> {
   // Sync Tenant.plan denormalized column
@@ -873,44 +873,35 @@ export async function processBillingWebhook(dto: BillingWebhookDto) {
             throw AppError.badRequest('Webhook tenant identity mismatch');
           }
 
-          if (localPayment.status !== 'PAID') {
+          // Validate amount and currency against expected local payment record
+          const eventAmount = Number(pEntity?.amount ?? oEntity?.amount ?? 0);
+          const eventCurrency = (pEntity?.currency ?? oEntity?.currency ?? '').toUpperCase();
+          if (
+            (eventAmount > 0 && eventAmount !== localPayment.amountMinor) ||
+            (eventCurrency && eventCurrency !== localPayment.currency.toUpperCase())
+          ) {
+            logger.warn(
+              {
+                localPaymentId: localPayment.id,
+                expectedAmount: localPayment.amountMinor,
+                expectedCurrency: localPayment.currency,
+                eventAmount,
+                eventCurrency,
+              },
+              'Payment amount or currency mismatch on webhook',
+            );
             await billingRepo.updatePayment(localPayment.id, {
-              status: 'PAID',
-              providerPaymentId: paymentId ?? localPayment.providerPaymentId,
-              paidAt: new Date(),
+              status: 'FAILED',
+              failureCode: 'AMOUNT_MISMATCH',
+              failureDescription: `Amount or currency mismatch: received ${eventAmount} ${eventCurrency}, expected ${localPayment.amountMinor} ${localPayment.currency}`,
             });
-
-            // Ensure subscription is active if not already activated
-            const meta = localPayment.metadata as any;
-            if (meta?.planKey && localPayment.tenantId) {
-              const plan = await billingRepo.findPlanByKey(meta.planKey);
-              if (plan) {
-                const sub = await billingRepo.findTenantSubscription(localPayment.tenantId);
-                const intervalDays = meta.billingInterval === 'ANNUAL' ? 365 : 30;
-                const periodEnd = new Date(Date.now() + intervalDays * 86400000);
-
-                if (sub) {
-                  await billingRepo.updateSubscription(sub.id, {
-                    planId: plan.id,
-                    status: 'ACTIVE',
-                    currentPeriodStart: new Date(),
-                    currentPeriodEnd: periodEnd,
-                    provider: 'razorpay',
-                  });
-                } else {
-                  await billingRepo.createSubscription({
-                    tenantId: localPayment.tenantId,
-                    planId: plan.id,
-                    status: 'ACTIVE',
-                    currentPeriodStart: new Date(),
-                    currentPeriodEnd: periodEnd,
-                    provider: 'razorpay',
-                  });
-                }
-
-                await onPlanChanged(localPayment.tenantId, sub?.planId ?? '', plan.key);
-              }
-            }
+          } else {
+            // Share unified activation function
+            await activatePaidOrder({
+              paymentId: localPayment.id,
+              providerPaymentId: paymentId,
+              paymentMethod: pEntity?.method,
+            });
           }
         }
       } else if (eventType === 'payment.failed') {
@@ -963,6 +954,8 @@ export async function processBillingWebhook(dto: BillingWebhookDto) {
             ? new Date(sEntity.current_end * 1000)
             : new Date(Date.now() + 30 * 86400000);
 
+          const fromPlanId = sub?.planId;
+
           if (sub) {
             await billingRepo.updateSubscription(sub.id, {
               status: 'ACTIVE',
@@ -985,7 +978,13 @@ export async function processBillingWebhook(dto: BillingWebhookDto) {
           }
 
           if (plan) {
-            await onPlanChanged(tenantId, sub?.planId ?? '', plan.key);
+            const oldPlan = fromPlanId ? await billingRepo.findPlanById(fromPlanId) : null;
+            const oldPlanKey = oldPlan?.key ?? null;
+            if (oldPlanKey !== plan.key) {
+              await onPlanChanged(tenantId, oldPlanKey, plan.key);
+            } else {
+              await invalidateTenantBillingCache(tenantId);
+            }
           } else {
             await invalidateTenantBillingCache(tenantId);
           }
@@ -1201,6 +1200,295 @@ export async function assignInitialSubscription(tenantId: string, planKey = DEFA
 // 7. Razorpay Checkout, Payments & Refunds
 // ==========================================
 
+export interface ActivatePaidOrderParams {
+  paymentId?: string;
+  providerOrderId?: string;
+  providerPaymentId?: string;
+  providerSignature?: string;
+  paymentMethod?: string;
+  actorUserId?: string;
+}
+
+export interface ActivatePaidOrderResult {
+  success: boolean;
+  status: string;
+  alreadyProcessed: boolean;
+  planKey: string;
+  planName: string;
+  subscriptionId: string;
+  paymentId: string;
+  tenantId: string;
+}
+
+/**
+ * Shared atomic activation function for Razorpay orders (used by both verify endpoint and webhooks).
+ * Acquires a SELECT ... FOR UPDATE lock on the payment row to guarantee atomic, once-and-only-once execution.
+ */
+export async function activatePaidOrder(
+  params: ActivatePaidOrderParams,
+): Promise<ActivatePaidOrderResult> {
+  let postActivationAction: {
+    tenantId: string;
+    oldPlanKey: string | null;
+    newPlanKey: string;
+    actorUserId?: string;
+    orderId?: string | null;
+    paymentId?: string;
+    planName: string;
+  } | null = null;
+
+  const result = await db.transaction(async (tx) => {
+    let payment: Payment | null = null;
+    if (params.paymentId) {
+      const [row] = await tx
+        .select()
+        .from(payments)
+        .where(eq(payments.id, params.paymentId))
+        .for('update');
+      payment = row ?? null;
+    } else if (params.providerOrderId) {
+      const [row] = await tx
+        .select()
+        .from(payments)
+        .where(eq(payments.providerOrderId, params.providerOrderId))
+        .for('update');
+      payment = row ?? null;
+    }
+
+    if (!payment) {
+      throw AppError.notFound('Payment record not found');
+    }
+
+    const meta = (payment.metadata ?? {}) as Record<string, any>;
+    const targetPlanKey = (meta.planKey ?? 'PRO').toUpperCase();
+    const plan =
+      (await billingRepo.findPlanByKey(targetPlanKey, tx)) ??
+      (meta.planId ? await billingRepo.findPlanById(meta.planId, tx) : null);
+
+    if (!plan) {
+      throw AppError.notFound(`Plan "${targetPlanKey}" not found`);
+    }
+
+    // Idempotency check: if already PAID, return idempotent success
+    if (payment.status === 'PAID') {
+      const existingSub = await tx
+        .select()
+        .from(subscriptions)
+        .where(
+          and(
+            eq(subscriptions.tenantId, payment.tenantId),
+            sql`${subscriptions.status} IN ('TRIALING', 'ACTIVE', 'PAST_DUE')`,
+          ),
+        )
+        .limit(1);
+
+      return {
+        success: true,
+        status: 'PAID',
+        alreadyProcessed: true,
+        planKey: plan.key,
+        planName: plan.name,
+        subscriptionId: payment.subscriptionId ?? existingSub[0]?.id ?? '',
+        paymentId: payment.id,
+        tenantId: payment.tenantId,
+      };
+    }
+
+    const paidAt = new Date();
+    const [updatedPayment] = await tx
+      .update(payments)
+      .set({
+        status: 'PAID',
+        providerPaymentId: params.providerPaymentId ?? payment.providerPaymentId,
+        providerSignature: params.providerSignature ?? payment.providerSignature,
+        paymentMethod: params.paymentMethod ?? payment.paymentMethod,
+        paidAt,
+        updatedAt: paidAt,
+      })
+      .where(eq(payments.id, payment.id))
+      .returning();
+
+    if (!updatedPayment) {
+      throw AppError.internal('Failed to update payment status');
+    }
+
+    // Period calculation: extend from current period end if still active
+    const isAnnual = meta.billingInterval === 'ANNUAL';
+    const now = new Date();
+
+    const [existingSub] = await tx
+      .select()
+      .from(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.tenantId, payment.tenantId),
+          sql`${subscriptions.status} IN ('TRIALING', 'ACTIVE', 'PAST_DUE')`,
+        ),
+      )
+      .limit(1);
+
+    const baseStart =
+      existingSub?.status === 'ACTIVE' &&
+      existingSub?.currentPeriodEnd &&
+      new Date(existingSub.currentPeriodEnd) > now
+        ? new Date(existingSub.currentPeriodEnd)
+        : now;
+
+    const currentPeriodStart = baseStart === now ? now : (existingSub?.currentPeriodStart ?? now);
+    const currentPeriodEnd = new Date(baseStart.getTime());
+    if (isAnnual) {
+      currentPeriodEnd.setFullYear(currentPeriodEnd.getFullYear() + 1);
+    } else {
+      currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
+    }
+
+    const fromPlanId = existingSub?.planId ?? null;
+    let subRecord: Subscription;
+
+    if (existingSub) {
+      const [updated] = await tx
+        .update(subscriptions)
+        .set({
+          planId: plan.id,
+          status: 'ACTIVE',
+          currentPeriodStart,
+          currentPeriodEnd,
+          billingInterval: isAnnual ? 'ANNUAL' : 'MONTHLY',
+          cancelAtPeriodEnd: false,
+          provider: 'razorpay',
+          updatedAt: now,
+        })
+        .where(eq(subscriptions.id, existingSub.id))
+        .returning();
+      if (!updated) {
+        throw AppError.internal('Failed to update subscription record');
+      }
+      subRecord = updated;
+    } else {
+      const [created] = await tx
+        .insert(subscriptions)
+        .values({
+          tenantId: payment.tenantId,
+          planId: plan.id,
+          status: 'ACTIVE',
+          currentPeriodStart,
+          currentPeriodEnd,
+          billingInterval: isAnnual ? 'ANNUAL' : 'MONTHLY',
+          provider: 'razorpay',
+        })
+        .returning();
+      if (!created) {
+        throw AppError.internal('Failed to create subscription record');
+      }
+      subRecord = created;
+    }
+
+    if (!updatedPayment.subscriptionId) {
+      await tx
+        .update(payments)
+        .set({ subscriptionId: subRecord.id })
+        .where(eq(payments.id, updatedPayment.id));
+    }
+
+    // Auto-generate invoice
+    const generatedInv = await billingRepo.generateInvoiceNumber(now.getFullYear(), tx);
+    const [invoice] = await tx
+      .insert(invoices)
+      .values({
+        tenantId: payment.tenantId,
+        subscriptionId: subRecord.id,
+        planId: plan.id,
+        invoiceNumber: generatedInv.invoiceNumber,
+        invoiceYear: generatedInv.year,
+        invoiceSeq: generatedInv.seq,
+        amountCents: payment.amountMinor,
+        taxCents: 0,
+        totalCents: payment.amountMinor,
+        currency: payment.currency,
+        status: 'PAID',
+        paidAt: now,
+        billingPeriodStart: currentPeriodStart,
+        billingPeriodEnd: currentPeriodEnd,
+        lineItems: [
+          {
+            description: `${plan.name} Plan (${isAnnual ? 'Annual' : 'Monthly'})`,
+            quantity: 1,
+            unitPriceCents: payment.amountMinor,
+            totalCents: payment.amountMinor,
+          },
+        ],
+      })
+      .returning();
+
+    if (!invoice) {
+      throw AppError.internal('Failed to generate invoice record');
+    }
+
+    // Log subscription event
+    await tx.insert(subscriptionEvents).values({
+      subscriptionId: subRecord.id,
+      tenantId: payment.tenantId,
+      type: 'PURCHASED',
+      fromPlanId,
+      toPlanId: plan.id,
+      actorType: params.actorUserId ? 'USER' : 'SYSTEM',
+      actorId: params.actorUserId ?? 'system',
+      metadata: {
+        orderId: payment.providerOrderId,
+        paymentId: updatedPayment.providerPaymentId,
+        planKey: plan.key,
+        billingInterval: isAnnual ? 'ANNUAL' : 'MONTHLY',
+        invoiceId: invoice.id,
+      },
+    });
+
+    const oldPlan = fromPlanId ? await billingRepo.findPlanById(fromPlanId, tx) : null;
+
+    postActivationAction = {
+      tenantId: payment.tenantId,
+      oldPlanKey: oldPlan?.key ?? null,
+      newPlanKey: plan.key,
+      actorUserId: params.actorUserId,
+      orderId: payment.providerOrderId,
+      paymentId: updatedPayment.providerPaymentId ?? undefined,
+      planName: plan.name,
+    };
+
+    return {
+      success: true,
+      status: 'PAID',
+      alreadyProcessed: false,
+      planKey: plan.key,
+      planName: plan.name,
+      subscriptionId: subRecord.id,
+      paymentId: updatedPayment.id,
+      tenantId: payment.tenantId,
+    };
+  });
+
+  // Post-transaction notifications and cache sync
+  if (postActivationAction) {
+    const { tenantId, oldPlanKey, newPlanKey, actorUserId, orderId, paymentId, planName } =
+      postActivationAction;
+    if (oldPlanKey !== newPlanKey) {
+      await onPlanChanged(tenantId, oldPlanKey, newPlanKey);
+    } else {
+      await invalidateTenantBillingCache(tenantId);
+    }
+
+    if (actorUserId) {
+      emitToUser(actorUserId, 'billing:payment_success', {
+        orderId,
+        paymentId,
+        planKey: newPlanKey,
+        planName,
+      });
+    }
+  }
+
+  return result;
+}
+
 export async function createTenantOrderCheckout(tenantId: string, dto: CheckoutOrderDto) {
   const tenant = await tenantsRepo.findTenantById(tenantId);
   if (!tenant) throw AppError.notFound('Tenant not found');
@@ -1222,6 +1510,24 @@ export async function createTenantOrderCheckout(tenantId: string, dto: CheckoutO
     throw AppError.internal('Razorpay key ID is not configured on the server');
   }
 
+  // Idempotency: reuse existing CREATED payment for same tenant + plan + interval in the last 15 min
+  const existingPayment = await billingRepo.findRecentCreatedPayment(
+    tenantId,
+    plan.key,
+    dto.billingInterval,
+    15 * 60 * 1000,
+  );
+  if (existingPayment && existingPayment.providerOrderId) {
+    return {
+      keyId,
+      orderId: existingPayment.providerOrderId,
+      amountMinor: existingPayment.amountMinor,
+      currency: existingPayment.currency,
+      planName: plan.name,
+      paymentRecordId: existingPayment.id,
+    };
+  }
+
   // 1. Create a local pending payment record before calling provider
   const localPayment = await billingRepo.createPayment({
     tenantId,
@@ -1236,9 +1542,9 @@ export async function createTenantOrderCheckout(tenantId: string, dto: CheckoutO
     },
   });
 
-  // 2. Call Razorpay Orders API
-  const receipt = `rcpt_${tenantId.slice(0, 8)}_${Date.now()}`;
-  const order = await createRazorpayOrder({
+  // 2. Call Razorpay Orders API with deterministic receipt
+  const receipt = `rcpt_${tenantId.slice(0, 8)}_${localPayment.id.slice(0, 8)}`;
+  const order = await razorpayGateway.createRazorpayOrder({
     amountMinor,
     currency: plan.currency || env.RAZORPAY_CURRENCY || 'INR',
     receipt,
@@ -1287,7 +1593,7 @@ export async function verifyTenantOrderPayment(
   }
 
   // 3. Server-side signature verification
-  const isValid = verifyOrderPaymentSignature({
+  const isValid = razorpayGateway.verifyOrderPaymentSignature({
     orderId: dto.razorpay_order_id,
     paymentId: dto.razorpay_payment_id,
     signature: dto.razorpay_signature,
@@ -1298,120 +1604,42 @@ export async function verifyTenantOrderPayment(
   }
 
   // 4. Fetch payment details from Razorpay to confirm capture
-  const rzpPayment = await fetchRazorpayPayment(dto.razorpay_payment_id);
+  const rzpPayment = await razorpayGateway.fetchRazorpayPayment(dto.razorpay_payment_id);
   if (rzpPayment.status !== 'captured' && rzpPayment.status !== 'authorized') {
     throw AppError.badRequest(`Payment status is not captured (current: ${rzpPayment.status})`);
   }
 
-  // 5. Update local payment record to PAID
-  await billingRepo.updatePayment(localPayment.id, {
-    status: 'PAID',
+  // 5. Validate amount and currency
+  const rzpAmount = Number(rzpPayment.amount ?? 0);
+  const rzpCurrency = (rzpPayment.currency ?? '').toUpperCase();
+  if (
+    rzpAmount !== localPayment.amountMinor ||
+    rzpCurrency !== localPayment.currency.toUpperCase()
+  ) {
+    await billingRepo.updatePayment(localPayment.id, {
+      status: 'FAILED',
+      failureCode: 'AMOUNT_MISMATCH',
+      failureDescription: 'Payment amount or currency mismatch',
+    });
+    throw AppError.badRequest('Payment amount or currency does not match order');
+  }
+
+  // 6. Unified atomic activation function
+  const result = await activatePaidOrder({
+    paymentId: localPayment.id,
     providerPaymentId: dto.razorpay_payment_id,
     providerSignature: dto.razorpay_signature,
     paymentMethod: rzpPayment.method,
-    paidAt: new Date(),
-  });
-
-  // 6. Activate/Renew tenant subscription
-  const meta = (localPayment.metadata ?? {}) as Record<string, any>;
-  const targetPlanKey = (meta.planKey ?? 'PRO').toUpperCase();
-  const plan =
-    (await billingRepo.findPlanByKey(targetPlanKey)) ??
-    (await billingRepo.findPlanById(meta.planId));
-  if (!plan) throw AppError.notFound(`Plan "${targetPlanKey}" not found`);
-
-  const isAnnual = meta.billingInterval === 'ANNUAL';
-  const durationDays = isAnnual ? 365 : 30;
-  const currentPeriodStart = new Date();
-  const currentPeriodEnd = new Date(Date.now() + durationDays * 86400000);
-
-  let sub = await billingRepo.findTenantSubscription(tenantId);
-  const fromPlanId = sub?.planId;
-
-  if (sub) {
-    sub = await billingRepo.updateSubscription(sub.id, {
-      planId: plan.id,
-      status: 'ACTIVE',
-      currentPeriodStart,
-      currentPeriodEnd,
-      billingInterval: isAnnual ? 'ANNUAL' : 'MONTHLY',
-      cancelAtPeriodEnd: false,
-      provider: 'razorpay',
-    });
-  } else {
-    sub = await billingRepo.createSubscription({
-      tenantId,
-      planId: plan.id,
-      status: 'ACTIVE',
-      currentPeriodStart,
-      currentPeriodEnd,
-      billingInterval: isAnnual ? 'ANNUAL' : 'MONTHLY',
-      provider: 'razorpay',
-    });
-  }
-
-  // 7. Auto-generate paid invoice
-  await billingRepo.createInvoice({
-    tenantId,
-    subscriptionId: sub!.id,
-    planId: plan.id,
-    amountCents: localPayment.amountMinor,
-    taxCents: 0,
-    currency: localPayment.currency,
-    status: 'PAID',
-    paidAt: new Date(),
-    billingPeriodStart: currentPeriodStart,
-    billingPeriodEnd: currentPeriodEnd,
-    lineItems: [
-      {
-        description: `${plan.name} Plan (${isAnnual ? 'Annual' : 'Monthly'})`,
-        quantity: 1,
-        unitPriceCents: localPayment.amountMinor,
-        totalCents: localPayment.amountMinor,
-      },
-    ],
-  });
-
-  // 8. Log subscription event
-  await billingRepo.createSubscriptionEvent({
-    subscriptionId: sub!.id,
-    tenantId,
-    type: 'PURCHASED',
-    fromPlanId,
-    toPlanId: plan.id,
-    actorType: 'USER',
-    actorId: actorUserId,
-    metadata: {
-      orderId: dto.razorpay_order_id,
-      paymentId: dto.razorpay_payment_id,
-      planKey: plan.key,
-      billingInterval: isAnnual ? 'ANNUAL' : 'MONTHLY',
-    },
-  });
-
-  // 9. Synchronize plan and notify
-  const oldPlan = fromPlanId ? await billingRepo.findPlanById(fromPlanId) : null;
-  if (oldPlan && oldPlan.key !== plan.key) {
-    await onPlanChanged(tenantId, oldPlan.key, plan.key);
-  } else {
-    await invalidateTenantBillingCache(tenantId);
-  }
-
-  // 10. Real-time push notification
-  emitToUser(actorUserId, 'billing:payment_success', {
-    orderId: dto.razorpay_order_id,
-    paymentId: dto.razorpay_payment_id,
-    planKey: plan.key,
-    planName: plan.name,
+    actorUserId,
   });
 
   return {
     success: true,
     status: 'PAID',
-    planKey: plan.key,
-    planName: plan.name,
-    subscriptionId: sub!.id,
-    paymentId: localPayment.id,
+    planKey: result.planKey,
+    planName: result.planName,
+    subscriptionId: result.subscriptionId,
+    paymentId: result.paymentId,
   };
 }
 
@@ -1438,23 +1666,45 @@ export async function createTenantSubscriptionCheckout(
     throw AppError.badRequest('Free plans do not require a subscription checkout');
   }
 
-  // Create a recurring Razorpay plan
-  const rzpPlan = await createRazorpayPlan({
-    period: isAnnual ? 'yearly' : 'monthly',
-    interval: 1,
-    name: `${plan.name} (${isAnnual ? 'Annual' : 'Monthly'})`,
-    amountMinor,
-    currency: plan.currency || env.RAZORPAY_CURRENCY || 'INR',
-    description: plan.description ?? undefined,
-  });
+  // Lazy plan creation: store razorpayPlanIdMonthly/Yearly on local Plan and reuse
+  let rzpPlanId = isAnnual ? plan.razorpayPlanIdYearly : plan.razorpayPlanIdMonthly;
+  if (!rzpPlanId) {
+    const createdPlan = await razorpayGateway.createRazorpayPlan({
+      period: isAnnual ? 'yearly' : 'monthly',
+      interval: 1,
+      name: `${plan.name} (${isAnnual ? 'Annual' : 'Monthly'})`,
+      amountMinor,
+      currency: plan.currency || env.RAZORPAY_CURRENCY || 'INR',
+      description: plan.description ?? undefined,
+    });
+    rzpPlanId = createdPlan.id;
+    await billingRepo.updatePlan(plan.id, {
+      [isAnnual ? 'razorpayPlanIdYearly' : 'razorpayPlanIdMonthly']: rzpPlanId,
+    });
+  }
 
   // Create recurring subscription in Razorpay
-  const rzpSub = await createRazorpaySubscription({
-    planId: rzpPlan.id,
+  const rzpSub = await razorpayGateway.createRazorpaySubscription({
+    planId: rzpPlanId,
     totalCount: dto.totalCount,
     notes: {
       tenantId,
       tenantSlug: tenant.slug,
+      planKey: plan.key,
+      planId: plan.id,
+      billingInterval: dto.billingInterval,
+    },
+  });
+
+  // Persist a local pending subscription/payment mapping (providerSubscriptionId -> tenantId)
+  await billingRepo.createPayment({
+    tenantId,
+    provider: 'razorpay',
+    amountMinor,
+    currency: plan.currency || env.RAZORPAY_CURRENCY || 'INR',
+    status: 'CREATED',
+    metadata: {
+      providerSubscriptionId: rzpSub.id,
       planKey: plan.key,
       planId: plan.id,
       billingInterval: dto.billingInterval,
@@ -1476,7 +1726,7 @@ export async function verifyTenantSubscriptionPayment(
   dto: VerifySubscriptionPaymentDto,
 ) {
   // 1. Verify recurring subscription payment signature
-  const isValid = verifySubscriptionPaymentSignature({
+  const isValid = razorpayGateway.verifySubscriptionPaymentSignature({
     subscriptionId: dto.razorpay_subscription_id,
     paymentId: dto.razorpay_payment_id,
     signature: dto.razorpay_signature,
@@ -1486,37 +1736,203 @@ export async function verifyTenantSubscriptionPayment(
     throw AppError.badRequest('Invalid recurring subscription signature');
   }
 
-  // 2. Fetch payment from Razorpay
-  const rzpPayment = await fetchRazorpayPayment(dto.razorpay_payment_id);
+  // 2. Fetch the subscription from Razorpay; require notes.tenantId === tenantId or local mapping
+  const rzpSub = await razorpayGateway.fetchRazorpaySubscription(dto.razorpay_subscription_id);
+  const subNotes = (rzpSub.notes ?? {}) as Record<string, string>;
 
-  // 3. Update or create local subscription
-  let sub = await billingRepo.findTenantSubscription(tenantId);
-  const currentPeriodStart = new Date();
-  const currentPeriodEnd = new Date(Date.now() + 30 * 86400000);
-
-  if (sub) {
-    sub = await billingRepo.updateSubscription(sub.id, {
-      status: 'ACTIVE',
-      provider: 'razorpay',
-      providerSubscriptionId: dto.razorpay_subscription_id,
-      currentPeriodStart,
-      currentPeriodEnd,
-    });
+  let isTenantAuthorized = subNotes.tenantId === tenantId;
+  if (!isTenantAuthorized) {
+    const localSub = await billingRepo.findSubscriptionByProviderId(dto.razorpay_subscription_id);
+    if (localSub && localSub.tenantId === tenantId) {
+      isTenantAuthorized = true;
+    }
   }
 
-  // 4. Record local payment
-  const payment = await billingRepo.createPayment({
-    tenantId,
-    subscriptionId: sub?.id,
-    provider: 'razorpay',
-    providerPaymentId: dto.razorpay_payment_id,
-    providerSignature: dto.razorpay_signature,
-    amountMinor: Number(rzpPayment.amount ?? 0),
-    currency: rzpPayment.currency ?? 'INR',
-    status: 'PAID',
-    paymentMethod: rzpPayment.method,
-    paidAt: new Date(),
+  if (!isTenantAuthorized) {
+    throw AppError.forbidden('Unauthorized subscription verification for this workspace');
+  }
+
+  // 3. Fetch payment; require status captured or authorized
+  const rzpPayment = await razorpayGateway.fetchRazorpayPayment(dto.razorpay_payment_id);
+  if (rzpPayment.status !== 'captured' && rzpPayment.status !== 'authorized') {
+    throw AppError.badRequest(`Payment status is not captured (current: ${rzpPayment.status})`);
+  }
+
+  // Resolve plan from subscription notes
+  const targetPlanKey = (subNotes.planKey ?? 'PRO').toUpperCase();
+  const plan =
+    (await billingRepo.findPlanByKey(targetPlanKey)) ??
+    (subNotes.planId ? await billingRepo.findPlanById(subNotes.planId) : null);
+
+  if (!plan) {
+    throw AppError.notFound(`Plan "${targetPlanKey}" not found for subscription`);
+  }
+
+  const billingInterval = subNotes.billingInterval === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY';
+  const isAnnual = billingInterval === 'ANNUAL';
+  const expectedAmount = isAnnual ? plan.priceYearlyMinor : plan.priceMonthlyMinor;
+  const rzpAmount = Number(rzpPayment.amount ?? 0);
+  const rzpCurrency = (rzpPayment.currency ?? '').toUpperCase();
+
+  if (
+    rzpAmount !== expectedAmount ||
+    (rzpCurrency && rzpCurrency !== (plan.currency || 'INR').toUpperCase())
+  ) {
+    throw AppError.badRequest('Payment amount or currency does not match subscription plan');
+  }
+
+  // 4. DB transaction with atomic updates
+  const { sub, payment, fromPlanId } = await db.transaction(async (tx) => {
+    // Set period from Razorpay subscription current_start/current_end (not a hardcoded 30 days)
+    const currentPeriodStart = rzpSub.current_start
+      ? new Date(rzpSub.current_start * 1000)
+      : new Date();
+    const currentPeriodEnd = rzpSub.current_end
+      ? new Date(rzpSub.current_end * 1000)
+      : isAnnual
+        ? new Date(Date.now() + 365 * 86400000)
+        : new Date(Date.now() + 30 * 86400000);
+
+    const [existingSub] = await tx
+      .select()
+      .from(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.tenantId, tenantId),
+          sql`${subscriptions.status} IN ('TRIALING', 'ACTIVE', 'PAST_DUE')`,
+        ),
+      )
+      .limit(1);
+
+    const prevPlanId = existingSub?.planId ?? null;
+    let activeSub: Subscription;
+
+    if (existingSub) {
+      const [updated] = await tx
+        .update(subscriptions)
+        .set({
+          planId: plan.id,
+          status: 'ACTIVE',
+          provider: 'razorpay',
+          providerSubscriptionId: dto.razorpay_subscription_id,
+          currentPeriodStart,
+          currentPeriodEnd,
+          billingInterval,
+          cancelAtPeriodEnd: false,
+          updatedAt: new Date(),
+        })
+        .where(eq(subscriptions.id, existingSub.id))
+        .returning();
+      if (!updated) {
+        throw AppError.internal('Failed to update subscription record');
+      }
+      activeSub = updated;
+    } else {
+      const [created] = await tx
+        .insert(subscriptions)
+        .values({
+          tenantId,
+          planId: plan.id,
+          status: 'ACTIVE',
+          provider: 'razorpay',
+          providerSubscriptionId: dto.razorpay_subscription_id,
+          currentPeriodStart,
+          currentPeriodEnd,
+          billingInterval,
+        })
+        .returning();
+      if (!created) {
+        throw AppError.internal('Failed to create subscription record');
+      }
+      activeSub = created;
+    }
+
+    // Idempotent payment upsert
+    const paidPayment = await billingRepo.upsertPayment(
+      {
+        tenantId,
+        subscriptionId: activeSub.id,
+        provider: 'razorpay',
+        providerPaymentId: dto.razorpay_payment_id,
+        providerSignature: dto.razorpay_signature,
+        amountMinor: rzpAmount,
+        currency: rzpPayment.currency ?? plan.currency ?? 'INR',
+        status: 'PAID',
+        paymentMethod: rzpPayment.method,
+        paidAt: new Date(),
+        metadata: {
+          providerSubscriptionId: dto.razorpay_subscription_id,
+          planKey: plan.key,
+          planId: plan.id,
+          billingInterval,
+        },
+      },
+      tx,
+    );
+
+    // Auto-generate invoice
+    const generatedInv = await billingRepo.generateInvoiceNumber(new Date().getFullYear(), tx);
+    const [invoice] = await tx
+      .insert(invoices)
+      .values({
+        tenantId,
+        subscriptionId: activeSub.id,
+        planId: plan.id,
+        invoiceNumber: generatedInv.invoiceNumber,
+        invoiceYear: generatedInv.year,
+        invoiceSeq: generatedInv.seq,
+        amountCents: rzpAmount,
+        taxCents: 0,
+        totalCents: rzpAmount,
+        currency: paidPayment.currency,
+        status: 'PAID',
+        paidAt: new Date(),
+        billingPeriodStart: currentPeriodStart,
+        billingPeriodEnd: currentPeriodEnd,
+        lineItems: [
+          {
+            description: `${plan.name} Plan (${isAnnual ? 'Annual' : 'Monthly'})`,
+            quantity: 1,
+            unitPriceCents: rzpAmount,
+            totalCents: rzpAmount,
+          },
+        ],
+      })
+      .returning();
+
+    if (!invoice) {
+      throw AppError.internal('Failed to generate invoice record');
+    }
+
+    // Log subscription event
+    await tx.insert(subscriptionEvents).values({
+      subscriptionId: activeSub.id,
+      tenantId,
+      type: 'PURCHASED',
+      fromPlanId: prevPlanId,
+      toPlanId: plan.id,
+      actorType: 'USER',
+      actorId: actorUserId,
+      metadata: {
+        subscriptionId: dto.razorpay_subscription_id,
+        paymentId: dto.razorpay_payment_id,
+        planKey: plan.key,
+        billingInterval,
+        invoiceId: invoice.id,
+      },
+    });
+
+    return { sub: activeSub, payment: paidPayment, fromPlanId: prevPlanId };
   });
+
+  // Post-transaction notifications and cache sync
+  const oldPlan = fromPlanId ? await billingRepo.findPlanById(fromPlanId) : null;
+  const oldPlanKey = oldPlan?.key ?? null;
+  if (oldPlanKey !== plan.key) {
+    await onPlanChanged(tenantId, oldPlanKey, plan.key);
+  } else {
+    await invalidateTenantBillingCache(tenantId);
+  }
 
   emitToUser(actorUserId, 'billing:subscription_activated', {
     subscriptionId: dto.razorpay_subscription_id,
@@ -1527,7 +1943,9 @@ export async function verifyTenantSubscriptionPayment(
     success: true,
     status: 'ACTIVE',
     paymentId: payment.id,
-    subscriptionId: sub?.id,
+    subscriptionId: sub.id,
+    planKey: plan.key,
+    planName: plan.name,
   };
 }
 
@@ -1540,7 +1958,7 @@ export async function cancelTenantSubscription(
   if (!sub) throw AppError.notFound('No active subscription found for this workspace');
 
   if (sub.provider === 'razorpay' && sub.providerSubscriptionId) {
-    await cancelRazorpaySubscription(sub.providerSubscriptionId, !dto.immediately);
+    await razorpayGateway.cancelRazorpaySubscription(sub.providerSubscriptionId, !dto.immediately);
   }
 
   const updated = await billingRepo.updateSubscription(sub.id, {
@@ -1609,7 +2027,7 @@ export async function issuePaymentRefund(
   const refundAmount = dto.amountMinor ?? payment.amountMinor;
 
   // 1. Call Razorpay Refund API
-  const rzpRefund = await createRazorpayRefund({
+  const rzpRefund = await razorpayGateway.createRazorpayRefund({
     paymentId: payment.providerPaymentId,
     amountMinor: refundAmount,
     notes: {
