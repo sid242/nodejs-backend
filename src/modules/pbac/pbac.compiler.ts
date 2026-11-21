@@ -1,6 +1,7 @@
-import { and, eq, gt, gte, inArray, lt, lte, ne, not, notInArray, or, SQL, sql } from 'drizzle-orm';
+import { and, eq, gt, gte, ilike, inArray, like, lt, lte, ne, not, notInArray, or, SQL, sql } from 'drizzle-orm';
 import { PgColumn } from 'drizzle-orm/pg-core';
 
+import { logger } from '@/config/logger';
 import { Policy } from '@/db/schema/access/policies';
 
 import { resolvePath } from './pbac.evaluator';
@@ -10,7 +11,6 @@ import {
   CompiledScope,
   ConditionRule,
   PolicyConditionTree,
-  PolicyEvaluationContext,
 } from './pbac.types';
 
 /**
@@ -30,18 +30,27 @@ function getColumnForAttribute(
   return columns?.[field];
 }
 
+function escapeLikePattern(str: string): string {
+  return str.replace(/[%_\\]/g, '\\$&');
+}
+
 /**
  * Compiles a single AttributeCondition into a Drizzle SQL condition.
+ * Fails closed (1 = 0) if the attribute cannot be mapped to a column
+ * or if the operator is unrecognized/unsupported.
  */
 function compileAttributeCondition(
   cond: AttributeCondition,
   columns: Record<string, PgColumn>,
   actorContext: ActorContext,
-): SQL | undefined {
+): SQL {
   const col = getColumnForAttribute(cond?.attribute, columns);
   if (!col) {
-    // If the attribute does not belong to the target table, condition cannot be compiled to SQL directly
-    return undefined;
+    logger.warn(
+      { attribute: cond?.attribute },
+      'PBAC: Attribute does not map to table column; failing closed to prevent access widening',
+    );
+    return sql`1 = 0`;
   }
 
   // Resolve dynamic values like 'actor.memberId'
@@ -82,8 +91,28 @@ function compileAttributeCondition(
     case '$lte':
       return lte(col, targetVal as never);
 
+    case '$contains': {
+      if (typeof targetVal === 'string') {
+        const escaped = escapeLikePattern(targetVal);
+        return ilike(col, `%${escaped}%`);
+      }
+      return sql`1 = 0`;
+    }
+
+    case '$startsWith': {
+      if (typeof targetVal === 'string') {
+        const escaped = escapeLikePattern(targetVal);
+        return like(col, `${escaped}%`);
+      }
+      return sql`1 = 0`;
+    }
+
     default:
-      return undefined;
+      logger.warn(
+        { operator: (cond as any)?.operator },
+        'PBAC: Unknown condition operator; failing closed to prevent access widening',
+      );
+      return sql`1 = 0`;
   }
 }
 

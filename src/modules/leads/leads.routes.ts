@@ -23,8 +23,12 @@ router.get(
 
 router.post(
   '/',
-  requirePolicy({ resource: 'leads', action: 'create' }),
   validate({ body: dto.createLeadDto }),
+  requirePolicy({
+    resource: 'leads',
+    action: 'create',
+    getTargetResource: (req) => (req.valid?.body ?? req.body) as Record<string, unknown>,
+  }),
   controller.createLead,
 );
 

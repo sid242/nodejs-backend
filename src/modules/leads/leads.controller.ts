@@ -17,6 +17,8 @@ export const listLeads = asyncHandler(async (req: Request, res: Response) => {
     req.actorContext,
     req.membership?.roleIds,
     isOwnerOrSupport,
+    !!req.isSupportSession,
+    req.supportSession?.scope,
     req.db,
   );
 
@@ -49,7 +51,18 @@ export const updateLead = asyncHandler(async (req: Request, res: Response) => {
   const tenantId = req.tenant!.id;
   const leadId = (req.valid?.params?.leadId ?? req.params.leadId) as string;
   const body = (req.valid?.body ?? req.body) as UpdateLeadDto;
-  const updated = await leadsService.updateLead(tenantId, leadId, body, req.user?.id, req.db);
+  const isOwnerOrSupport = !!req.membership?.roles?.includes('OWNER') || !!req.isSupportSession;
+
+  const updated = await leadsService.updateLead(
+    tenantId,
+    leadId,
+    body,
+    req.user?.id,
+    req.actorContext,
+    req.membership?.roleIds,
+    isOwnerOrSupport,
+    req.db,
+  );
 
   res.json(AppResponse.ok(updated, 'Lead updated successfully'));
 });

@@ -288,6 +288,8 @@ export async function resolveTenantContext(
         status: member.status,
         roles,
         roleIds,
+        departmentId: member.departmentId ?? member.department ?? null,
+        regionId: member.regionId ?? member.location ?? null,
       };
     }
 

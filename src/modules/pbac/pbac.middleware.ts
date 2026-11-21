@@ -1,6 +1,8 @@
 import { NextFunction, Request, Response } from 'express';
 
+import { logger } from '@/config/logger';
 import { AppError } from '@/lib/errors';
+import * as platformRepo from '@/modules/platform/platform.repository';
 
 import { pbacService } from './pbac.service';
 import { ActorContext, PolicyEvaluationContext } from './pbac.types';
@@ -31,8 +33,43 @@ export function requirePolicy(options: RequirePolicyOptions) {
         throw AppError.unauthorized('Tenant context is required for policy evaluation');
       }
 
-      // Built-in OWNER role or active platform support sessions bypass fine-grained PBAC
-      if (req.membership?.roles?.includes('OWNER') || req.isSupportSession) {
+      // Built-in OWNER role bypasses fine-grained PBAC
+      if (req.membership?.roles?.includes('OWNER')) {
+        return next();
+      }
+
+      // Platform support sessions: require FULL_ADMIN for confidential records and write audit log
+      if (req.isSupportSession) {
+        if (options.getTargetResource) {
+          const targetResource = await options.getTargetResource(req);
+          if (
+            targetResource &&
+            Boolean((targetResource as Record<string, unknown>).isConfidential)
+          ) {
+            if (req.supportSession?.scope !== 'FULL_ADMIN') {
+              throw AppError.forbidden(
+                'Confidential records cannot be accessed via standard support sessions',
+              );
+            }
+          }
+        }
+
+        // Log support session access for audit trail
+        await platformRepo
+          .logPlatformAction({
+            actorStaffId: req.supportSession?.staffId ?? req.staff?.id ?? 'support',
+            action: `support.${options.resource}.${options.action}`,
+            targetType: options.resource,
+            tenantId: req.tenant.id,
+            supportSessionId: req.supportSession?.id,
+            metadata: {
+              resource: options.resource,
+              action: options.action,
+              reason: req.supportSession?.reason,
+            },
+          })
+          .catch(() => {});
+
         return next();
       }
 
@@ -70,11 +107,21 @@ export function requirePolicy(options: RequirePolicyOptions) {
         );
 
         if (!result.allowed) {
-          throw AppError.forbidden('Access denied by workspace policy', {
-            resource: options.resource,
-            action: options.action,
-            traces: result.traces,
-          });
+          logger.warn(
+            {
+              tenantId: req.tenant.id,
+              userId: req.user?.id,
+              memberId: actorContext.memberId,
+              resource: options.resource,
+              action: options.action,
+              traces: result.traces,
+              requestId: (req as unknown as { id?: string }).id,
+            },
+            'PBAC access denied by policy',
+          );
+
+          // Never leak policy traces or internal rules to clients
+          throw AppError.forbidden('Access denied by workspace policy');
         }
       }
 
