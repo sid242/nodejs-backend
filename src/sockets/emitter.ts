@@ -13,6 +13,17 @@ export const emitToUser = (userId: string, event: string, payload: any): void =>
   void emitterClient?.publish?.(`sse:user:${userId}`, JSON.stringify({ event, payload }));
 };
 
+export function emitToWorkspaceUser(
+  tenantId: string,
+  userId: string,
+  event: string,
+  payload: Record<string, unknown>,
+): void {
+  const room = 'workspace-user:' + tenantId + ':' + userId;
+  emitter.to(room).emit(event, payload);
+  void emitterClient.publish('sse:' + room, JSON.stringify({ event, payload }));
+}
+
 export const emitToRoom = (room: string, event: string, payload: any): void => {
   emitter.to(`room:${room}`).emit(event, payload);
 };

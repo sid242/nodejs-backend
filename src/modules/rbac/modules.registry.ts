@@ -5,11 +5,12 @@ import { billingModuleDefinition } from '@/modules/billing/billing.permissions';
 import { developersModuleDefinition } from '@/modules/developers/developers.permissions';
 import { filesModuleDefinition } from '@/modules/files/files.permissions';
 import { groupsModuleDefinition } from '@/modules/groups/groups.permissions';
-import { rbacModuleDefinition } from '@/modules/rbac/rbac.permissions';
 import {
   onboardingModuleDefinition,
   supportModuleDefinition,
 } from '@/modules/onboarding/onboarding.permissions';
+import { isModuleInstalled, optionalModules } from '@/modules/optional-modules/registry';
+import { rbacModuleDefinition } from '@/modules/rbac/rbac.permissions';
 import {
   membersModuleDefinition,
   tenantsModuleDefinition,
@@ -30,4 +31,5 @@ export const SYSTEM_MODULE_DEFINITIONS: DomainModuleDefinition[] = [
   analyticsModuleDefinition,
   onboardingModuleDefinition,
   supportModuleDefinition,
+  ...(isModuleInstalled('leads') ? [optionalModules.leads.catalog] : []),
 ];

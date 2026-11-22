@@ -1,19 +1,19 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
 
 import {
+  tenantScimTokens,
+  tenantSsoConfigs,
+  type NewTenantScimToken,
+  type NewTenantSsoConfig,
+  type TenantScimToken,
+  type TenantSsoConfig,
+} from '@/db/schema/index';
+import {
   assertTenantScope,
   currentTenantCtx,
   primaryDbHandle,
   tenantDb,
 } from '@/db/tenancy/context';
-import {
-  type NewTenantScimToken,
-  type NewTenantSsoConfig,
-  type TenantScimToken,
-  tenantScimTokens,
-  type TenantSsoConfig,
-  tenantSsoConfigs,
-} from '@/db/schema/index';
 
 export class SsoRepository {
   async findConfigByTenantId(tenantId: string): Promise<TenantSsoConfig | null> {
@@ -34,6 +34,27 @@ export class SsoRepository {
       .limit(1);
 
     return primaryConfig ?? null;
+  }
+
+  async recordConnectionTest(
+    tenantId: string,
+    configUpdatedAt: Date,
+    succeeded: boolean,
+  ): Promise<void> {
+    assertTenantScope(tenantId);
+    await tenantDb()
+      .update(tenantSsoConfigs)
+      .set({
+        lastConnectionTestAt: new Date(),
+        lastConnectionTestSucceeded: succeeded,
+        updatedAt: sql`${tenantSsoConfigs.updatedAt}`,
+      })
+      .where(
+        and(
+          eq(tenantSsoConfigs.tenantId, tenantId),
+          sql`date_trunc('milliseconds', ${tenantSsoConfigs.updatedAt}) = ${configUpdatedAt.toISOString()}::timestamptz`,
+        ),
+      );
   }
 
   async findActiveConfigByDomain(domain: string): Promise<TenantSsoConfig | null> {
@@ -138,10 +159,7 @@ export class SsoRepository {
     if (ip) {
       payload.lastUsedIp = ip;
     }
-    await target
-      .update(tenantScimTokens)
-      .set(payload)
-      .where(eq(tenantScimTokens.id, id));
+    await target.update(tenantScimTokens).set(payload).where(eq(tenantScimTokens.id, id));
   }
 
   async rotateScimToken(

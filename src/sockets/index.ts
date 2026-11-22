@@ -13,6 +13,11 @@ import { verifyAccessToken, verifySupportToken } from '@/modules/auth/tokens';
 import * as platformRepo from '@/modules/platform/platform.repository';
 import * as tenantsRepo from '@/modules/tenants/tenants.repository';
 
+const workspaceSlugSchema = z
+  .string()
+  .min(1)
+  .max(63)
+  .regex(/^[a-z0-9-]+$/);
 const roomSchema = z.object({ roomId: z.string().min(1).max(64) });
 const messageSchema = roomSchema.extend({ text: z.string().min(1).max(2000) });
 
@@ -57,12 +62,21 @@ export function initSocket(httpServer: HttpServer): SocketManager {
         token = cookies[ACCESS_TOKEN_COOKIE];
       }
       if (!token) throw new Error('unauthorized');
+      const requestedSlug = workspaceSlugSchema
+        .optional()
+        .parse(socket.handshake.auth?.workspaceSlug);
 
       try {
         const supportPayload = verifySupportToken(token);
         const session = await platformRepo.findSupportSessionById(supportPayload.sess);
         if (!session || session.status !== 'ACTIVE' || new Date(session.expiresAt) <= new Date()) {
           throw new Error('unauthorized');
+        }
+        if (requestedSlug) {
+          const tenant = await tenantsRepo.findTenantBySlug(requestedSlug);
+          if (tenant?.id !== session.tenantId || tenant.status !== 'ACTIVE')
+            throw new Error('unauthorized');
+          socket.data.workspaceTenantId = tenant.id;
         }
         socket.data.isSupportSession = true;
         socket.data.supportSession = session;
@@ -73,7 +87,7 @@ export function initSocket(httpServer: HttpServer): SocketManager {
       }
 
       const payload = verifyAccessToken(token);
-      if (payload?.typ !== 'USER') throw new Error('unauthorized');
+      if (payload?.typ !== 'USER' || !payload.sub) throw new Error('unauthorized');
 
       const allowed = await consumeRateLimit(
         `connect:${payload.sub}`,
@@ -81,6 +95,13 @@ export function initSocket(httpServer: HttpServer): SocketManager {
         60_000,
       );
       if (!allowed) throw new Error('rate_limited');
+      if (requestedSlug) {
+        const tenant = await tenantsRepo.findTenantBySlug(requestedSlug);
+        if (!tenant || tenant.status !== 'ACTIVE') throw new Error('unauthorized');
+        const member = await tenantsRepo.findTenantMember(tenant.id, payload.sub);
+        if (!member || member.status !== 'ACTIVE') throw new Error('unauthorized');
+        socket.data.workspaceTenantId = tenant.id;
+      }
       socket.data.user = { id: payload.sub as string };
       next();
     })().catch(() => next(new Error('unauthorized')));
@@ -91,6 +112,10 @@ export function initSocket(httpServer: HttpServer): SocketManager {
     const userId = user?.id;
     if (userId) {
       socket.join(`user:${userId}`); // personal room: lets workers target a user from anywhere
+    }
+
+    if (userId && socket.data.workspaceTenantId && !socket.data.isSupportSession) {
+      socket.join('workspace-user:' + socket.data.workspaceTenantId + ':' + userId);
     }
 
     if (socket.data.isSupportSession && socket.data.supportSession) {

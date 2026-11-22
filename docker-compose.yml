@@ -83,9 +83,14 @@ services:
       mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD} &&
       mc mb --ignore-existing local/$${S3_BUCKET} &&
       mc anonymous set none local/$${S3_BUCKET} &&
-      mc anonymous set download local/$${S3_BUCKET}/tenants &&
       mc anonymous set download local/$${S3_BUCKET}/avatars &&
       mc anonymous set download local/$${S3_BUCKET}/branding"
+
+  clamav:
+    profiles: ['full', 'scanner']
+    image: clamav/clamav:1.4
+    ports:
+      - '127.0.0.1:3310:3310'
 
   api: &app
     profiles: ['full']
@@ -98,6 +103,8 @@ services:
       QUEUE_REDIS_URL: redis://redis-queue:6379
       SOCKET_REDIS_URL: redis://redis-socket:6379
       S3_ENDPOINT: http://minio:9000
+      CLAMD_HOST: clamav
+      CLAMD_PORT: 3310
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }

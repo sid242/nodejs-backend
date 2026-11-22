@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 
+import { env } from '@/config/env';
 import { createRedis } from '@/config/redis';
 import { asyncHandler } from '@/lib/async-handler';
 import { AppError } from '@/lib/errors';
@@ -160,7 +161,8 @@ export const getStorageStats = asyncHandler(async (req: Request, res: Response) 
 
 export const streamEvents = (req: Request, res: Response): void => {
   const userId = req.user?.id;
-  if (!userId) {
+  const tenantId = req.tenant?.id;
+  if (!userId || !tenantId) {
     res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Authentication required' } });
     return;
   }
@@ -173,8 +175,8 @@ export const streamEvents = (req: Request, res: Response): void => {
   });
   res.write(':connected\n\n');
 
-  const subClient = createRedis(`sse-sub-${userId}`);
-  const channel = `sse:user:${userId}`;
+  const subClient = createRedis(`sse-sub-${userId}`, { url: env.SOCKET_REDIS_URL });
+  const channel = 'sse:workspace-user:' + tenantId + ':' + userId;
 
   void subClient.subscribe(channel);
 

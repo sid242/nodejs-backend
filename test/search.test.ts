@@ -27,7 +27,13 @@ test('Search: searchQueryDto validates query string and parses comma-separated t
 });
 
 test('Search: globalSearch correctly finds matching static pages and actions', async () => {
-  const result = await globalSearch({ q: 'team', limit: 10 });
+  const restricted = await globalSearch({ q: 'team', limit: 10 });
+  assert.equal(restricted.total, 0);
+
+  const result = await globalSearch({ q: 'team', limit: 10 }, null, [
+    'members:read',
+    'members:invite',
+  ]);
 
   assert.ok(result.total > 0);
   const titles = result.results.map((r) => r.title);

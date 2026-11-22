@@ -10,6 +10,7 @@ export const QUEUES = {
   DB_OPS: 'db-ops',
   NOTIFICATION: 'notification',
   WEBHOOK: 'webhook-delivery',
+  MEMBER_IMPORT: 'member-import',
 } as const;
 
 // Producer connection (used by the API and the worker when it enqueues follow-up jobs).
@@ -36,7 +37,9 @@ export const maintenanceQueue = make(QUEUES.MAINTENANCE);
 export const dbOpsQueue = make(QUEUES.DB_OPS);
 export const notificationQueue = make(QUEUES.NOTIFICATION);
 export const webhookQueue = make(QUEUES.WEBHOOK);
+export const memberImportQueue = make(QUEUES.MEMBER_IMPORT);
 export const allQueues: Queue[] = [
+  memberImportQueue,
   emailQueue,
   fileQueue,
   maintenanceQueue,

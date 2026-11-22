@@ -1,22 +1,22 @@
 import { Router, type Request, type Response } from 'express';
 
+import { asyncHandler } from '@/lib/async-handler';
+import { AppResponse } from '@/lib/responses';
 import { optionalAuth, requireAuth } from '@/middleware/auth';
-import { authLimiter, resolveLimiter } from '@/middleware/rate-limit';
+import { authLimiter, resolveLimiter, tenantLimiter } from '@/middleware/rate-limit';
 import { requirePermission } from '@/middleware/rbac';
 import { blockInSupportSession, requireSupportOrUser } from '@/middleware/support';
 import { requireTenant } from '@/middleware/tenant';
 import { validate } from '@/middleware/validate';
+import { tenantAnalyticsRouter } from '@/modules/analytics/analytics.routes';
 import { tenantAccessRouter, tenantAuditRouter } from '@/modules/audit/audit.routes';
 import * as billingController from '@/modules/billing/billing.controller';
 import * as billingDto from '@/modules/billing/billing.dto';
+import developersRouter from '@/modules/developers/developers.routes';
+import * as featureFlagsService from '@/modules/feature-flags/feature-flags.service';
 import * as invitationsController from '@/modules/invitations/invitations.controller';
-import { asyncHandler } from '@/lib/async-handler';
-import { AppResponse } from '@/lib/responses';
 import * as invitationsDto from '@/modules/invitations/invitations.dto';
 import { invitationsRouter } from '@/modules/invitations/invitations.routes';
-import * as featureFlagsService from '@/modules/feature-flags/feature-flags.service';
-import developersRouter from '@/modules/developers/developers.routes';
-import { tenantAnalyticsRouter } from '@/modules/analytics/analytics.routes';
 import { onboardingRouter } from '@/modules/onboarding/onboarding.routes';
 import * as privacyController from '@/modules/privacy/privacy.controller';
 import * as privacyDto from '@/modules/privacy/privacy.dto';
@@ -249,6 +249,26 @@ router.post(
   requirePermission('members:invite'),
   validate({ body: dto.validateMemberImportDto }),
   controller.validateMemberImport,
+);
+
+router.post(
+  '/:tenantId/members/import/jobs',
+  requireAuth,
+  requireTenant,
+  tenantLimiter,
+  requirePermission('members:invite'),
+  validate({ body: dto.executeMemberImportDto }),
+  controller.queueMemberImport,
+);
+
+router.get(
+  '/:tenantId/members/import/jobs/:jobId',
+  requireAuth,
+  requireTenant,
+  tenantLimiter,
+  requirePermission('members:invite'),
+  validate({ params: dto.memberImportJobParamsDto }),
+  controller.getMemberImportJob,
 );
 
 router.post(

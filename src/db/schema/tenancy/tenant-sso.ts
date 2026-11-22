@@ -1,13 +1,5 @@
 import { relations } from 'drizzle-orm';
-import {
-  boolean,
-  pgEnum,
-  pgTable,
-  text,
-  timestamp,
-  uniqueIndex,
-  uuid,
-} from 'drizzle-orm/pg-core';
+import { boolean, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { roles } from '../access/rbac';
 import { users } from '../identity/users';
@@ -37,14 +29,13 @@ export const tenantSsoConfigs = pgTable(
     oidcClientSecret: text('oidc_client_secret'),
     oidcDiscoveryUrl: text('oidc_discovery_url'),
     enforceSso: boolean('enforce_sso').notNull().default(false),
-    allowedDomains: text('allowed_domains')
-      .array()
-      .notNull()
-      .default([]),
+    allowedDomains: text('allowed_domains').array().notNull().default([]),
     defaultRoleId: uuid('default_role_id').references(() => roles.id, {
       onDelete: 'set null',
     }),
     jitProvisioning: boolean('jit_provisioning').notNull().default(true),
+    lastConnectionTestAt: timestamp('last_connection_test_at', { withTimezone: true }),
+    lastConnectionTestSucceeded: boolean('last_connection_test_succeeded'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
@@ -58,34 +49,28 @@ export const tenantSsoConfigs = pgTable(
  * Tenant SCIM 2.0 Bearer Tokens
  */
 // scope: tenant
-export const tenantScimTokens = pgTable(
-  'tenant_scim_tokens',
-  {
-    id: uuid('id').defaultRandom().primaryKey(),
-    tenantId: uuid('tenant_id')
-      .notNull()
-      .references(() => tenants.id, { onDelete: 'cascade' }),
-    name: text('name').notNull(),
-    tokenHash: text('token_hash').notNull().unique(),
-    tokenPrefix: text('token_prefix').notNull(),
-    status: scimTokenStatusEnum('status').notNull().default('ACTIVE'),
-    allowedIps: text('allowed_ips')
-      .array()
-      .notNull()
-      .default([]),
-    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
-    lastUsedIp: text('last_used_ip'),
-    expiresAt: timestamp('expires_at', { withTimezone: true }),
-    createdByUserId: uuid('created_by_user_id').references(() => users.id, {
-      onDelete: 'set null',
-    }),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
-  },
-);
+export const tenantScimTokens = pgTable('tenant_scim_tokens', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  tenantId: uuid('tenant_id')
+    .notNull()
+    .references(() => tenants.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  tokenHash: text('token_hash').notNull().unique(),
+  tokenPrefix: text('token_prefix').notNull(),
+  status: scimTokenStatusEnum('status').notNull().default('ACTIVE'),
+  allowedIps: text('allowed_ips').array().notNull().default([]),
+  lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  lastUsedIp: text('last_used_ip'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  createdByUserId: uuid('created_by_user_id').references(() => users.id, {
+    onDelete: 'set null',
+  }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
 
 export const tenantSsoRelations = relations(tenantSsoConfigs, ({ one }) => ({
   tenant: one(tenants, {

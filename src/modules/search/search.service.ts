@@ -147,30 +147,57 @@ export async function globalSearch(
   query: SearchQueryDto,
   tenantId?: string | null,
   userPermissions: string[] = [],
+  extraPages: SearchItem[] = [],
 ): Promise<SearchResult> {
   const q = query.q.trim().toLowerCase();
   const limit = query.limit ?? 20;
   const types = query.types;
 
   const results: SearchItem[] = [];
+  const can = (permission: string) =>
+    userPermissions.includes('*') || userPermissions.includes(permission);
+  const pagePermissions: Record<string, string> = {
+    'page-team': 'members:read',
+    'page-roles': 'roles:read',
+    'page-groups': 'groups:read',
+    'page-files': 'files:read',
+    'page-templates': 'email_templates:read',
+    'page-audit-logs': 'audit:read',
+    'page-branding': 'tenants:read',
+    'page-smtp': 'tenants:update',
+    'page-settings': 'tenants:read',
+    'page-security': 'tenants:update',
+    'page-billing': 'billing:read',
+  };
+  const actionPermissions: Record<string, string> = {
+    'action-invite-member': 'members:invite',
+    'action-upload-file': 'files:write',
+    'action-create-role': 'roles:create',
+    'action-create-group': 'groups:create',
+    'action-update-branding': 'tenants:update',
+  };
 
   // 1. Pages matching query
   if (!types || types.includes('pages')) {
-    const matchingPages = STATIC_PAGES.filter(
-      (p) =>
-        p.title.toLowerCase().includes(q) ||
-        p.subtitle?.toLowerCase().includes(q),
-    );
+    const matchingPages = [...STATIC_PAGES, ...extraPages].filter((p) => {
+      const permission = pagePermissions[p.id];
+      return (
+        (!permission || can(permission)) &&
+        (p.title.toLowerCase().includes(q) || p.subtitle?.toLowerCase().includes(q))
+      );
+    });
     results.push(...matchingPages);
   }
 
   // 2. Actions matching query
   if (!types || types.includes('actions')) {
-    const matchingActions = STATIC_ACTIONS.filter(
-      (a) =>
-        a.title.toLowerCase().includes(q) ||
-        a.subtitle?.toLowerCase().includes(q),
-    );
+    const matchingActions = STATIC_ACTIONS.filter((a) => {
+      const permission = actionPermissions[a.id];
+      return (
+        Boolean(permission && can(permission)) &&
+        (a.title.toLowerCase().includes(q) || a.subtitle?.toLowerCase().includes(q))
+      );
+    });
     results.push(...matchingActions);
   }
 
@@ -181,38 +208,28 @@ export async function globalSearch(
     const promises: Promise<SearchItem[]>[] = [];
 
     // Members search
-    if (!types || types.includes('members')) {
-      promises.push(
-        repo.searchMembers(tenantId, q, perCategoryLimit).catch(() => []),
-      );
+    if (can('members:read') && (!types || types.includes('members'))) {
+      promises.push(repo.searchMembers(tenantId, q, perCategoryLimit).catch(() => []));
     }
 
     // Files search
-    if (!types || types.includes('files')) {
-      promises.push(
-        repo.searchFiles(tenantId, q, perCategoryLimit).catch(() => []),
-      );
+    if (can('files:read') && (!types || types.includes('files'))) {
+      promises.push(repo.searchFiles(tenantId, q, perCategoryLimit).catch(() => []));
     }
 
     // Roles search
-    if (!types || types.includes('roles')) {
-      promises.push(
-        repo.searchRoles(tenantId, q, perCategoryLimit).catch(() => []),
-      );
+    if (can('roles:read') && (!types || types.includes('roles'))) {
+      promises.push(repo.searchRoles(tenantId, q, perCategoryLimit).catch(() => []));
     }
 
     // Groups search
-    if (!types || types.includes('groups')) {
-      promises.push(
-        repo.searchGroups(tenantId, q, perCategoryLimit).catch(() => []),
-      );
+    if (can('groups:read') && (!types || types.includes('groups'))) {
+      promises.push(repo.searchGroups(tenantId, q, perCategoryLimit).catch(() => []));
     }
 
     // Templates search
-    if (!types || types.includes('templates')) {
-      promises.push(
-        repo.searchEmailTemplates(tenantId, q, perCategoryLimit).catch(() => []),
-      );
+    if (can('email_templates:read') && (!types || types.includes('templates'))) {
+      promises.push(repo.searchEmailTemplates(tenantId, q, perCategoryLimit).catch(() => []));
     }
 
     const dynamicResults = await Promise.all(promises);

@@ -6,12 +6,9 @@ export const fileScanStatusEnum = pgEnum('FileScanStatus', [
   'CLEAN',
   'INFECTED',
   'SKIPPED',
+  'FAILED',
 ]);
-export const fileVisibilityEnum = pgEnum('FileVisibility', [
-  'PRIVATE',
-  'TENANT',
-  'PUBLIC_LINK',
-]);
+export const fileVisibilityEnum = pgEnum('FileVisibility', ['PRIVATE', 'TENANT', 'PUBLIC_LINK']);
 
 export const userStatusEnum = pgEnum('UserStatus', [
   'PENDING_VERIFICATION',
@@ -67,10 +64,7 @@ export const supportSessionStatusEnum = pgEnum('SupportSessionStatus', [
   'TERMINATED',
 ]);
 
-export const supportSessionModeEnum = pgEnum('SupportSessionMode', [
-  'TENANT_SCOPED',
-  'AS_MEMBER',
-]);
+export const supportSessionModeEnum = pgEnum('SupportSessionMode', ['TENANT_SCOPED', 'AS_MEMBER']);
 
 export const supportSessionScopeEnum = pgEnum('SupportSessionScope', [
   'READ_ONLY',
@@ -134,7 +128,12 @@ export const userGroupScopeEnum = pgEnum('UserGroupScope', ['PLATFORM', 'TENANT'
 
 export const userGroupStatusEnum = pgEnum('UserGroupStatus', ['ACTIVE', 'ARCHIVED']);
 
-export const outboxStatusEnum = pgEnum('OutboxStatus', ['PENDING', 'PROCESSING', 'PUBLISHED', 'FAILED']);
+export const outboxStatusEnum = pgEnum('OutboxStatus', [
+  'PENDING',
+  'PROCESSING',
+  'PUBLISHED',
+  'FAILED',
+]);
 
 export const notificationCategoryEnum = pgEnum('NotificationCategory', [
   'SECURITY',
@@ -153,17 +152,9 @@ export const notificationSeverityEnum = pgEnum('NotificationSeverity', [
   'CRITICAL',
 ]);
 
-export const notificationDigestEnum = pgEnum('NotificationDigest', [
-  'NONE',
-  'DAILY',
-  'WEEKLY',
-]);
+export const notificationDigestEnum = pgEnum('NotificationDigest', ['NONE', 'DAILY', 'WEEKLY']);
 
-export const featureFlagTypeEnum = pgEnum('FeatureFlagType', [
-  'BOOLEAN',
-  'PERCENT',
-  'VARIANT',
-]);
+export const featureFlagTypeEnum = pgEnum('FeatureFlagType', ['BOOLEAN', 'PERCENT', 'VARIANT']);
 
 export const featureFlagTargetEnum = pgEnum('FeatureFlagTarget', [
   'TENANT',
@@ -194,17 +185,9 @@ export const announcementStatusEnum = pgEnum('AnnouncementStatus', [
   'ENDED',
 ]);
 
-export const consentTypeEnum = pgEnum('ConsentType', [
-  'TERMS',
-  'PRIVACY',
-  'MARKETING',
-  'COOKIES',
-]);
+export const consentTypeEnum = pgEnum('ConsentType', ['TERMS', 'PRIVACY', 'MARKETING', 'COOKIES']);
 
-export const dataExportScopeEnum = pgEnum('DataExportScope', [
-  'USER',
-  'TENANT',
-]);
+export const dataExportScopeEnum = pgEnum('DataExportScope', ['USER', 'TENANT']);
 
 export const dataExportStatusEnum = pgEnum('DataExportStatus', [
   'PENDING',
@@ -225,5 +208,3 @@ export const tenantTombstoneReasonEnum = pgEnum('TenantTombstoneReason', [
   'TERMS_VIOLATION',
   'LEGAL',
 ]);
-
-

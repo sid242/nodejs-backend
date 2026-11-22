@@ -5,6 +5,7 @@ const bool = z.enum(['true', 'false']).transform((v) => v === 'true');
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   APP_NAME: z.string().default('api'),
+  FOUNDATION_MODULES: z.string().default('leads'),
   HOST: z.string().default('0.0.0.0'),
   PORT: z.coerce.number().int().default(3000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
@@ -88,6 +89,8 @@ const schema = z.object({
 
   WORKER_CONCURRENCY: z.coerce.number().default(10),
   EMAIL_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(100).optional(),
+  CLAMD_HOST: z.string().min(1).optional(),
+  CLAMD_PORT: z.coerce.number().int().min(1).max(65535).default(3310),
   FILE_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(100).optional(),
   MAINTENANCE_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(10).optional(),
   MAINTENANCE_BATCH_SIZE: z.coerce.number().int().min(1).max(10000).default(500),
@@ -124,12 +127,16 @@ if (parsed.data.NODE_ENV === 'production') {
 
   const hasEncryptionKey = parsed.data.ENCRYPTION_KEY || parsed.data.ENCRYPTION_KEYS;
   if (!hasEncryptionKey) {
-    console.error('Invalid environment variables: ENCRYPTION_KEY (>=32 chars) or ENCRYPTION_KEYS is required in production.');
+    console.error(
+      'Invalid environment variables: ENCRYPTION_KEY (>=32 chars) or ENCRYPTION_KEYS is required in production.',
+    );
     process.exit(1);
   }
 
   if (parsed.data.ENCRYPTION_KEY && parsed.data.ENCRYPTION_KEY.length < 32) {
-    console.error('Invalid environment variables: ENCRYPTION_KEY must be at least 32 characters long in production.');
+    console.error(
+      'Invalid environment variables: ENCRYPTION_KEY must be at least 32 characters long in production.',
+    );
     process.exit(1);
   }
 
@@ -138,12 +145,19 @@ if (parsed.data.NODE_ENV === 'production') {
     (parsed.data.ENCRYPTION_KEY === parsed.data.JWT_ACCESS_SECRET ||
       parsed.data.ENCRYPTION_KEY === parsed.data.JWT_REFRESH_SECRET)
   ) {
-    console.error('Invalid environment variables: ENCRYPTION_KEY must be distinct from JWT secrets.');
+    console.error(
+      'Invalid environment variables: ENCRYPTION_KEY must be distinct from JWT secrets.',
+    );
     process.exit(1);
   }
 
-  if (!process.env.BFF_SHARED_SECRET || parsed.data.BFF_SHARED_SECRET === 'bff-dev-shared-secret-key-min-16-chars') {
-    console.error('Invalid environment variables: Dedicated non-default BFF_SHARED_SECRET is required in production.');
+  if (
+    !process.env.BFF_SHARED_SECRET ||
+    parsed.data.BFF_SHARED_SECRET === 'bff-dev-shared-secret-key-min-16-chars'
+  ) {
+    console.error(
+      'Invalid environment variables: Dedicated non-default BFF_SHARED_SECRET is required in production.',
+    );
     process.exit(1);
   }
 

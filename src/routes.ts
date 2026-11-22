@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import addressRoutes from '@/modules/addresses/addresses.routes';
+import { platformMetricsRouter } from '@/modules/analytics/analytics.routes';
 import announcementsRoutes from '@/modules/announcements/announcements.routes';
 import authRoutes from '@/modules/auth/auth.routes';
 import * as billingController from '@/modules/billing/billing.controller';
@@ -15,9 +16,9 @@ import internalRoutes from '@/modules/internal/internal.routes';
 import leadsRoutes from '@/modules/leads/leads.routes';
 import maintenanceRoutes from '@/modules/maintenance/maintenance.routes';
 import notificationsRoutes from '@/modules/notifications/notifications.routes';
+import { isModuleInstalled, optionalModules } from '@/modules/optional-modules/registry';
 import platformRoutes from '@/modules/platform/platform.routes';
 import policiesRoutes from '@/modules/policies/policies.routes';
-import { platformMetricsRouter } from '@/modules/analytics/analytics.routes';
 import { consentRouter, platformPrivacyRouter } from '@/modules/privacy/privacy.routes';
 import rbacRoutes from '@/modules/rbac/rbac.routes';
 import { scimRouter } from '@/modules/scim/scim.routes';
@@ -37,7 +38,7 @@ router.use('/tenants', tenantRoutes);
 router.use('/groups', groupRoutes);
 router.use('/rbac', rbacRoutes);
 router.use('/policies', policiesRoutes);
-router.use('/leads', leadsRoutes);
+if (isModuleInstalled('leads')) router.use(optionalModules.leads.mountPath, leadsRoutes);
 router.use('/notifications', notificationsRoutes);
 router.use('/search', searchRoutes);
 router.use('/platform', platformRoutes);

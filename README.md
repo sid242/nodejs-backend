@@ -119,8 +119,10 @@ The RBAC engine supports system roles (`OWNER`, `ADMIN`, `MEMBER`) and custom te
 1. `POST /api/v1/files/upload-url` `{ filename, contentType }` -> returns `{ fileId, upload: { url, fields } }`
 2. Browser directly `POST`s `multipart/form-data` (form fields, then binary file) to S3/MinIO.
 3. `POST /api/v1/files/:id/confirm` -> server verifies object existence, validates size, and queues a processing job.
-4. Background worker processes the file and emits `file:processed` via WebSocket.
-5. `GET /api/v1/files/:id/download-url` -> returns a short-lived presigned GET URL.
+4. The worker scans the upload with ClamAV and stores the verified bytes under a separate private key before marking a file available. Infected files are quarantined and scanner failures are retried.
+5. `GET /api/v1/files/:id/download-url` issues a short-lived URL after a clean scan. Shares also require a clean scan.
+
+For host development, start the scanner with `docker compose --profile scanner up -d clamav`. Once its definitions load, set `CLAMD_HOST=127.0.0.1` and `CLAMD_PORT=3310` in the worker environment and run `npm run dev:worker`. The full Compose profile uses the private Compose network. Keep the daemon endpoint off public networks. Before rollout, apply the scan migration and verify that the bucket policy limits public reads to branding and avatars. Inspect legacy pending records before resuming scans.
 
 ### 4. Audit Logging & Compliance
 
@@ -157,19 +159,19 @@ curl -X POST http://localhost:3000/api/v1/auth/stop-impersonate \
 
 ## Useful Commands
 
-| Command               | Description                                                         |
-| :-------------------- | :------------------------------------------------------------------ |
-| `npm run dev`         | Run API server with file watch (`tsx watch --env-file=.env`)        |
-| `npm run dev:worker`  | Run Background Worker with file watch (`tsx watch --env-file=.env`) |
-| `npm run typecheck`   | Run TypeScript compiler type checking (`tsc --noEmit`)              |
-| `npm test`            | Run test suites using tsx test runner (`tsx --test`)                |
-| `npm run lint`        | Run ESLint checks                                                   |
-| `npm run lint:fix`    | Fix linting errors automatically                                    |
-| `npm run format`      | Format codebase using Prettier                                      |
-| `npm run db:generate` | Generate SQL migrations from Drizzle schemas                        |
-| `npm run db:migrate`  | Execute pending database migrations on primary DB                   |
+| Command                  | Description                                                                 |
+| :----------------------- | :-------------------------------------------------------------------------- |
+| `npm run dev`            | Run API server with file watch (`tsx watch --env-file=.env`)                |
+| `npm run dev:worker`     | Run Background Worker with file watch (`tsx watch --env-file=.env`)         |
+| `npm run typecheck`      | Run TypeScript compiler type checking (`tsc --noEmit`)                      |
+| `npm test`               | Run test suites using tsx test runner (`tsx --test`)                        |
+| `npm run lint`           | Run ESLint checks                                                           |
+| `npm run lint:fix`       | Fix linting errors automatically                                            |
+| `npm run format`         | Format codebase using Prettier                                              |
+| `npm run db:generate`    | Generate SQL migrations from Drizzle schemas                                |
+| `npm run db:migrate`     | Execute pending database migrations on primary DB                           |
 | `npm run db:migrate:all` | Execute pending database migrations across primary and dedicated tenant DBs |
-| `npm run db:seed`     | Seed default system permissions and roles                           |
+| `npm run db:seed`        | Seed default system permissions and roles                                   |
 
 ---
 
@@ -238,3 +240,11 @@ To test the application on physical mobile devices (iOS Safari, Android Chrome) 
 - [ ] Infrastructure as Code (Terraform / AWS CDK)
 - [ ] OpenTelemetry / Sentry distributed tracing and CloudWatch alarm dashboards
 - [ ] AWS WAF rules in front of the Application Load Balancer
+
+## Optional modules and local release verification
+
+`FOUNDATION_MODULES=leads` includes the example business module. Set `FOUNDATION_MODULES=` for a deployment with the shared platform and workspace services only. The workspace context publishes module availability after evaluating deployment configuration, the workspace override, its plan entitlement and rollout. User and record-level permissions still apply to each request.
+
+Add new modules through the optional module registry and application router. Keep business DTOs, routes, policies, workers and storage in the owning module. Register any tenant tables for row-level security. Maintain migrations for existing installations when omitting a module, so turning it off preserves its records. Publish matching navigation and search entries only when the module is available.
+
+For release testing, start PostgreSQL, Redis and MinIO, migrate a fresh disposable database, and create the demo fixtures there. Exercise both module configurations with the frontend's browser suite. Keep the worker running for file and member import checks. Review `GET /health/ready` before starting the suite. Apply additive migrations to the primary database and dedicated tenant databases before switching traffic. Test upgrades and a backup restore against separate local or staging databases. Exercise live SSO, SMTP and billing flows with dedicated sandbox credentials.

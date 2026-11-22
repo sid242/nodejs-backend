@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { requireAuth } from '@/middleware/auth';
 import { requireTenant } from '@/middleware/tenant';
 import { validate } from '@/middleware/validate';
+import { requireModule } from '@/modules/optional-modules/availability';
 import { requirePolicy } from '@/modules/pbac/pbac.middleware';
 
 import * as controller from './leads.controller';
@@ -12,7 +13,7 @@ import { leadsRepo } from './leads.repository';
 const router: Router = Router();
 
 // All leads routes require user authentication and tenant resolution
-router.use(requireAuth, requireTenant);
+router.use(requireAuth, requireTenant, requireModule('leads'));
 
 router.get(
   '/',

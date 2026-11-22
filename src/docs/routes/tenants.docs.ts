@@ -2,7 +2,13 @@ import type { OpenAPIRegistry } from '@asteasolutions/zod-to-openapi';
 import { z } from 'zod';
 
 import { bearerAuth, errorResponse, successResponse } from '@/docs/helpers';
-import { addMemberDto, createTenantDto, offboardMemberDto, updateTenantDto } from '@/modules/tenants/tenants.dto';
+import {
+  addMemberDto,
+  createTenantDto,
+  executeMemberImportDto,
+  offboardMemberDto,
+  updateTenantDto,
+} from '@/modules/tenants/tenants.dto';
 
 export const TenantSchema = z.object({
   id: z.string().uuid().openapi({ example: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22' }),
@@ -29,6 +35,63 @@ export function registerTenantsDocs(registry: OpenAPIRegistry): void {
   const CreateTenantInput = registry.register('CreateTenantInput', createTenantDto);
   const UpdateTenantInput = registry.register('UpdateTenantInput', updateTenantDto);
   const AddMemberInput = registry.register('AddMemberInput', addMemberDto);
+  const MemberImportJob = registry.register(
+    'MemberImportJob',
+    z.object({
+      id: z.string(),
+      state: z.enum(['waiting', 'active', 'completed', 'failed']),
+      progress: z.number().int().min(0).max(100),
+      result: z
+        .object({
+          totalSubmitted: z.number().int(),
+          importedCount: z.number().int(),
+          failedCount: z.number().int(),
+          results: z.array(
+            z.object({
+              email: z.string().email(),
+              status: z.enum(['IMPORTED', 'FAILED']),
+              error: z.string().optional(),
+            }),
+          ),
+        })
+        .optional(),
+    }),
+  );
+
+  registry.registerPath({
+    method: 'post',
+    path: '/api/v1/tenants/{tenantId}/members/import/jobs',
+    summary: 'Queue an idempotent workspace member import',
+    description:
+      'Requires members:invite. Repeating the same batch returns the existing job while its status is retained.',
+    tags: ['Tenants'],
+    security: [{ [bearerAuth.name]: [] }],
+    request: {
+      params: z.object({ tenantId: z.string() }),
+      body: { content: { 'application/json': { schema: executeMemberImportDto } } },
+    },
+    responses: {
+      202: successResponse(MemberImportJob, 'Import job accepted'),
+      400: errorResponse('Validation error'),
+      401: errorResponse('Unauthorized'),
+      403: errorResponse('Forbidden'),
+    },
+  });
+
+  registry.registerPath({
+    method: 'get',
+    path: '/api/v1/tenants/{tenantId}/members/import/jobs/{jobId}',
+    summary: 'Read progress for your workspace import job',
+    tags: ['Tenants'],
+    security: [{ [bearerAuth.name]: [] }],
+    request: { params: z.object({ tenantId: z.string(), jobId: z.string() }) },
+    responses: {
+      200: successResponse(MemberImportJob, 'Import job progress'),
+      401: errorResponse('Unauthorized'),
+      403: errorResponse('Forbidden'),
+      404: errorResponse('Job missing or expired'),
+    },
+  });
 
   registry.registerPath({
     method: 'post',
@@ -98,14 +161,17 @@ export function registerTenantsDocs(registry: OpenAPIRegistry): void {
     method: 'patch',
     path: '/api/v1/tenants/{tenantId}/slug',
     summary: 'Change tenant workspace slug',
-    description: 'Changes the workspace slug with DNS-label validation and creates a 90-day redirect from the old slug.',
+    description:
+      'Changes the workspace slug with DNS-label validation and creates a 90-day redirect from the old slug.',
     tags: ['Tenants'],
     security: [{ [bearerAuth.name]: [] }],
     request: {
       params: z.object({
         tenantId: z.string().uuid(),
       }),
-      body: { content: { 'application/json': { schema: z.object({ slug: z.string().min(3).max(63) }) } } },
+      body: {
+        content: { 'application/json': { schema: z.object({ slug: z.string().min(3).max(63) }) } },
+      },
     },
     responses: {
       200: successResponse(TenantSchema, 'Workspace slug updated successfully'),
@@ -183,7 +249,8 @@ export function registerTenantsDocs(registry: OpenAPIRegistry): void {
     method: 'post',
     path: '/api/v1/tenants/{tenantId}/members/{memberId}/offboard',
     summary: 'Offboard a member from tenant',
-    description: 'Offboards a member, revokes active sessions, and optionally reassigns their owned resources to another member.',
+    description:
+      'Offboards a member, revokes active sessions, and optionally reassigns their owned resources to another member.',
     tags: ['Tenants'],
     security: [{ [bearerAuth.name]: [] }],
     request: {

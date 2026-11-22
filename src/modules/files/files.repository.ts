@@ -1,7 +1,6 @@
 import { and, arrayContains, count, desc, eq, ilike, isNull, sql } from 'drizzle-orm';
 
 import type { DbExecutor } from '@/config/db';
-import { assertTenantScope, tenantDb } from '@/db/tenancy/context';
 import {
   fileFolders,
   files,
@@ -16,6 +15,7 @@ import {
   type NewFileShareRecord,
   type NewFileVersionRecord,
 } from '@/db/schema/index';
+import { assertTenantScope, tenantDb } from '@/db/tenancy/context';
 
 // ---------------------------------------------------------------------------
 // Files
@@ -88,7 +88,7 @@ export interface UpdateFileOptions {
   tags?: string[];
   folderId?: string | null;
   visibility?: 'PRIVATE' | 'TENANT' | 'PUBLIC_LINK';
-  scanStatus?: 'PENDING' | 'CLEAN' | 'INFECTED' | 'SKIPPED';
+  scanStatus?: FileRecord['scanStatus'];
   scannedAt?: Date;
   version?: number;
   key?: string;
@@ -113,6 +113,52 @@ export async function updateFile(
     .where(and(...conditions))
     .returning();
   return updated ?? null;
+}
+
+export async function retryFailedFileScan(file: FileRecord): Promise<FileRecord | null> {
+  if (!file.tenantId) return null;
+  assertTenantScope(file.tenantId);
+  const [updated] = await tenantDb()
+    .update(files)
+    .set({ scanStatus: 'PENDING', updatedAt: new Date() })
+    .where(
+      and(
+        eq(files.id, file.id),
+        eq(files.tenantId, file.tenantId),
+        eq(files.version, file.version),
+        eq(files.status, 'UPLOADED'),
+        eq(files.scanStatus, 'FAILED'),
+        eq(files.isDeleted, false),
+      ),
+    )
+    .returning();
+  return updated ?? null;
+}
+
+export async function completeFileScan(
+  file: FileRecord,
+  scanStatus: 'CLEAN' | 'INFECTED' | 'FAILED',
+  verified?: { key: string; checksumSha256: string; size: number },
+): Promise<boolean> {
+  if (!file.tenantId) return false;
+  assertTenantScope(file.tenantId);
+  const now = new Date();
+  const [updated] = await tenantDb()
+    .update(files)
+    .set({ ...verified, scanStatus, scannedAt: now, updatedAt: now })
+    .where(
+      and(
+        eq(files.id, file.id),
+        eq(files.tenantId, file.tenantId),
+        eq(files.key, file.key),
+        eq(files.version, file.version),
+        eq(files.status, 'UPLOADED'),
+        eq(files.scanStatus, 'PENDING'),
+        eq(files.isDeleted, false),
+      ),
+    )
+    .returning({ id: files.id });
+  return Boolean(updated);
 }
 
 export async function incrementDownloadCount(
@@ -140,7 +186,7 @@ export interface ListFilesOptions {
   search?: string;
   tag?: string;
   isDeleted?: boolean;
-  scanStatus?: 'PENDING' | 'CLEAN' | 'INFECTED' | 'SKIPPED';
+  scanStatus?: FileRecord['scanStatus'];
   limit?: number;
   offset?: number;
 }
@@ -206,7 +252,7 @@ export async function findByOwnerId(
   return executor
     .select()
     .from(files)
-    .where(and(eq(files.ownerId, ownerId), eq(files.isDeleted, false)))
+    .where(and(eq(files.ownerId, ownerId), isNull(files.tenantId), eq(files.isDeleted, false)))
     .orderBy(desc(files.createdAt))
     .limit(limit);
 }
@@ -541,7 +587,12 @@ export async function getTenantStorageStats(
     const ct = (r.contentType || '').toLowerCase();
     let cat = 'other';
     if (ct.startsWith('image/')) cat = 'images';
-    else if (ct.includes('pdf') || ct.includes('word') || ct.includes('sheet') || ct.includes('text'))
+    else if (
+      ct.includes('pdf') ||
+      ct.includes('word') ||
+      ct.includes('sheet') ||
+      ct.includes('text')
+    )
       cat = 'documents';
     else if (ct.includes('zip') || ct.includes('tar') || ct.includes('compressed'))
       cat = 'archives';
