@@ -3,7 +3,12 @@ import type { PresignedPost } from '@aws-sdk/s3-presigned-post';
 import bcrypt from 'bcryptjs';
 
 import { logger } from '@/config/logger';
-import type { FileFolderRecord, FileRecord, FileShareRecord, FileVersionRecord } from '@/db/schema/index';
+import type {
+  FileFolderRecord,
+  FileRecord,
+  FileShareRecord,
+  FileVersionRecord,
+} from '@/db/schema/index';
 import { AppError } from '@/lib/errors';
 import { createDownloadUrl, createUploadPost, deleteObject, headObject } from '@/lib/s3';
 import { safeFilename } from '@/lib/utils';
@@ -61,6 +66,8 @@ async function getOwned(
     throw AppError.notFound('File not found');
   }
 
+  if (file.tenantId && !tenantId) throw AppError.notFound('File not found');
+
   if (file.tenantId) {
     if (tenantId && file.tenantId !== tenantId) {
       throw AppError.notFound('File not found');
@@ -93,7 +100,7 @@ export async function requestUpload(
   const yyyy = date.getUTCFullYear().toString();
   const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
   const sanitized = safeFilename(dto.filename);
-  const key = `tenants/${tenantId}/${yyyy}/${mm}/${fileId}/${sanitized}`;
+  const key = `private-files/staging/${tenantId}/${yyyy}/${mm}/${fileId}/${sanitized}`;
 
   if (dto.folderId) {
     const folder = await fileRepo.findFolderById(dto.folderId, tenantId);
@@ -125,14 +132,48 @@ export async function requestUpload(
   }
 }
 
-/** Step 3: verify the uploaded object exists and queue background virus scan and thumbnail generation. */
+async function enqueueFileScan(file: FileRecord): Promise<void> {
+  if (!file.tenantId) throw AppError.badRequest('Tenant context is required to scan files');
+  await fileQueue.add(
+    'process',
+    { fileId: file.id, tenantId: file.tenantId, ownerId: file.ownerId, version: file.version },
+    { jobId: 'scan-' + file.id + '-' + file.version + '-' + (file.scannedAt?.getTime() ?? 0) },
+  );
+}
+
+function requireAvailableFile(file: FileRecord): void {
+  if (file.isDeleted || file.status !== 'UPLOADED') throw AppError.notFound('File is unavailable');
+  if (file.scanStatus === 'INFECTED') throw AppError.forbidden('File has been quarantined');
+  if (file.scanStatus !== 'CLEAN') {
+    throw new AppError(
+      409,
+      'The file is not available until scanning succeeds',
+      'FILE_SCAN_REQUIRED',
+    );
+  }
+}
+
+/** Step 3: verify the uploaded object exists and queue background scanning. */
 export async function confirmUpload(
   userId: string,
   id: string,
   tenantId?: string,
 ): Promise<FileRecord> {
   const file = await getOwned(userId, id, tenantId);
-  if (file.status === 'UPLOADED') return file;
+  if (file.status === 'UPLOADED') {
+    if (file.scanStatus === 'PENDING') await enqueueFileScan(file);
+    if (file.scanStatus !== 'FAILED') return file;
+
+    const retry = await fileRepo.retryFailedFileScan(file);
+    if (!retry) return getOwned(userId, id, tenantId);
+    try {
+      await enqueueFileScan(retry);
+      return retry;
+    } catch (error) {
+      await fileRepo.completeFileScan(retry, 'FAILED');
+      throw error;
+    }
+  }
 
   const head = await headObject(file.key).catch(() => null);
   if (!head) throw AppError.badRequest('Upload not found in storage yet');
@@ -150,11 +191,7 @@ export async function confirmUpload(
   if (!updated) throw AppError.notFound('File not found');
 
   try {
-    await fileQueue.add(
-      'process',
-      { fileId: id, ownerId: userId, tenantId: file.tenantId },
-      { jobId: `process-${id}` },
-    );
+    await enqueueFileScan(updated);
   } catch (queueErr) {
     logger.error(
       { err: queueErr, fileId: id },
@@ -175,12 +212,7 @@ export async function getDownloadUrl(
   disposition: 'attachment' | 'inline' = 'attachment',
 ): Promise<DownloadUrlResult> {
   const file = await getOwned(userId, id, tenantId);
-  if (file.status !== 'UPLOADED') {
-    throw AppError.badRequest('File not uploaded yet');
-  }
-  if (file.scanStatus === 'INFECTED') {
-    throw AppError.forbidden('File is quarantined due to detected security risk');
-  }
+  requireAvailableFile(file);
 
   const url = await createDownloadUrl(file.key, 300, {
     filename: file.filename,
@@ -340,8 +372,7 @@ export async function createShare(
   dto: CreateShareDto,
 ): Promise<ShareCreationResult> {
   const file = await getOwned(userId, fileId, tenantId);
-  if (file.status !== 'UPLOADED') throw AppError.badRequest('Cannot share unconfirmed file');
-  if (file.scanStatus === 'INFECTED') throw AppError.badRequest('Cannot share infected file');
+  requireAvailableFile(file);
 
   const rawToken = randomBytes(32).toString('hex');
   const tokenHash = createHash('sha256').update(rawToken).digest('hex');
@@ -421,6 +452,7 @@ export async function accessShare(
     }
   }
 
+  requireAvailableFile(share.file);
   const downloadUrl = await createDownloadUrl(share.file.key, 300, {
     filename: share.file.filename,
     disposition: 'attachment',
@@ -486,10 +518,12 @@ export async function restoreVersion(
       size: targetVer.size,
       checksumSha256: targetVer.checksumSha256,
       version: file.version + 1,
+      scanStatus: 'PENDING',
     },
     tenantId,
   );
   if (!updated) throw AppError.notFound('Failed to restore version');
+  await enqueueFileScan(updated);
   return updated;
 }
 

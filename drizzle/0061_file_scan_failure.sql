@@ -1,0 +1,1 @@
+ALTER TYPE "public"."FileScanStatus" ADD VALUE 'FAILED';

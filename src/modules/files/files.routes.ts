@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { requireAuth } from '@/middleware/auth';
 import { uploadLimiter } from '@/middleware/rate-limit';
+import { requirePermission } from '@/middleware/rbac';
 import { resolveTenantContext } from '@/middleware/tenant';
 import { validate } from '@/middleware/validate';
 import * as controller from '@/modules/files/files.controller';
@@ -33,6 +34,20 @@ router.get('/shares/:token', validate({ params: shareTokenParamDto }), controlle
 // Protected routes
 router.use(requireAuth);
 router.use(resolveTenantContext);
+
+const fileRead = requirePermission('files:read');
+const fileWrite = requirePermission('files:write');
+const fileDelete = requirePermission('files:delete');
+
+router.use((req, res, next) => {
+  // Personal operations still require ownership through the service.
+  if (!req.tenant) return next();
+  if (req.method === 'GET' || req.method === 'HEAD') return fileRead(req, res, next);
+  if (req.method === 'DELETE' && !req.path.includes('/shares/')) {
+    return fileDelete(req, res, next);
+  }
+  return fileWrite(req, res, next);
+});
 
 // Realtime events
 router.get('/events/stream', controller.streamEvents);

@@ -2,18 +2,18 @@ import { createHash, randomBytes } from 'node:crypto';
 import { SAML } from '@node-saml/node-saml';
 import * as jose from 'jose';
 
+import { db } from '@/config/db';
 import { env } from '@/config/env';
 import { logger } from '@/config/logger';
+import { tenantMemberRoles } from '@/db/schema/access/rbac';
 import { decrypt, encrypt } from '@/lib/crypto';
 import { AppError } from '@/lib/errors';
 import { logSecurityEvent } from '@/modules/audit/audit.service';
 import * as authRepo from '@/modules/auth/auth.repository';
 import * as authService from '@/modules/auth/auth.service';
 import * as billingService from '@/modules/billing/billing.service';
-import * as tenantsRepo from '@/modules/tenants/tenants.repository';
 import { rbacRepo } from '@/modules/rbac/rbac.repository';
-import { db } from '@/config/db';
-import { tenantMemberRoles } from '@/db/schema/access/rbac';
+import * as tenantsRepo from '@/modules/tenants/tenants.repository';
 
 import {
   CreateScimTokenDto,
@@ -23,11 +23,7 @@ import {
 } from './sso.dto';
 import { ssoRepo } from './sso.repository';
 import { assertSafeUrl, safeFetch, validateReturnTo } from './sso.security';
-import {
-  consumeSsoState,
-  createSsoState,
-  recordSamlAssertion,
-} from './sso.state';
+import { consumeSsoState, createSsoState, recordSamlAssertion } from './sso.state';
 
 export function getSpEntityId(tenantId: string): string {
   const base = env.SSO_SP_ENTITY_ID_BASE || `${env.APP_PROTOCOL}://${env.PLATFORM_HOST}`;
@@ -101,7 +97,9 @@ export class SsoService {
         }
       } else if (input.providerType === 'OIDC') {
         if (!input.oidcDiscoveryUrl || !input.oidcClientId) {
-          throw AppError.badRequest('OIDC Discovery URL and Client ID are required to activate OIDC');
+          throw AppError.badRequest(
+            'OIDC Discovery URL and Client ID are required to activate OIDC',
+          );
         }
       }
 
@@ -152,6 +150,8 @@ export class SsoService {
       allowedDomains: input.allowedDomains,
       defaultRoleId: input.defaultRoleId ?? null,
       jitProvisioning: input.jitProvisioning,
+      lastConnectionTestAt: null,
+      lastConnectionTestSucceeded: null,
     });
 
     return {
@@ -163,7 +163,28 @@ export class SsoService {
     };
   }
 
-  async testSsoConnection(input: TestSsoConnectionDto) {
+  async testSsoConnection(input: TestSsoConnectionDto, tenantId?: string) {
+    const saved = tenantId ? await ssoRepo.findConfigByTenantId(tenantId) : null;
+    const matchesSaved =
+      saved?.providerType === input.providerType &&
+      (input.providerType === 'SAML'
+        ? saved.idpSsoUrl === (input.idpSsoUrl ?? null) &&
+          saved.idpEntityId === (input.idpEntityId ?? null) &&
+          (saved.idpCertificate ?? '').trim() === (input.idpCertificate ?? '').trim()
+        : saved.oidcDiscoveryUrl === (input.oidcDiscoveryUrl ?? null));
+    let passed = false;
+    try {
+      const result = await this.validateSsoConnection(input);
+      passed = result.success;
+      return result;
+    } finally {
+      if (tenantId && saved && matchesSaved) {
+        await ssoRepo.recordConnectionTest(tenantId, saved.updatedAt, passed);
+      }
+    }
+  }
+
+  private async validateSsoConnection(input: TestSsoConnectionDto) {
     if (input.providerType === 'SAML') {
       if (!input.idpSsoUrl) {
         throw AppError.badRequest('IdP SSO URL is required for testing SAML connection');
@@ -177,13 +198,16 @@ export class SsoService {
         const hasHeader = cert.includes('BEGIN CERTIFICATE');
         const hasFooter = cert.includes('END CERTIFICATE');
         if (!hasHeader || !hasFooter) {
-          throw AppError.badRequest('Invalid X.509 certificate: missing BEGIN/END CERTIFICATE header/footer');
+          throw AppError.badRequest(
+            'Invalid X.509 certificate: missing BEGIN/END CERTIFICATE header/footer',
+          );
         }
       }
 
       return {
         success: true,
-        message: 'SAML IdP configuration syntax, certificate, and endpoint connectivity are verified',
+        message:
+          'SAML URL and certificate format checks passed. Verify sign-in with your identity provider before enforcement.',
         details: {
           ssoUrl: input.idpSsoUrl,
           hasCert: Boolean(input.idpCertificate),
@@ -199,7 +223,11 @@ export class SsoService {
     // Fetch and validate openid-configuration with SSRF protection
     const wellKnownUrl = `${input.oidcDiscoveryUrl.replace(/\/$/, '')}/.well-known/openid-configuration`;
     try {
-      const res = await safeFetch(wellKnownUrl, { headers: { Accept: 'application/json' } }, { allowHttpInDev: true });
+      const res = await safeFetch(
+        wellKnownUrl,
+        { headers: { Accept: 'application/json' } },
+        { allowHttpInDev: true },
+      );
       if (!res.ok) {
         throw AppError.badRequest(`OIDC discovery endpoint returned HTTP ${res.status}`);
       }
@@ -220,7 +248,9 @@ export class SsoService {
       };
     } catch (err: any) {
       if (err instanceof AppError) throw err;
-      throw AppError.badRequest(`Failed to reach OIDC discovery endpoint: ${err?.message ?? 'Network error'}`);
+      throw AppError.badRequest(
+        `Failed to reach OIDC discovery endpoint: ${err?.message ?? 'Network error'}`,
+      );
     }
   }
 
@@ -447,7 +477,11 @@ export class SsoService {
 
     // Discover OIDC endpoints
     const wellKnownUrl = `${config.oidcDiscoveryUrl.replace(/\/$/, '')}/.well-known/openid-configuration`;
-    const discoveryRes = await safeFetch(wellKnownUrl, { headers: { Accept: 'application/json' } }, { allowHttpInDev: true });
+    const discoveryRes = await safeFetch(
+      wellKnownUrl,
+      { headers: { Accept: 'application/json' } },
+      { allowHttpInDev: true },
+    );
     if (!discoveryRes.ok) {
       throw AppError.internal('Failed to discover OIDC provider configuration');
     }
@@ -589,7 +623,9 @@ export class SsoService {
     pathTenantId?: string,
   ): Promise<{ redirectUrl: string; handoffUrl: string; code: string; returnTo: string }> {
     if (query.error) {
-      throw AppError.unauthorized(`OIDC authentication failed: ${query.error_description || query.error}`);
+      throw AppError.unauthorized(
+        `OIDC authentication failed: ${query.error_description || query.error}`,
+      );
     }
 
     const stateId = query.state;
@@ -618,7 +654,11 @@ export class SsoService {
 
     // Discover endpoints
     const wellKnownUrl = `${config.oidcDiscoveryUrl.replace(/\/$/, '')}/.well-known/openid-configuration`;
-    const discoveryRes = await safeFetch(wellKnownUrl, { headers: { Accept: 'application/json' } }, { allowHttpInDev: true });
+    const discoveryRes = await safeFetch(
+      wellKnownUrl,
+      { headers: { Accept: 'application/json' } },
+      { allowHttpInDev: true },
+    );
     if (!discoveryRes.ok) {
       throw AppError.internal('Failed to retrieve OIDC discovery document');
     }
@@ -739,14 +779,18 @@ export class SsoService {
         result: 'FAILURE',
         reason: `Email domain '${emailDomain}' is not authorized`,
       });
-      throw AppError.forbidden(`Email domain '${emailDomain}' is not authorized for this workspace SSO`);
+      throw AppError.forbidden(
+        `Email domain '${emailDomain}' is not authorized for this workspace SSO`,
+      );
     }
 
     // User lookup / JIT provisioning
     let user = await authRepo.findByEmail(email);
     if (!user) {
       if (!config.jitProvisioning) {
-        throw AppError.forbidden('User does not exist and Just-In-Time provisioning is disabled for this workspace');
+        throw AppError.forbidden(
+          'User does not exist and Just-In-Time provisioning is disabled for this workspace',
+        );
       }
 
       const nameParts = name.trim().split(/\s+/);
@@ -775,7 +819,9 @@ export class SsoService {
     let membership = await tenantsRepo.findTenantMember(tenantId, user.id);
     if (!membership) {
       if (!config.jitProvisioning) {
-        throw AppError.forbidden('User is not a member of this workspace and JIT provisioning is disabled');
+        throw AppError.forbidden(
+          'User is not a member of this workspace and JIT provisioning is disabled',
+        );
       }
 
       membership = await tenantsRepo.addTenantMember({

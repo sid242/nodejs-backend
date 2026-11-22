@@ -18,6 +18,6 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['node_modules', 'dist', 'drizzle', 'coverage'],
+    ignores: ['node_modules', 'dist', 'drizzle', 'coverage', 'tmp'],
   },
 );

@@ -3,9 +3,12 @@ import type { Request, Response } from 'express';
 import { asyncHandler } from '@/lib/async-handler';
 import { AppResponse } from '@/lib/responses';
 import * as billingService from '@/modules/billing/billing.service';
+import { getModuleAvailability } from '@/modules/optional-modules/availability';
+import { pbacService } from '@/modules/pbac/pbac.service';
 import * as platformRepo from '@/modules/platform/platform.repository';
 import { rbacRepo } from '@/modules/rbac/rbac.repository';
 
+import * as importJobs from './member-import-jobs.service';
 import * as tenantsRepo from './tenants.repository';
 import * as tenantsService from './tenants.service';
 
@@ -34,15 +37,23 @@ export const getTenantContext = asyncHandler(async (req: Request, res: Response)
     effective.roles?.includes('OWNER') ||
     req.permissions?.includes('*');
 
+  const businessModules = req.tenant
+    ? await getModuleAvailability(req.tenant.id)
+    : { leads: false };
   const basePermissions = effective.permissions ?? req.permissions ?? [];
-  const finalPermissions = isOwner
-    ? Array.from(new Set(['*', ...basePermissions]))
-    : basePermissions;
+  const policyPermissions =
+    !isOwner && businessModules.leads && req.tenant && req.membership?.roleIds?.length
+      ? await pbacService.getPossiblePermissions(req.tenant.id, req.membership.roleIds, 'leads')
+      : [];
+  const finalPermissions = Array.from(
+    new Set([...(isOwner ? ['*'] : []), ...basePermissions, ...policyPermissions]),
+  );
 
   AppResponse.ok({
     tenant: req.tenant,
     membership: req.membership,
     permissions: finalPermissions,
+    businessModules,
     provenance: effective.provenance,
   }).send(res);
 });
@@ -111,11 +122,7 @@ export const listMembers = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const exportMembers = asyncHandler(async (req: Request, res: Response) => {
-  const result = await tenantsService.exportMembers(
-    req.tenant!.id,
-    req.valid?.query,
-    req.user?.id,
-  );
+  const result = await tenantsService.exportMembers(req.tenant!.id, req.valid?.query, req.user?.id);
 
   if (result.format === 'json') {
     AppResponse.ok(result.data).send(res);
@@ -392,6 +399,20 @@ export const validateMemberImport = asyncHandler(async (req: Request, res: Respo
   const rows = req.valid?.body?.rows ?? req.body?.rows ?? [];
   const result = await tenantsService.validateMemberImport(tenantId, rows);
   AppResponse.ok(result, 'Import preview validated').send(res);
+});
+
+export const queueMemberImport = asyncHandler(async (req: Request, res: Response) => {
+  const job = await importJobs.queueMemberImport(req.tenant!.id, req.user!.id, req.valid?.body);
+  new AppResponse(202, job, 'Member import queued').send(res);
+});
+
+export const getMemberImportJob = asyncHandler(async (req: Request, res: Response) => {
+  const job = await importJobs.getMemberImportJob(
+    req.tenant!.id,
+    req.user!.id,
+    req.valid?.params?.jobId,
+  );
+  AppResponse.ok(job).send(res);
 });
 
 export const executeMemberImport = asyncHandler(async (req: Request, res: Response) => {

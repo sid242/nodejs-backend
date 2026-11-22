@@ -5,6 +5,7 @@ import { ssoLimiter } from '@/middleware/rate-limit';
 import { requirePermission } from '@/middleware/rbac';
 import { requireTenant } from '@/middleware/tenant';
 import { validate } from '@/middleware/validate';
+
 import {
   createScimToken,
   getSpMetadata,
@@ -50,8 +51,18 @@ ssoAuthRouter.post('/acs/:tenantId', ssoLimiter, validate({ body: samlAcsBodyDto
 ssoAuthRouter.post('/acs', ssoLimiter, validate({ body: samlAcsBodyDto }), handleSamlAcs);
 
 // OIDC Callback endpoints (both path-based tenantId and universal)
-ssoAuthRouter.get('/callback/oidc/:tenantId', ssoLimiter, validate({ query: oidcCallbackQueryDto }), handleOidcCallback);
-ssoAuthRouter.get('/callback/oidc', ssoLimiter, validate({ query: oidcCallbackQueryDto }), handleOidcCallback);
+ssoAuthRouter.get(
+  '/callback/oidc/:tenantId',
+  ssoLimiter,
+  validate({ query: oidcCallbackQueryDto }),
+  handleOidcCallback,
+);
+ssoAuthRouter.get(
+  '/callback/oidc',
+  ssoLimiter,
+  validate({ query: oidcCallbackQueryDto }),
+  handleOidcCallback,
+);
 
 // Public SAML SP Metadata endpoint
 ssoAuthRouter.get('/metadata/:tenantId', getSpMetadata);
@@ -63,7 +74,12 @@ tenantSsoRouter.use(requireAuth, requireTenant, requirePermission('tenants:updat
 
 tenantSsoRouter.get('/', getTenantSsoConfig);
 tenantSsoRouter.put('/', validate({ body: updateTenantSsoConfigDto }), updateTenantSsoConfig);
-tenantSsoRouter.post('/test', validate({ body: testSsoConnectionDto }), testSsoConnection);
+tenantSsoRouter.post(
+  '/test',
+  ssoLimiter,
+  validate({ body: testSsoConnectionDto }),
+  testSsoConnection,
+);
 tenantSsoRouter.get('/metadata', getSpMetadata);
 
 // Tenant SCIM Management Router (/api/v1/tenants/:tenantId/scim)
@@ -73,5 +89,9 @@ tenantScimManagementRouter.use(requireAuth, requireTenant, requirePermission('te
 
 tenantScimManagementRouter.get('/tokens', listScimTokens);
 tenantScimManagementRouter.post('/tokens', validate({ body: createScimTokenDto }), createScimToken);
-tenantScimManagementRouter.post('/tokens/:tokenId/rotate', validate({ body: rotateScimTokenDto }), rotateScimToken);
+tenantScimManagementRouter.post(
+  '/tokens/:tokenId/rotate',
+  validate({ body: rotateScimTokenDto }),
+  rotateScimToken,
+);
 tenantScimManagementRouter.delete('/tokens/:tokenId', revokeScimToken);

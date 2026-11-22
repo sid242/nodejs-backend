@@ -2,54 +2,55 @@ import { Request, Response } from 'express';
 
 import { asyncHandler } from '@/lib/async-handler';
 import { AppResponse } from '@/lib/responses';
+
 import { ssoService } from './sso.service';
 
 export const getTenantSsoConfig = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.params.tenantId as string;
+  const tenantId = req.tenant?.id ?? String(req.params.tenantId);
   const config = await ssoService.getTenantSsoConfig(tenantId);
   AppResponse.ok(config, 'Tenant SSO configuration retrieved').send(res);
 });
 
 export const updateTenantSsoConfig = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.params.tenantId as string;
+  const tenantId = req.tenant?.id ?? String(req.params.tenantId);
   const updated = await ssoService.updateTenantSsoConfig(tenantId, req.body);
   AppResponse.ok(updated, 'Tenant SSO configuration updated successfully').send(res);
 });
 
 export const testSsoConnection = asyncHandler(async (req: Request, res: Response) => {
-  const result = await ssoService.testSsoConnection(req.body);
+  const result = await ssoService.testSsoConnection(req.body, req.tenant?.id);
   AppResponse.ok(result, result.message).send(res);
 });
 
 export const getSpMetadata = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.params.tenantId as string;
+  const tenantId = req.tenant?.id ?? String(req.params.tenantId);
   const xml = await ssoService.getSpMetadata(tenantId, req.headers.host);
   res.setHeader('Content-Type', 'application/xml');
   res.send(xml);
 });
 
 export const createScimToken = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.params.tenantId as string;
+  const tenantId = req.tenant?.id ?? String(req.params.tenantId);
   const userId = req.user!.id;
   const result = await ssoService.createScimToken(tenantId, userId, req.body);
   AppResponse.created(result, 'SCIM token generated successfully').send(res);
 });
 
 export const listScimTokens = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.params.tenantId as string;
+  const tenantId = req.tenant?.id ?? String(req.params.tenantId);
   const tokens = await ssoService.listScimTokens(tenantId);
   AppResponse.ok(tokens, 'SCIM tokens retrieved').send(res);
 });
 
 export const revokeScimToken = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.params.tenantId as string;
+  const tenantId = req.tenant?.id ?? String(req.params.tenantId);
   const tokenId = req.params.tokenId as string;
   const result = await ssoService.revokeScimToken(tenantId, tokenId);
   AppResponse.ok(result, 'SCIM token revoked').send(res);
 });
 
 export const rotateScimToken = asyncHandler(async (req: Request, res: Response) => {
-  const tenantId = req.params.tenantId as string;
+  const tenantId = req.tenant?.id ?? String(req.params.tenantId);
   const tokenId = req.params.tokenId as string;
   const result = await ssoService.rotateScimToken(tenantId, tokenId, req.body);
   AppResponse.ok(result, 'SCIM token rotated successfully').send(res);

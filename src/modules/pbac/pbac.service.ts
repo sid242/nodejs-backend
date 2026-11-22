@@ -7,6 +7,7 @@ import { cache } from '@/lib/cache';
 
 import { compilePoliciesToSqlScope } from './pbac.compiler';
 import { evaluatePolicies } from './pbac.evaluator';
+import { PBAC_REGISTRY } from './pbac.registry';
 import {
   ActorContext,
   CompiledScope,
@@ -77,6 +78,33 @@ export class PbacService {
     }
 
     return Array.from(policyMap.values());
+  }
+
+  /**
+   * Coarse UI hints for policies that may allow an action. Actual requests still
+   * evaluate the full policy set against the actor, record, and environment.
+   */
+  async getPossiblePermissions(
+    tenantId: string,
+    roleIds: string[],
+    resource: string,
+  ): Promise<string[]> {
+    const definition = PBAC_REGISTRY.resources.find((entry) => entry.resource === resource);
+    if (!definition) return [];
+    const allRolePolicies = await Promise.all(
+      roleIds.map((roleId) => this.getPoliciesForRole(tenantId, roleId)),
+    );
+    const allows = allRolePolicies.flat().filter((policy) => policy.effect === 'allow');
+
+    return definition.actions
+      .filter((action) =>
+        allows.some(
+          (policy) =>
+            (policy.resource === resource || policy.resource === '*') &&
+            (policy.action === action || policy.action === '*'),
+        ),
+      )
+      .map((action) => `${resource}:${action}`);
   }
 
   /**

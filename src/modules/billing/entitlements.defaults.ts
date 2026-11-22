@@ -10,6 +10,13 @@ export interface DefaultEntitlementDefinition {
 
 export const DEFAULT_ENTITLEMENT_DEFINITIONS: DefaultEntitlementDefinition[] = [
   {
+    key: 'modules.leads',
+    label: 'CRM Leads',
+    description: 'Availability of the optional Leads module',
+    type: 'BOOLEAN',
+    defaultValue: true,
+  },
+  {
     key: 'members.max',
     label: 'Maximum Team Members',
     description: 'The maximum number of active workspace members and pending invites allowed.',
@@ -55,42 +62,48 @@ export const DEFAULT_ENTITLEMENT_DEFINITIONS: DefaultEntitlementDefinition[] = [
   {
     key: 'api_access.enabled',
     label: 'API & Webhook Access',
-    description: 'Enables external developer API access and automated outbound webhook integrations.',
+    description:
+      'Enables external developer API access and automated outbound webhook integrations.',
     type: 'BOOLEAN',
     defaultValue: false,
   },
   {
     key: 'branding.remove_watermark',
     label: 'Remove Platform Watermark',
-    description: 'Allows hiding platform branding and "Powered by" badges on customer-facing auth and workspace portals.',
+    description:
+      'Allows hiding platform branding and "Powered by" badges on customer-facing auth and workspace portals.',
     type: 'BOOLEAN',
     defaultValue: false,
   },
   {
     key: 'branding.custom_colors',
     label: 'Custom Theme & Brand Palette',
-    description: 'Enables advanced custom palette configuration, dual-theme dark colors, and custom typography.',
+    description:
+      'Enables advanced custom palette configuration, dual-theme dark colors, and custom typography.',
     type: 'BOOLEAN',
     defaultValue: false,
   },
   {
     key: 'sso.saml',
     label: 'Enterprise SSO (SAML 2.0 / OIDC)',
-    description: 'Enables SAML 2.0 and OpenID Connect enterprise identity provider integration with domain routing.',
+    description:
+      'Enables SAML 2.0 and OpenID Connect enterprise identity provider integration with domain routing.',
     type: 'BOOLEAN',
     defaultValue: false,
   },
   {
     key: 'sso.scim',
     label: 'SCIM 2.0 Directory Sync',
-    description: 'Enables automated user provisioning, deprovisioning, and group synchronization via SCIM 2.0 protocol.',
+    description:
+      'Enables automated user provisioning, deprovisioning, and group synchronization via SCIM 2.0 protocol.',
     type: 'BOOLEAN',
     defaultValue: false,
   },
   {
     key: 'audit.export',
     label: 'Audit Trail Export',
-    description: 'Allows exporting filtered audit logs and security trails to CSV or JSON for compliance archival.',
+    description:
+      'Allows exporting filtered audit logs and security trails to CSV or JSON for compliance archival.',
     type: 'BOOLEAN',
     defaultValue: false,
   },
@@ -137,4 +150,3 @@ export const DEFAULT_PLAN_ENTITLEMENT_VALUES: Record<string, Record<string, any>
     'sso.scim': true,
   },
 };
-

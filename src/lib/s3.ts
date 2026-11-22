@@ -132,6 +132,20 @@ export const createDownloadUrl = (
   );
 };
 
+/** Read a bounded upload for scanning. The server writes the verified bytes under a separate key. */
+export async function readUploadBytes(key: string): Promise<Uint8Array> {
+  const signal = AbortSignal.timeout(30_000);
+  const object = await s3.send(new GetObjectCommand({ Bucket, Key: key }), { abortSignal: signal });
+  const maxBytes = env.S3_MAX_UPLOAD_MB * 1024 * 1024;
+  if (!object.Body || !object.ContentLength || object.ContentLength > maxBytes) {
+    if (object.Body && 'destroy' in object.Body) object.Body.destroy();
+    throw new Error('File scan requires a nonempty object within the upload size limit');
+  }
+  const bytes = await object.Body.transformToByteArray();
+  if (bytes.byteLength !== object.ContentLength) throw new Error('Unexpected upload size');
+  return bytes;
+}
+
 export const headObject = (key: string): Promise<HeadObjectCommandOutput> =>
   s3.send(new HeadObjectCommand({ Bucket, Key: key }));
 
@@ -172,7 +186,7 @@ export async function ensurePublicBucketPolicies(): Promise<void> {
           Principal: '*',
           Action: ['s3:GetObject'],
           Resource: [
-            `arn:aws:s3:::${env.S3_BUCKET}/tenants/*`,
+            `arn:aws:s3:::${env.S3_BUCKET}/tenants/*/branding/*`,
             `arn:aws:s3:::${env.S3_BUCKET}/avatars/*`,
             `arn:aws:s3:::${env.S3_BUCKET}/branding/*`,
           ],

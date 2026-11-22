@@ -1,0 +1,2 @@
+ALTER TABLE "tenant_sso_configs" ADD COLUMN "last_connection_test_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "tenant_sso_configs" ADD COLUMN "last_connection_test_succeeded" boolean;

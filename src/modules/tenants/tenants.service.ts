@@ -342,6 +342,7 @@ export async function addMemberToTenant(
   operatorUserId: string,
   payload: string | AddMemberDto,
   explicitRoleName?: string,
+  sendInviteEmail = true,
 ): Promise<{
   member: TenantMember;
   role: string;
@@ -354,6 +355,43 @@ export async function addMemberToTenant(
       ? { email: payload, role: explicitRoleName || rbacService.SYSTEM_ROLES.MEMBER }
       : payload,
   );
+
+  // Find target role (either custom tenant role or system role)
+  const roleId = dto.roleId;
+  let matchedRole;
+
+  if (roleId) {
+    matchedRole = await rbacRepo.findRoleById(roleId);
+  } else {
+    const roleName = dto.role || explicitRoleName || rbacService.SYSTEM_ROLES.MEMBER;
+    const availableRoles = await rbacRepo.findRolesByTenant(tenantId);
+    matchedRole = availableRoles.find((r) => r.name.toLowerCase() === roleName.toLowerCase());
+  }
+
+  if (
+    !matchedRole ||
+    (matchedRole.tenantId && matchedRole.tenantId !== tenantId) ||
+    !matchedRole.isActive
+  ) {
+    throw AppError.badRequest('Invalid workspace role specified for member');
+  }
+  const roleCode = (matchedRole.code ?? matchedRole.name).toUpperCase();
+  if (roleCode === rbacService.SYSTEM_ROLES.OWNER) {
+    throw AppError.forbidden('Assign ownership through the workspace ownership transfer');
+  }
+  const isBaseRole =
+    matchedRole.tenantId === null &&
+    (roleCode === rbacService.SYSTEM_ROLES.MEMBER || roleCode === rbacService.SYSTEM_ROLES.VIEWER);
+  if (!isBaseRole) {
+    const operator = await rbacService.resolveUserPermissions(tenantId, operatorUserId);
+    if (
+      !operator.permissions.includes('*') &&
+      !operator.permissions.includes('roles:assign') &&
+      !operator.roles.includes(rbacService.SYSTEM_ROLES.OWNER)
+    ) {
+      throw AppError.forbidden('Permission to assign this workspace role is required');
+    }
+  }
 
   const normalizedEmail = dto.email.toLowerCase().trim();
   let targetUser = await authRepo.findByEmail(normalizedEmail);
@@ -375,8 +413,7 @@ export async function addMemberToTenant(
     const dummyHash = await bcrypt.hash(randomUUID(), 12);
     const defaultNamePart = normalizedEmail.split('@')[0] || 'Member';
     const firstName =
-      dto.firstName?.trim() ||
-      defaultNamePart.charAt(0).toUpperCase() + defaultNamePart.slice(1);
+      dto.firstName?.trim() || defaultNamePart.charAt(0).toUpperCase() + defaultNamePart.slice(1);
     const lastName = dto.lastName?.trim() || 'Member';
 
     const created = await authRepo.createUser({
@@ -420,22 +457,6 @@ export async function addMemberToTenant(
     });
   }
 
-  // Find target role (either custom tenant role or system role)
-  const roleId = dto.roleId;
-  let matchedRole;
-
-  if (roleId) {
-    matchedRole = await rbacRepo.findRoleById(roleId);
-  } else {
-    const roleName = dto.role || explicitRoleName || rbacService.SYSTEM_ROLES.MEMBER;
-    const availableRoles = await rbacRepo.findRolesByTenant(tenantId);
-    matchedRole = availableRoles.find((r) => r.name.toLowerCase() === roleName.toLowerCase());
-  }
-
-  if (!matchedRole) {
-    throw AppError.badRequest('Invalid workspace role specified for member');
-  }
-
   await rbacRepo.assignRoleToMember(member.id, matchedRole.id);
 
   // If user groups were provided, associate them
@@ -462,20 +483,22 @@ export async function addMemberToTenant(
     `/accept-invite?token=${inviteToken}&tenant=${tenantId}`,
   );
 
-  await emailQueue.add(
-    'tenant-invite',
-    {
-      to: targetUser.email,
-      name: [targetUser.firstName, targetUser.lastName].filter(Boolean).join(' ') || 'Member',
-      tenantName: tenant?.name ?? 'Workspace',
-      roleName: matchedRole.name,
-      token: inviteToken,
-      inviteUrl,
-      tenantId,
-      message: dto.message,
-    },
-    { jobId: `invite-${tenantId}-${targetUser.id}-${Date.now()}` },
-  );
+  if (sendInviteEmail) {
+    await emailQueue.add(
+      'tenant-invite',
+      {
+        to: targetUser.email,
+        name: [targetUser.firstName, targetUser.lastName].filter(Boolean).join(' ') || 'Member',
+        tenantName: tenant?.name ?? 'Workspace',
+        roleName: matchedRole.name,
+        token: inviteToken,
+        inviteUrl,
+        tenantId,
+        message: dto.message,
+      },
+      { jobId: `invite-${tenantId}-${targetUser.id}-${Date.now()}` },
+    );
+  }
 
   await logSecurityEvent({
     tenantId,
@@ -492,7 +515,9 @@ export async function addMemberToTenant(
     member,
     role: matchedRole.name,
     inviteUrl: exposeDev ? inviteUrl : undefined,
-    message: `Invitation successfully sent to ${normalizedEmail}`,
+    message: sendInviteEmail
+      ? `Invitation successfully sent to ${normalizedEmail}`
+      : 'Invitation prepared',
   };
 }
 
@@ -2455,13 +2480,25 @@ export async function validateMemberImport(
     paginated.items.map((m) => m.email?.toLowerCase()).filter(Boolean),
   );
 
+  const allowedRoles = new Set(
+    (await rbacRepo.findRolesByTenant(tenantId))
+      .filter(
+        (role) =>
+          role.isActive &&
+          (role.code ?? role.name).toUpperCase() !== rbacService.SYSTEM_ROLES.OWNER,
+      )
+      .map((role) => role.name.toLowerCase()),
+  );
   const seenEmails = new Set<string>();
   const validationResults = rows.map((r, idx) => {
     const emailNorm = r.email.toLowerCase().trim();
     let status: 'VALID' | 'ERROR' | 'DUPLICATE' = 'VALID';
     let error: string | undefined;
 
-    if (existingEmailSet.has(emailNorm)) {
+    if (!allowedRoles.has((r.role || 'MEMBER').toLowerCase())) {
+      status = 'ERROR';
+      error = 'Select an assignable workspace role';
+    } else if (existingEmailSet.has(emailNorm)) {
       status = 'DUPLICATE';
       error = 'Already an existing member in this workspace';
     } else if (seenEmails.has(emailNorm)) {
@@ -2514,7 +2551,8 @@ export async function executeMemberImport(
     phone?: string;
     managerEmail?: string | null;
   }>,
-  _sendInviteEmails = true,
+  sendInviteEmails = true,
+  onProgress?: (processed: number, total: number) => Promise<void>,
 ) {
   const validation = await validateMemberImport(tenantId, rows);
   if (validation.exceedsQuota) {
@@ -2528,20 +2566,28 @@ export async function executeMemberImport(
 
   for (const r of validRows) {
     try {
-      await addMemberToTenant(tenantId, operatorUserId, {
-        email: r.email,
-        role: r.role,
-        firstName: r.firstName,
-        lastName: r.lastName,
-        jobTitle: r.jobTitle,
-        department: r.department,
-        phone: r.phone,
-      } as any);
+      await addMemberToTenant(
+        tenantId,
+        operatorUserId,
+        {
+          email: r.email,
+          role: r.role,
+          expiresInHours: 48,
+          firstName: r.firstName,
+          lastName: r.lastName,
+          jobTitle: r.jobTitle,
+          department: r.department,
+          phone: r.phone,
+        },
+        undefined,
+        sendInviteEmails,
+      );
       results.push({ email: r.email, status: 'IMPORTED' });
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Import failed';
+      const msg = err instanceof AppError ? err.message : 'Import failed';
       results.push({ email: r.email, status: 'FAILED', error: msg });
     }
+    await onProgress?.(results.length, validRows.length);
   }
 
   const importedCount = results.filter((r) => r.status === 'IMPORTED').length;

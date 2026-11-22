@@ -1,14 +1,13 @@
-import { logger } from '@/config/logger';
+import { and, eq, inArray } from 'drizzle-orm';
+
 import { db } from '@/config/db';
+import { logger } from '@/config/logger';
+import { subscriptions, tenantMembers, users } from '@/db/schema/index';
 import { AppError } from '@/lib/errors';
 import { notificationQueue } from '@/queues/index';
-import { emitToUser } from '@/sockets/emitter';
-import { tenantMembers, users, subscriptions } from '@/db/schema/index';
-import { eq, inArray, and } from 'drizzle-orm';
-import {
-  getCatalogEntry,
-  getDefaultPreferencesForCategory,
-} from './notifications.catalog';
+import { emitToUser, emitToWorkspaceUser } from '@/sockets/emitter';
+
+import { getCatalogEntry, getDefaultPreferencesForCategory } from './notifications.catalog';
 import type {
   BroadcastNotificationDto,
   ListNotificationsQueryDto,
@@ -104,7 +103,7 @@ export async function notify(params: NotifyParams): Promise<void> {
       }
 
       // 2. Real-time WebSocket emission
-      emitToUser(recipient.userId, 'notification:new', {
+      const realtimePayload = {
         id: created.id,
         type: created.type,
         category: created.category,
@@ -113,7 +112,12 @@ export async function notify(params: NotifyParams): Promise<void> {
         body: created.body,
         link: created.link,
         createdAt: created.createdAt,
-      });
+      };
+      if (params.tenantId) {
+        emitToWorkspaceUser(params.tenantId, recipient.userId, 'notification:new', realtimePayload);
+      } else {
+        emitToUser(recipient.userId, 'notification:new', realtimePayload);
+      }
 
       // 3. User channel preferences & quiet hours
       const prefs = await repo.getPreferences(recipient.userId, params.tenantId);
@@ -170,7 +174,10 @@ export async function notify(params: NotifyParams): Promise<void> {
         );
       }
     } catch (err) {
-      logger.error({ err, recipient, type: params.type }, 'Failed to deliver notification to recipient');
+      logger.error(
+        { err, recipient, type: params.type },
+        'Failed to deliver notification to recipient',
+      );
     }
   }
 }
@@ -323,10 +330,7 @@ export async function broadcast(
         .select({ tenantId: subscriptions.tenantId })
         .from(subscriptions)
         .where(
-          and(
-            eq(subscriptions.planId, input.target.planId),
-            eq(subscriptions.status, 'ACTIVE'),
-          ),
+          and(eq(subscriptions.planId, input.target.planId), eq(subscriptions.status, 'ACTIVE')),
         );
       const tenantIds = subTenants.map((s) => s.tenantId);
       if (tenantIds.length > 0) {
@@ -334,10 +338,7 @@ export async function broadcast(
           .select({ userId: tenantMembers.userId })
           .from(tenantMembers)
           .where(
-            and(
-              inArray(tenantMembers.tenantId, tenantIds),
-              eq(tenantMembers.status, 'ACTIVE'),
-            ),
+            and(inArray(tenantMembers.tenantId, tenantIds), eq(tenantMembers.status, 'ACTIVE')),
           );
         userIds = Array.from(new Set(members.map((m) => m.userId)));
       }

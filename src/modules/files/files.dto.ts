@@ -100,7 +100,7 @@ export const listFilesQueryDto = z.object({
     .enum(['true', 'false'])
     .optional()
     .transform((val) => val === 'true'),
-  scanStatus: z.enum(['PENDING', 'CLEAN', 'INFECTED', 'SKIPPED']).optional(),
+  scanStatus: z.enum(['PENDING', 'CLEAN', 'INFECTED', 'SKIPPED', 'FAILED']).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 });

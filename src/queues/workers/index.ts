@@ -9,6 +9,7 @@ import { processDbOperation } from '@/queues/workers/db-ops.worker';
 import { processEmail } from '@/queues/workers/email.worker';
 import { processFile } from '@/queues/workers/file.worker';
 import { processMaintenance } from '@/queues/workers/maintenance.worker';
+import { processMemberImport } from '@/queues/workers/member-import.worker';
 import { processNotification } from '@/queues/workers/notification.worker';
 import { processWebhookDelivery } from '@/queues/workers/webhook.worker';
 
@@ -45,7 +46,7 @@ function createWorker(
       captureJobException(err, {
         id: job.id,
         name: job.name,
-        data: job.data,
+        data: name === QUEUES.MEMBER_IMPORT ? { tenantId: job.data.tenantId } : job.data,
         queueName: name,
       });
     }
@@ -72,6 +73,7 @@ export function startWorkers(): Worker[] {
     createWorker(QUEUES.NOTIFICATION, processNotification as Processor, {
       concurrency: 5,
     }),
+    createWorker(QUEUES.MEMBER_IMPORT, processMemberImport as Processor, { concurrency: 2 }),
     createWorker(QUEUES.WEBHOOK, processWebhookDelivery as Processor, {
       concurrency: 5,
     }),

@@ -436,3 +436,6 @@ export const executeMemberImportDto = z.object({
 
 export type ExecuteMemberImportDto = z.infer<typeof executeMemberImportDto>;
 
+export const memberImportJobParamsDto = z.object({
+  jobId: z.string().regex(/^[a-f0-9]{64}$/),
+});
