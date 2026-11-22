@@ -3,6 +3,7 @@ import { boolean, index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-c
 import { platformStaff } from '../platform/platform-staff';
 import { tenants } from '../tenancy/tenants';
 
+// scope: primary
 export const maintenanceConfig = pgTable(
   'MaintenanceConfig',
   {

@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import dns from 'node:dns/promises';
 import { after, describe, it } from 'node:test';
 
 import { closeDb, db } from '@/config/db';
+import { env } from '@/config/env';
 import { closeRedisClients } from '@/config/redis';
 import { users } from '@/db/schema/index';
 import { isOriginAllowed } from '@/lib/cors';
@@ -61,13 +63,7 @@ describe('Phase 08: Workspace Branding, White-Labeling & Custom Domains Unit Tes
     });
 
     it('enforces allowed image MIME types for asset upload presigned URLs', () => {
-      const validMimes = [
-        'image/png',
-        'image/jpeg',
-        'image/webp',
-        'image/svg+xml',
-        'image/x-icon',
-      ];
+      const validMimes = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'image/x-icon'];
       for (const ct of validMimes) {
         const parsed = requestBrandingUploadUrlDto.safeParse({
           type: 'logo',
@@ -224,7 +220,7 @@ describe('Phase 08: Workspace Branding, White-Labeling & Custom Domains Unit Tes
       await assert.rejects(
         async () => {
           await tenantsService.updateTenantUrlSettings(entTenant.id, staffUserId, {
-            customDomain: 'subdomain.localhost',
+            customDomain: `subdomain.${new URL(`https://${env.APP_BASE_DOMAIN}`).hostname}`,
           });
         },
         (err: any) => {
@@ -235,7 +231,8 @@ describe('Phase 08: Workspace Branding, White-Labeling & Custom Domains Unit Tes
       );
     });
 
-    it('registers custom domain with PENDING status, generates TXT instructions, and handles verification', async () => {
+    it('registers custom domain with PENDING status, generates TXT instructions, and handles verification', async (context) => {
+      context.mock.method(dns, 'resolveTxt', async () => []);
       const entTenant = await tenantsRepo.createTenant({
         name: `Domain Verification Test ${Date.now()}`,
         slug: `dom-verify-${Date.now()}`,
@@ -274,7 +271,11 @@ describe('Phase 08: Workspace Branding, White-Labeling & Custom Domains Unit Tes
       assert.equal(failedBranding?.customDomainStatus, 'FAILED');
 
       // 3. Staff bypass allows immediate verification & CORS registration
-      const verified = await tenantsService.verifyTenantCustomDomain(entTenant.id, staffUserId, true);
+      const verified = await tenantsService.verifyTenantCustomDomain(
+        entTenant.id,
+        staffUserId,
+        true,
+      );
       assert.equal(verified.customDomainStatus, 'VERIFIED');
       assert.ok(verified.customDomainVerifiedAt);
 

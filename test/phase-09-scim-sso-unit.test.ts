@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import dns from 'node:dns/promises';
 import { after, before, describe, it } from 'node:test';
 
 import { closeDb } from '@/config/db';
@@ -144,7 +145,8 @@ describe('SCIM 2.0 Directory Sync & Enterprise SSO Unit Tests', () => {
         status: 'ACTIVE',
         idpEntityId: 'https://okta.acme.corp/exk123',
         idpSsoUrl: 'https://okta.acme.corp/app/sso',
-        idpCertificate: '-----BEGIN CERTIFICATE-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A\n-----END CERTIFICATE-----',
+        idpCertificate:
+          '-----BEGIN CERTIFICATE-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A\n-----END CERTIFICATE-----',
         allowedDomains: [testDomain, 'subsidiary.acme.com'],
         enforceSso: true,
         jitProvisioning: true,
@@ -156,7 +158,8 @@ describe('SCIM 2.0 Directory Sync & Enterprise SSO Unit Tests', () => {
       assert.strictEqual(config.enforceSso, true);
     });
 
-    it('validates SAML certificate syntax during connection test', async () => {
+    it('validates SAML certificate syntax during connection test', async (context) => {
+      context.mock.method(dns, 'lookup', async () => [{ address: '192.0.2.10', family: 4 }]);
       const valid = await ssoService.testSsoConnection({
         providerType: 'SAML',
         idpSsoUrl: 'https://okta.acme.corp/app/sso',
@@ -174,6 +177,7 @@ describe('SCIM 2.0 Directory Sync & Enterprise SSO Unit Tests', () => {
         },
         (err: any) => {
           assert.strictEqual(err.status, 400);
+          assert.match(err.message, /certificate/i);
           return true;
         },
       );
@@ -204,7 +208,10 @@ describe('SCIM 2.0 Directory Sync & Enterprise SSO Unit Tests', () => {
       });
 
       assert.strictEqual(init.providerType, 'SAML');
-      assert.ok(init.redirectUrl.startsWith('https://okta.acme.corp/app/sso?RelayState='));
+      const location = new URL(init.redirectUrl);
+      assert.equal(location.origin + location.pathname, 'https://okta.acme.corp/app/sso');
+      assert.ok(location.searchParams.get('SAMLRequest'));
+      assert.ok(location.searchParams.get('RelayState'));
     });
   });
 
@@ -248,7 +255,9 @@ describe('SCIM 2.0 Directory Sync & Enterprise SSO Unit Tests', () => {
   describe('4. SCIM 2.0 Protocol Conformance & Discovery', () => {
     it('returns compliant ServiceProviderConfig with patch and bearer token support', () => {
       const config = scimService.getServiceProviderConfig();
-      assert.deepStrictEqual(config.schemas, ['urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig']);
+      assert.deepStrictEqual(config.schemas, [
+        'urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig',
+      ]);
       assert.strictEqual(config.patch.supported, true);
       assert.strictEqual(config.bulk.supported, false);
       assert.strictEqual(config.filter.supported, true);
@@ -267,7 +276,11 @@ describe('SCIM 2.0 Directory Sync & Enterprise SSO Unit Tests', () => {
 
   describe('5. SCIM 2.0 User Provisioning & Lifecycle', () => {
     let createdUserId: string;
-    const testEmail = `scim.dev.${Date.now()}@acme.corp`;
+    let testEmail: string;
+
+    before(() => {
+      testEmail = `scim.dev.${Date.now()}@${testDomain}`;
+    });
 
     it('provisions new user into workspace via POST /Users', async () => {
       const scimUser = await scimService.createUser(enterpriseTenant.id, {
@@ -326,8 +339,13 @@ describe('SCIM 2.0 Directory Sync & Enterprise SSO Unit Tests', () => {
 
     it('removes member from workspace via DELETE /Users/:id', async () => {
       await scimService.deleteUser(enterpriseTenant.id, createdUserId);
+      await assert.rejects(() => scimService.getUser(enterpriseTenant.id, createdUserId), {
+        name: 'ScimError',
+        status: 404,
+      });
       const member = await tenantsRepo.findTenantMember(enterpriseTenant.id, createdUserId);
-      assert.strictEqual(member, null);
+      assert.equal(member?.status, 'SUSPENDED');
+      assert.ok(member?.deletedAt);
     });
   });
 });

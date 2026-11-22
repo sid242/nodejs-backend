@@ -1,13 +1,15 @@
 import { createHash } from 'node:crypto';
 
 import { REDIS_PREFIXES } from '@/constants/index';
+import type { TenantMember, User } from '@/db/schema';
 import { cache } from '@/lib/cache';
 import * as auditRepo from '@/modules/audit/audit.repository';
-import * as billingService from '@/modules/billing/billing.service';
 import { revokeAllUserTokens } from '@/modules/auth/tokens';
+import * as billingService from '@/modules/billing/billing.service';
 import { groupsRepo } from '@/modules/groups/groups.repository';
 import { ssoRepo } from '@/modules/sso/sso.repository';
 import { emitToUser } from '@/sockets/emitter';
+
 import { ScimCreateUserDto, ScimError, ScimPatchUserDto, ScimQueryDto } from './scim.dto';
 import { scimRepo } from './scim.repository';
 
@@ -92,10 +94,7 @@ export class ScimService {
       totalResults: 2,
       itemsPerPage: 2,
       startIndex: 1,
-      Resources: [
-        this.getResourceTypeById('User'),
-        this.getResourceTypeById('Group'),
-      ],
+      Resources: [this.getResourceTypeById('User'), this.getResourceTypeById('Group')],
     };
   }
 
@@ -129,11 +128,11 @@ export class ScimService {
     };
   }
 
-  private formatScimUser(user: any, membership: any) {
+  private formatScimUser(user: User, membership: TenantMember & { role?: string }) {
     const isActive = membership?.status === 'ACTIVE';
-    const parts = (user?.name || '').split(' ');
-    const firstName = parts[0] || '';
-    const lastName = parts.slice(1).join(' ') || '';
+    const firstName = user?.firstName ?? '';
+    const lastName = user?.lastName ?? '';
+    const displayName = [firstName, lastName].filter(Boolean).join(' ') || user.email;
 
     const lastModified = membership?.updatedAt || user?.updatedAt || new Date();
     const versionHash = createHash('sha256')
@@ -148,9 +147,9 @@ export class ScimService {
       name: {
         givenName: firstName,
         familyName: lastName,
-        formatted: user.name || user.email,
+        formatted: displayName,
       },
-      displayName: user.name || user.email,
+      displayName,
       emails: [
         {
           value: user.email,
@@ -439,6 +438,10 @@ export class ScimService {
       statusChangedAt: statusChanged ? new Date() : membership.statusChangedAt,
     });
 
+    if (!updatedMembership) {
+      throw new ScimError(404, `User ${userId} not found in workspace`);
+    }
+
     if (statusChanged && newStatus === 'SUSPENDED') {
       await this.revokeUserSessions(userId, tenantId, 'SCIM_DEACTIVATED');
       await auditRepo.createAuditLog({
@@ -451,6 +454,9 @@ export class ScimService {
     }
 
     const user = await scimRepo.findUserById(userId);
+    if (!user) {
+      throw new ScimError(404, `User ${userId} record not found`);
+    }
     return this.formatScimUser(user, updatedMembership);
   }
 
@@ -505,10 +511,14 @@ export class ScimService {
     const statusChanged = membership.status !== newStatus;
     const updatedMembership = await scimRepo.updateMember(tenantId, membership.id, {
       status: newStatus,
-      externalId: newExternalId !== undefined ? (newExternalId || null) : membership.externalId,
+      externalId: newExternalId !== undefined ? newExternalId || null : membership.externalId,
       tokenVersion: statusChanged ? (membership.tokenVersion ?? 1) + 1 : membership.tokenVersion,
       statusChangedAt: statusChanged ? new Date() : membership.statusChangedAt,
     });
+
+    if (!updatedMembership) {
+      throw new ScimError(404, `User ${userId} not found in workspace`);
+    }
 
     if (statusChanged && newStatus === 'SUSPENDED') {
       await this.revokeUserSessions(userId, tenantId, 'SCIM_DEACTIVATED');
@@ -522,6 +532,9 @@ export class ScimService {
     }
 
     const user = await scimRepo.findUserById(userId);
+    if (!user) {
+      throw new ScimError(404, `User ${userId} record not found`);
+    }
     return this.formatScimUser(user, updatedMembership);
   }
 

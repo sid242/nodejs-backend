@@ -137,6 +137,12 @@ export const TENANT_TABLES: TenantTableRegistration[] = [
  * Tables that strictly reside in the primary cluster and are not tenant-scoped.
  */
 export const PRIMARY_ONLY_TABLES: string[] = [
+  'Announcement',
+  'AnnouncementDismissal',
+  'ChangelogEntry',
+  'FeatureFlag',
+  'FeatureFlagRule',
+  'MaintenanceConfig',
   'Tenant',
   'TenantSlugHistory',
   'tenant_secrets',

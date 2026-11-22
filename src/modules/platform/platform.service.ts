@@ -57,6 +57,8 @@ import {
 } from './platform.permissions';
 import * as platformRepo from './platform.repository';
 
+const STAFF_LOGIN_DUMMY_HASH = bcrypt.hashSync('platform-login-placeholder', 12);
+
 // ==========================================
 // 1. Staff Management & Authentication
 // ==========================================
@@ -68,14 +70,10 @@ export async function loginStaff(
   requestId?: string,
 ) {
   const staff = await platformRepo.findStaffByEmail(data.email.toLowerCase().trim());
-  if (!staff) throw AppError.unauthorized('Invalid email or password');
-
-  if (staff.status !== 'ACTIVE') {
-    throw AppError.forbidden(`Platform staff account is ${staff.status.toLowerCase()}`);
+  const valid = await bcrypt.compare(data.password, staff?.passwordHash ?? STAFF_LOGIN_DUMMY_HASH);
+  if (!valid || staff?.status !== 'ACTIVE') {
+    throw AppError.unauthorized('Invalid email or password');
   }
-
-  const valid = await bcrypt.compare(data.password, staff.passwordHash);
-  if (!valid) throw AppError.unauthorized('Invalid email or password');
 
   // Intercept if 2FA is active on the platform staff account
   if (staff.twoFactorEnabledAt) {
@@ -1221,7 +1219,11 @@ export async function provisionTenant(
       let databaseSecretRef: string | null = null;
       if (data.databaseConfig?.connectionUrl) {
         const secretStore = getSecretStore();
-        databaseSecretRef = await secretStore.put('db-connection-url', data.databaseConfig.connectionUrl, tenant.id);
+        databaseSecretRef = await secretStore.put(
+          'db-connection-url',
+          data.databaseConfig.connectionUrl,
+          tenant.id,
+        );
       }
 
       await tenantsRepo.updateTenant(tenant.id, {
@@ -1528,7 +1530,8 @@ export async function retryTenantProvisioning(
       `/accept-invite?token=${inviteToken}&tenant=${tenant.id}`,
     );
     const memberDisplayName =
-      [existingOwnerMember.firstName, existingOwnerMember.lastName].filter(Boolean).join(' ') || 'Owner';
+      [existingOwnerMember.firstName, existingOwnerMember.lastName].filter(Boolean).join(' ') ||
+      'Owner';
     await emailQueue.add(
       'tenant-invite',
       {
@@ -1955,7 +1958,9 @@ export async function migrateTenantToDedicated(
           .from(schema.tenantMembers)
           .where(eq(schema.tenantMembers.tenantId, tenant.id));
         if (Number(cnt?.count ?? 0) < recordsMigrated.members) {
-          throw AppError.internal('Migration verification failed: member count mismatch in dedicated database');
+          throw AppError.internal(
+            'Migration verification failed: member count mismatch in dedicated database',
+          );
         }
       }
     } finally {
@@ -1966,7 +1971,11 @@ export async function migrateTenantToDedicated(
     let databaseSecretRef = tenant.databaseSecretRef;
     if (options?.connectionUrl) {
       const secretStore = getSecretStore();
-      databaseSecretRef = await secretStore.put('db-connection-url', options.connectionUrl, tenant.id);
+      databaseSecretRef = await secretStore.put(
+        'db-connection-url',
+        options.connectionUrl,
+        tenant.id,
+      );
     }
 
     const currentMetadata = { ...(tenant.metadata as Record<string, unknown> | null) };
@@ -2358,4 +2367,3 @@ export async function cancelTenantDbOperation(
 
   return updated;
 }
-

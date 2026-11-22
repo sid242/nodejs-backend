@@ -9,7 +9,7 @@ test('AES-256-GCM encryption & decryption roundtrip succeeds', () => {
 
   assert.notEqual(encrypted, secretText);
   assert.equal(typeof encrypted, 'string');
-  assert.equal(encrypted.split(':').length, 3); // iv:authTag:ciphertext
+  assert.match(encrypted, /^v1:[^:]+:[a-f0-9]{24}:[a-f0-9]{32}:[a-f0-9]+$/);
 
   const decrypted = decrypt(encrypted);
   assert.equal(decrypted, secretText);
@@ -22,16 +22,14 @@ test('encrypt returns empty string for falsy input', () => {
 
 test('decrypt rejects tampered ciphertext or altered auth tag', () => {
   const encrypted = encrypt('my-secret-password');
-  const [iv, authTag, data] = encrypted.split(':');
-
-  // Alter the ciphertext
-  const safeData = data ?? '';
-  const tamperedData = safeData.slice(0, -2) + (safeData.endsWith('a') ? 'b' : 'a');
-  const tampered = `${iv}:${authTag}:${tamperedData}`;
-
-  assert.throws(() => {
-    decrypt(tampered);
-  });
+  const parts = encrypted.split(':');
+  for (const index of [3, 4]) {
+    const tampered = [...parts];
+    const part = tampered[index];
+    assert.ok(part);
+    tampered[index] = part.slice(0, -1) + (part.endsWith('a') ? 'b' : 'a');
+    assert.throws(() => decrypt(tampered.join(':')));
+  }
 });
 
 test('decrypt rejects invalid string formats', () => {

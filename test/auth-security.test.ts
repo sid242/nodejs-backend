@@ -2,8 +2,26 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import bcrypt from 'bcryptjs';
 
-import { registerDto } from '../src/modules/auth/auth.dto';
+import { loginDto, registerDto, verifyTwoFactorChallengeDto } from '../src/modules/auth/auth.dto';
 import { hashToken } from '../src/modules/auth/verification.repository';
+
+test('Sign-in trims email without applying the registration password minimum', () => {
+  assert.deepEqual(loginDto.parse({ email: ' member@example.com ', password: 'short' }), {
+    email: 'member@example.com',
+    password: 'short',
+  });
+});
+
+test('MFA accepts authenticator and recovery code formats', () => {
+  const challengeToken = 'demo-challenge';
+  for (const code of ['123456', 'a1b2c3d4e5']) {
+    assert.equal(verifyTwoFactorChallengeDto.safeParse({ challengeToken, code }).success, true);
+  }
+  assert.equal(
+    verifyTwoFactorChallengeDto.safeParse({ challengeToken, code: '1234567' }).success,
+    false,
+  );
+});
 
 test('Registration DTO validates required firstName and lastName', () => {
   const result = registerDto.safeParse({

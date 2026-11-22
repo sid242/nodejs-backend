@@ -1,8 +1,19 @@
-import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 import { featureFlagTargetEnum, featureFlagTypeEnum } from '../enums';
 import { platformStaff } from '../platform/platform-staff';
 
+// scope: primary
 export const featureFlags = pgTable(
   'FeatureFlag',
   {
@@ -34,6 +45,7 @@ export const featureFlags = pgTable(
 export type FeatureFlag = typeof featureFlags.$inferSelect;
 export type NewFeatureFlag = typeof featureFlags.$inferInsert;
 
+// scope: primary
 export const featureFlagRules = pgTable(
   'FeatureFlagRule',
   {

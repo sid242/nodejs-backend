@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import type { CookieOptions, Response } from 'express';
 import jwt from 'jsonwebtoken';
 
 const TEST_ACCESS_SECRET = 'a'.repeat(32);
@@ -68,40 +69,40 @@ test('parseCookies parses cookie string into key-value pairs', async () => {
   assert.deepEqual(parseCookies(''), {});
 });
 
-test('setAuthCookies sets both accessToken and refreshToken cookies with httpOnly', async () => {
+test('setAuthCookies sets both authentication cookies with httpOnly', async () => {
   const { setAuthCookies } = await import('../src/modules/auth/cookies.js');
-  const cookies: Record<string, { val: string; options: any }> = {};
+  const cookies: Record<string, { val: string; options: CookieOptions }> = {};
   const mockRes = {
-    cookie: (name: string, val: string, options: any) => {
+    cookie: (name: string, val: string, options: CookieOptions) => {
       cookies[name] = { val, options };
     },
-  } as any;
+  } as unknown as Response;
 
   setAuthCookies(mockRes, { accessToken: 'acc-1', refreshToken: 'ref-1' });
 
-  assert.ok(cookies.accessToken);
-  assert.equal(cookies.accessToken.val, 'acc-1');
-  assert.equal(cookies.accessToken.options.httpOnly, true);
-  assert.equal(cookies.accessToken.options.path, '/');
-  assert.ok(cookies.refreshToken);
-  assert.equal(cookies.refreshToken.val, 'ref-1');
-  assert.equal(cookies.refreshToken.options.httpOnly, true);
-  assert.equal(cookies.refreshToken.options.path, '/api/v1/auth');
+  assert.ok(cookies.access_token);
+  assert.equal(cookies.access_token.val, 'acc-1');
+  assert.equal(cookies.access_token.options.httpOnly, true);
+  assert.equal(cookies.access_token.options.path, '/');
+  assert.ok(cookies.refresh_token);
+  assert.equal(cookies.refresh_token.val, 'ref-1');
+  assert.equal(cookies.refresh_token.options.httpOnly, true);
+  assert.equal(cookies.refresh_token.options.path, '/api/v1/auth');
 });
 
-test('clearAuthCookies clears both accessToken and refreshToken cookies', async () => {
+test('clearAuthCookies clears both authentication cookies', async () => {
   const { clearAuthCookies } = await import('../src/modules/auth/cookies.js');
-  const cleared: Array<{ name: string; options: any }> = [];
+  const cleared: Array<{ name: string; options: CookieOptions }> = [];
   const mockRes = {
-    clearCookie: (name: string, options: any) => {
+    clearCookie: (name: string, options: CookieOptions) => {
       cleared.push({ name, options });
     },
-  } as any;
+  } as unknown as Response;
 
   clearAuthCookies(mockRes);
 
-  assert.ok(cleared.some((c) => c.name === 'accessToken' && c.options.path === '/'));
-  assert.ok(cleared.some((c) => c.name === 'refreshToken' && c.options.path === '/api/v1/auth'));
+  assert.ok(cleared.some((c) => c.name === 'access_token' && c.options.path === '/'));
+  assert.ok(cleared.some((c) => c.name === 'refresh_token' && c.options.path === '/api/v1/auth'));
 });
 
 test('dual-mode auth token extraction: header takes precedence, cookie is fallback', () => {
@@ -152,8 +153,8 @@ test('auth and queue constants are properly defined', async () => {
     QUEUE_NAMES,
   } = await import('../src/constants/index.js');
 
-  assert.equal(COOKIE_NAMES.ACCESS_TOKEN, 'accessToken');
-  assert.equal(COOKIE_NAMES.REFRESH_TOKEN, 'refreshToken');
+  assert.equal(COOKIE_NAMES.ACCESS_TOKEN, 'access_token');
+  assert.equal(COOKIE_NAMES.REFRESH_TOKEN, 'refresh_token');
   assert.equal(COOKIE_PATHS.ROOT, '/');
   assert.equal(COOKIE_PATHS.AUTH, '/api/v1/auth');
   assert.equal(AUTH_HEADERS.PREFIX, 'Bearer ');
