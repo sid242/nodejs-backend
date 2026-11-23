@@ -208,7 +208,7 @@ export async function findFiles(
   const conditions = [eq(files.tenantId, tenantId), eq(files.isDeleted, isDeleted)];
 
   if (folderId !== undefined) {
-    if (folderId === 'root' || folderId === null) {
+    if (folderId === 'root' || folderId === null || folderId === 'null') {
       conditions.push(isNull(files.folderId));
     } else {
       conditions.push(eq(files.folderId, folderId));
@@ -371,7 +371,7 @@ export async function findFoldersByTenantId(
   assertTenantScope(tenantId);
   const conditions = [eq(fileFolders.tenantId, tenantId)];
   if (parentId !== undefined) {
-    if (parentId === null || parentId === 'root') {
+    if (parentId === null || parentId === 'root' || parentId === 'null') {
       conditions.push(isNull(fileFolders.parentId));
     } else {
       conditions.push(eq(fileFolders.parentId, parentId));

@@ -345,10 +345,19 @@ export async function updateFolder(
   id: string,
   dto: UpdateFolderDto,
 ): Promise<FileFolderRecord> {
-  if (dto.parentId) {
+  if (dto.parentId !== undefined && dto.parentId !== null) {
     if (dto.parentId === id) throw AppError.badRequest('Folder cannot be parent of itself');
     const parent = await fileRepo.findFolderById(dto.parentId, tenantId);
     if (!parent) throw AppError.badRequest('Parent folder not found');
+
+    // Prevent cycle: traverse up the parent chain to make sure id is not an ancestor of dto.parentId
+    let curr: FileFolderRecord | null = parent;
+    while (curr && curr.parentId) {
+      if (curr.parentId === id) {
+        throw AppError.badRequest('Cannot move a folder into one of its own subfolders');
+      }
+      curr = await fileRepo.findFolderById(curr.parentId, tenantId);
+    }
   }
   const updated = await fileRepo.updateFolder(id, tenantId, dto);
   if (!updated) throw AppError.notFound('Folder not found');

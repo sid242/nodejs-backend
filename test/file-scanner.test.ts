@@ -54,3 +54,26 @@ test('file scanner sends complete bytes and distinguishes verdicts from errors',
   await assert.rejects(scanFileBytes(bytes), /valid verdict/);
   assert.equal(requests, 3);
 });
+
+test('file scanner in development auto-marks as CLEAN when CLAMD_HOST is unset or unreachable', async (t) => {
+  const bytes = Buffer.from('test data');
+  const prevHost = env.CLAMD_HOST;
+  const prevPort = env.CLAMD_PORT;
+  const prevNodeEnv = env.NODE_ENV;
+
+  (env as { NODE_ENV: string }).NODE_ENV = 'development';
+  t.after(() => {
+    env.CLAMD_HOST = prevHost;
+    env.CLAMD_PORT = prevPort;
+    (env as { NODE_ENV: string }).NODE_ENV = prevNodeEnv;
+  });
+
+  // 1. Unset CLAMD_HOST in development
+  env.CLAMD_HOST = undefined;
+  assert.equal(await scanFileBytes(bytes), 'CLEAN');
+
+  // 2. Unreachable port in development (ECONNREFUSED)
+  env.CLAMD_HOST = '127.0.0.1';
+  env.CLAMD_PORT = 1; // reserved port, unreachable
+  assert.equal(await scanFileBytes(bytes), 'CLEAN');
+});

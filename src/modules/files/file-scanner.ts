@@ -1,16 +1,36 @@
 import { createConnection } from 'node:net';
 
 import { env } from '@/config/env';
+import { logger } from '@/config/logger';
 
 export async function scanFileBytes(bytes: Uint8Array): Promise<'CLEAN' | 'INFECTED'> {
-  if (!env.CLAMD_HOST) throw new Error('A ClamAV daemon is required to scan files');
+  if (!env.CLAMD_HOST) {
+    if (env.NODE_ENV === 'development') {
+      logger.warn('CLAMD_HOST not configured in development: auto-marking file as CLEAN');
+      return 'CLEAN';
+    }
+    throw new Error('A ClamAV daemon is required to scan files');
+  }
 
   return new Promise((resolve, reject) => {
     const socket = createConnection({ host: env.CLAMD_HOST, port: env.CLAMD_PORT });
     const timer = setTimeout(() => socket.destroy(new Error('File scan timed out')), 30_000);
     let reply = '';
 
-    socket.on('error', reject);
+    socket.on('error', (err) => {
+      if (
+        env.NODE_ENV === 'development' &&
+        (err as NodeJS.ErrnoException).code === 'ECONNREFUSED'
+      ) {
+        logger.warn(
+          `ClamAV daemon at ${env.CLAMD_HOST}:${env.CLAMD_PORT} is unreachable in development: auto-marking file as CLEAN`,
+        );
+        clearTimeout(timer);
+        resolve('CLEAN');
+        return;
+      }
+      reject(err);
+    });
     socket.once('close', () => {
       clearTimeout(timer);
       reject(new Error('Scanner closed before returning a verdict'));
