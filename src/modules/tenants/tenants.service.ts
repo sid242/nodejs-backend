@@ -26,7 +26,7 @@ import {
   isPrivateOrReservedHost,
   verifySmtpConnection,
 } from '@/lib/mailer';
-import { createUploadPost } from '@/lib/s3';
+import { createUploadPost, ensurePublicBucketPolicies } from '@/lib/s3';
 import { safeFilename } from '@/lib/utils';
 import * as auditRepo from '@/modules/audit/audit.repository';
 import { logSecurityEvent } from '@/modules/audit/audit.service';
@@ -1652,6 +1652,8 @@ export async function getTenantBranding(tenantId: string): Promise<PublicTenantB
     throw AppError.notFound('Tenant not found');
   }
 
+  await ensurePublicBucketPolicies();
+
   const branding = await tenantBrandingRepo.findBrandingByTenantId(tenantId);
   if (branding) {
     return branding;
@@ -1698,6 +1700,8 @@ export async function updateTenantBranding(
   if (!tenant) {
     throw AppError.notFound('Tenant not found');
   }
+
+  await ensurePublicBucketPolicies();
 
   if (data?.customDomain) {
     const entitlements = await billingService.getTenantEntitlements(tenantId);
@@ -1871,6 +1875,8 @@ export async function generateBrandingUploadUrl(
     throw AppError.notFound('Tenant not found');
   }
 
+  await ensurePublicBucketPolicies();
+
   const ext = data?.filename?.split('.').pop()?.toLowerCase() ?? 'png';
   const cleanExt = safeFilename(ext);
   const key = `tenants/${tenantId}/branding/${data.type}-${Date.now()}.${cleanExt}`;
@@ -1937,6 +1943,8 @@ export async function verifyTenantCustomDomain(
   if (!tenant) {
     throw AppError.notFound('Tenant not found');
   }
+
+  await ensurePublicBucketPolicies();
 
   // Plan gate: custom domain requires Enterprise unless staff bypasses
   if (!bypassVerification) {

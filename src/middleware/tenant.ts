@@ -8,11 +8,12 @@ import { getLatestSchemaTag, isSchemaVersionCurrent } from '@/db/schema-version'
 import { runWithTenantDb } from '@/db/tenancy/context';
 import { getTenantDb } from '@/db/tenancy/tenant-db';
 import { AppError } from '@/lib/errors';
+import { SUPPORT_SCOPE_PRESETS } from '@/middleware/support';
 import * as platformRepo from '@/modules/platform/platform.repository';
 import { resolveUserPermissions, SYSTEM_ROLES } from '@/modules/rbac/rbac.service';
+import { ssoRepo } from '@/modules/sso/sso.repository';
 import * as tenantsRepo from '@/modules/tenants/tenants.repository';
 import * as usersRepo from '@/modules/users/users.repository';
-import { ssoRepo } from '@/modules/sso/sso.repository';
 
 function safeCompareSecrets(input: string, expected?: string): boolean {
   if (!expected || !input) return false;
@@ -257,7 +258,10 @@ export async function resolveTenantContext(
       // Under audited support delegation, staff access is granted with specific support scope
       roles = ['SUPPORT_STAFF'];
       roleIds = [];
-      effectivePermissions = ['*']; // Full troubleshooting scope bounded by support session
+      const scopeKey =
+        (activeSupportSession.scope as keyof typeof SUPPORT_SCOPE_PRESETS) || 'READ_ONLY';
+      const preset = SUPPORT_SCOPE_PRESETS[scopeKey] ?? SUPPORT_SCOPE_PRESETS.READ_ONLY;
+      effectivePermissions = [...preset];
     } else if (member && req.user?.id) {
       const resolved = await resolveUserPermissions(tenant.id, req.user.id);
       roles = resolved.roles;

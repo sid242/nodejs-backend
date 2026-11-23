@@ -460,6 +460,9 @@ export async function listSupportSessionsPaginated(filters?: ListSupportSessions
         ilike(platformStaff.displayName, term),
         ilike(tenants.name, term),
         ilike(tenants.slug, term),
+        ilike(users.email, term),
+        ilike(users.firstName, term),
+        ilike(users.lastName, term),
       ),
     );
   }
@@ -479,6 +482,7 @@ export async function listSupportSessionsPaginated(filters?: ListSupportSessions
         mode: platformSupportSessions.mode,
         scope: platformSupportSessions.scope,
         targetUserId: platformSupportSessions.targetUserId,
+        targetMemberId: platformSupportSessions.targetMemberId,
         targetUserEmail: users.email,
         targetUserFirstName: users.firstName,
         targetUserLastName: users.lastName,
@@ -492,7 +496,11 @@ export async function listSupportSessionsPaginated(filters?: ListSupportSessions
       .from(platformSupportSessions)
       .leftJoin(platformStaff, eq(platformSupportSessions.staffId, platformStaff.id))
       .leftJoin(tenants, eq(platformSupportSessions.tenantId, tenants.id))
-      .leftJoin(users, eq(platformSupportSessions.targetUserId, users.id))
+      .leftJoin(tenantMembers, eq(platformSupportSessions.targetMemberId, tenantMembers.id))
+      .leftJoin(
+        users,
+        or(eq(platformSupportSessions.targetUserId, users.id), eq(tenantMembers.userId, users.id)),
+      )
       .where(whereClause)
       .orderBy(desc(platformSupportSessions.startedAt))
       .offset((page - 1) * limit)
@@ -502,7 +510,11 @@ export async function listSupportSessionsPaginated(filters?: ListSupportSessions
       .from(platformSupportSessions)
       .leftJoin(platformStaff, eq(platformSupportSessions.staffId, platformStaff.id))
       .leftJoin(tenants, eq(platformSupportSessions.tenantId, tenants.id))
-      .leftJoin(users, eq(platformSupportSessions.targetUserId, users.id))
+      .leftJoin(tenantMembers, eq(platformSupportSessions.targetMemberId, tenantMembers.id))
+      .leftJoin(
+        users,
+        or(eq(platformSupportSessions.targetUserId, users.id), eq(tenantMembers.userId, users.id)),
+      )
       .where(whereClause),
   ]);
 
@@ -523,6 +535,11 @@ export async function listTenantSupportSessions(tenantId: string) {
       staffDisplayName: platformStaff.displayName,
       mode: platformSupportSessions.mode,
       scope: platformSupportSessions.scope,
+      targetUserId: platformSupportSessions.targetUserId,
+      targetMemberId: platformSupportSessions.targetMemberId,
+      targetUserEmail: users.email,
+      targetUserFirstName: users.firstName,
+      targetUserLastName: users.lastName,
       reason: platformSupportSessions.reason,
       ticketRef: platformSupportSessions.ticketRef,
       status: platformSupportSessions.status,
@@ -532,6 +549,11 @@ export async function listTenantSupportSessions(tenantId: string) {
     })
     .from(platformSupportSessions)
     .leftJoin(platformStaff, eq(platformSupportSessions.staffId, platformStaff.id))
+    .leftJoin(tenantMembers, eq(platformSupportSessions.targetMemberId, tenantMembers.id))
+    .leftJoin(
+      users,
+      or(eq(platformSupportSessions.targetUserId, users.id), eq(tenantMembers.userId, users.id)),
+    )
     .where(eq(platformSupportSessions.tenantId, tenantId))
     .orderBy(desc(platformSupportSessions.startedAt));
 }
@@ -1032,10 +1054,7 @@ export async function listTenantDatabasesPaginated(filters?: ListTenantDatabases
 }
 
 export async function createTenantDbOperation(data: NewTenantDbOperation) {
-  const [record] = await db
-    .insert(tenantDbOperations)
-    .values(data)
-    .returning();
+  const [record] = await db.insert(tenantDbOperations).values(data).returning();
   return record;
 }
 
@@ -1057,10 +1076,7 @@ export async function listTenantDbOperations(tenantId: string, limit = 20) {
     .limit(limit);
 }
 
-export async function updateTenantDbOperation(
-  id: string,
-  updates: Partial<NewTenantDbOperation>,
-) {
+export async function updateTenantDbOperation(id: string, updates: Partial<NewTenantDbOperation>) {
   const [record] = await db
     .update(tenantDbOperations)
     .set({

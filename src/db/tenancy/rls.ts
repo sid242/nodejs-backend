@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 
 import { db as defaultDb, type Database } from '@/config/db';
+import { logger } from '@/config/logger';
 import { currentTenantCtx, runWithTenantDb, tenantDb } from '@/db/tenancy/context';
 
 /**
@@ -19,9 +20,7 @@ export async function withTenantTransaction<T>(
   dbInstance?: Database,
 ): Promise<T> {
   const currentCtx = currentTenantCtx();
-  const targetDb =
-    dbInstance ??
-    (currentCtx?.tenantId === tenantId ? tenantDb() : defaultDb);
+  const targetDb = dbInstance ?? (currentCtx?.tenantId === tenantId ? tenantDb() : defaultDb);
 
   return targetDb.transaction(async (tx) => {
     // Switch to non-superuser role so Postgres kernel enforces RLS
@@ -33,7 +32,7 @@ export async function withTenantTransaction<T>(
     return runWithTenantDb(
       {
         tenantId,
-        db: (tx as unknown as Database),
+        db: tx as unknown as Database,
         tx,
         databaseMode: currentCtx?.databaseMode ?? 'shared',
       },
@@ -139,8 +138,11 @@ export async function applyTenantRlsPolicies(
       await client.unsafe(`
         GRANT SELECT, INSERT, UPDATE, DELETE ON "${name}" TO tenant_app_role, app_runtime, app_platform_role;
       `);
-    } catch {
-      // Table might not exist yet if migrations haven't created it
+    } catch (err: unknown) {
+      logger.warn(
+        { err, table: name },
+        'Could not apply RLS policy to table (table may not exist yet or privileges restricted)',
+      );
     }
   }
 
@@ -151,7 +153,7 @@ export async function applyTenantRlsPolicies(
       GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO tenant_app_role, app_runtime, app_platform_role;
       ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO tenant_app_role, app_runtime, app_platform_role;
     `);
-  } catch {
-    // Ignore schema grant errors if not permitted
+  } catch (err: unknown) {
+    logger.warn({ err }, 'Could not grant schema/sequence privileges to tenant roles');
   }
 }

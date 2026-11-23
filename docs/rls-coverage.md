@@ -9,6 +9,7 @@ This document defines the kernel-enforced Row-Level Security (RLS) defense-in-de
 Application-level filtering (`WHERE "tenantId" = ...`) is required on all queries, but software bugs, unverified queries, or third-party ORM edge cases can lead to accidental data leakage.
 
 PostgreSQL Row-Level Security acts as an immutable database-kernel boundary:
+
 1. **Zero-Leakage on Unset Tenant**: If `app.tenant_id` is missing, empty, or uninitialized in a session, queries return **zero rows** by default (`NULLIF(current_setting('app.tenant_id', true), '')::uuid` evaluates to `NULL`, which fails the policy check).
 2. **Force RLS**: Every tenant table has `FORCE ROW LEVEL SECURITY` enabled to prevent table owners or elevated application roles from bypassing isolation policies.
 3. **No Cross-Tenant Writes**: The `WITH CHECK` expression guarantees that tenant sessions can never insert or update records with a foreign `tenantId`, nor can they create or modify system-level records (`tenantId IS NULL`).
@@ -18,41 +19,60 @@ PostgreSQL Row-Level Security acts as an immutable database-kernel boundary:
 
 ## 2. PostgreSQL Role Matrix
 
-| Role | Classification | Permissions | Usage |
-| :--- | :--- | :--- | :--- |
-| `app_owner` | Schema Owner | `ALL PRIVILEGES`, `SUPERUSER` / `CREATEDB` | CI/CD schema migrations only (`DATABASE_MIGRATION_URL`) |
-| `app_runtime` | Standard Connection | `NOSUPERUSER`, `NOBYPASSRLS`, `SELECT/INSERT/UPDATE/DELETE` on public tables | Standard API & Worker processes (`DATABASE_URL`) |
-| `tenant_app_role` | Transaction Role | `NOSUPERUSER`, `NOBYPASSRLS`, RLS strictly enforced | Switched to locally via `SET LOCAL ROLE tenant_app_role` within `withTenantTransaction` |
-| `app_platform_role` | Platform Role | `NOSUPERUSER`, `NOBYPASSRLS`, RLS bypass policy enabled | Switched to locally via `SET LOCAL ROLE app_platform_role` for cross-tenant maintenance |
+| Role                | Classification      | Permissions                                                                  | Usage                                                                                   |
+| :------------------ | :------------------ | :--------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------- |
+| `app_owner`         | Schema Owner        | `ALL PRIVILEGES`, `SUPERUSER` / `CREATEDB`                                   | CI/CD schema migrations only (`DATABASE_MIGRATION_URL`)                                 |
+| `app_runtime`       | Standard Connection | `NOSUPERUSER`, `NOBYPASSRLS`, `SELECT/INSERT/UPDATE/DELETE` on public tables | Standard API & Worker processes (`DATABASE_URL`)                                        |
+| `tenant_app_role`   | Transaction Role    | `NOSUPERUSER`, `NOBYPASSRLS`, RLS strictly enforced                          | Switched to locally via `SET LOCAL ROLE tenant_app_role` within `withTenantTransaction` |
+| `app_platform_role` | Platform Role       | `NOSUPERUSER`, `NOBYPASSRLS`, RLS bypass policy enabled                      | Switched to locally via `SET LOCAL ROLE app_platform_role` for cross-tenant maintenance |
 
 ---
 
 ## 3. Tenant Tables RLS Inventory
 
-All 20 tenant-scoped tables have RLS enabled, forced, and governed by strict isolation policies:
+All 39 tenant-scoped tables registered in `TENANT_TABLES` have RLS enabled, forced, and governed by strict isolation policies:
 
-| Table Name | Drizzle Export | Tenant Column | Read Policy (`USING`) | Write Policy (`WITH CHECK`) |
-| :--- | :--- | :--- | :--- | :--- |
-| `TenantBranding` | `tenantBrandings` | `tenantId` | `tenantId = app.tenant_id` | `tenantId = app.tenant_id` |
-| `AppRole` | `roles` | `tenantId` | `tenantId = app.tenant_id OR tenantId IS NULL` | `tenantId = app.tenant_id` |
-| `TenantMember` | `tenantMembers` | `tenantId` | `tenantId = app.tenant_id` | `tenantId = app.tenant_id` |
-| `TenantInvitation` | `tenantInvitations` | `tenantId` | `tenantId = app.tenant_id` | `tenantId = app.tenant_id` |
-| `File` | `files` | `tenantId` | `tenantId = app.tenant_id` | `tenantId = app.tenant_id` |
-| `EmailTemplate` | `emailTemplates` | `tenantId` | `tenantId = app.tenant_id` | `tenantId = app.tenant_id` |
-| `TenantEmailConfig` | `tenantEmailConfigs` | `tenantId` | `tenantId = app.tenant_id` | `tenantId = app.tenant_id` |
-| `Address` | `addresses` | `tenantId` | `tenantId = app.tenant_id` | `tenantId = app.tenant_id` |
-| `UserGroup` | `userGroups` | `tenantId` | `tenantId = app.tenant_id` | `tenantId = app.tenant_id` |
-| `AuditLog` | `auditLogs` | `tenantId` | `tenantId = app.tenant_id` | `tenantId = app.tenant_id` |
-| `TenantAuditPolicy` | `tenantAuditPolicies` | `tenantId` | `tenantId = app.tenant_id` | `tenantId = app.tenant_id` |
-| `tenant_sso_configs` | `tenantSsoConfigs` | `tenantId` | `tenantId = app.tenant_id` | `tenantId = app.tenant_id` |
-| `tenant_scim_tokens` | `tenantScimTokens` | `tenantId` | `tenantId = app.tenant_id` | `tenantId = app.tenant_id` |
-| `TenantModule` | `tenantModules` | `tenantId` | `tenantId = app.tenant_id` | `tenantId = app.tenant_id` |
-| `OutboxEvent` | `outboxEvents` | `tenantId` | `tenantId = app.tenant_id` | `tenantId = app.tenant_id` |
-| `Lead` | `leads` | `tenantId` | `tenantId = app.tenant_id` | `tenantId = app.tenant_id` |
-| `RolePermission` | `rolePermissions` | `tenantId` | `tenantId = app.tenant_id` | `tenantId = app.tenant_id` |
-| `TenantMemberRole` | `tenantMemberRoles` | `tenantId` | `tenantId = app.tenant_id` | `tenantId = app.tenant_id` |
-| `UserGroupMember` | `userGroupMembers` | `tenantId` | `tenantId = app.tenant_id` | `tenantId = app.tenant_id` |
-| `UserGroupRole` | `userGroupRoles` | `tenantId` | `tenantId = app.tenant_id` | `tenantId = app.tenant_id` |
+| Table Name             | Drizzle Export           | Tenant Column | Read Policy (`USING`)                          | Write Policy (`WITH CHECK`) |
+| :--------------------- | :----------------------- | :------------ | :--------------------------------------------- | :-------------------------- |
+| `TenantBranding`       | `tenantBrandings`        | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `AppRole`              | `roles`                  | `tenantId`    | `tenantId = app.tenant_id OR tenantId IS NULL` | `tenantId = app.tenant_id`  |
+| `TenantMember`         | `tenantMembers`          | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `TenantInvitation`     | `tenantInvitations`      | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `FileFolder`           | `fileFolders`            | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `File`                 | `files`                  | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `EmailTemplate`        | `emailTemplates`         | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `TenantEmailConfig`    | `tenantEmailConfigs`     | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `Address`              | `addresses`              | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `UserGroup`            | `userGroups`             | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `AuditLog`             | `auditLogs`              | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `TenantAuditPolicy`    | `tenantAuditPolicies`    | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `tenant_sso_configs`   | `tenantSsoConfigs`       | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `tenant_scim_tokens`   | `tenantScimTokens`       | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `TenantModule`         | `tenantModules`          | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `OutboxEvent`          | `outboxEvents`           | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `Lead`                 | `leads`                  | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `TenantSetting`        | `tenantSettings`         | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `TenantSecurityPolicy` | `tenantSecurityPolicies` | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `EmailSuppression`     | `emailSuppressions`      | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `UsageEvent`           | `usageEvents`            | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `UsageDaily`           | `usageDaily`             | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `ActivityFeed`         | `activityFeed`           | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `ReportDefinition`     | `reportDefinitions`      | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `RolePermission`       | `rolePermissions`        | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `TenantMemberRole`     | `tenantMemberRoles`      | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `UserGroupMember`      | `userGroupMembers`       | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `UserGroupRole`        | `userGroupRoles`         | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `FileShare`            | `fileShares`             | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `FileVersion`          | `fileVersions`           | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `EmailTemplateVersion` | `emailTemplateVersions`  | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `EmailMessage`         | `emailMessages`          | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `ApiKey`               | `apiKeys`                | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `WebhookEndpoint`      | `webhookEndpoints`       | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `WebhookDelivery`      | `webhookDeliveries`      | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `ConsentRecord`        | `consentRecords`         | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `ExportJob`            | `exportJobs`             | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `ExportArtifact`       | `exportArtifacts`        | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `ReportRun`            | `reportRuns`             | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
 
 ---
 

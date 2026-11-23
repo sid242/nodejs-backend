@@ -143,7 +143,7 @@ export const DEMO_CREDENTIALS = {
       tenantName: 'Nexus Global Technologies',
       tenantSlug: 'nexus-global',
       plan: 'ENTERPRISE',
-      databaseMode: 'dedicated',
+      databaseMode: 'shared',
       primaryColor: '#2563EB',
       members: [
         {
@@ -339,7 +339,7 @@ export const DEMO_CREDENTIALS = {
       tenantName: 'Horizon Mediaworks',
       tenantSlug: 'horizon-media',
       plan: 'ENTERPRISE',
-      databaseMode: 'dedicated',
+      databaseMode: 'shared',
       primaryColor: '#D97706',
       members: [
         {

@@ -6,16 +6,17 @@ This document defines the architectural division of data across the database top
 
 ## 1. Scope Definitions
 
-| Scope | Physical Location | Rationale |
-|---|---|---|
-| **Primary (Registry)** | Central Primary PostgreSQL cluster | Global data needed before tenant identity is resolved, cross-tenant records, billing control plane, staff administration, and central identity/authentication. |
-| **Tenant** | Tenant Database (Primary if `databaseMode = 'shared'`, dedicated isolated cluster if `databaseMode = 'dedicated'`) | Enterprise tenant business data, members, custom roles, uploaded assets, audit logs, and configuration. Provides complete data isolation for dedicated tier customers. |
+| Scope                  | Physical Location                                                                                                  | Rationale                                                                                                                                                              |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Primary (Registry)** | Central Primary PostgreSQL cluster                                                                                 | Global data needed before tenant identity is resolved, cross-tenant records, billing control plane, staff administration, and central identity/authentication.         |
+| **Tenant**             | Tenant Database (Primary if `databaseMode = 'shared'`, dedicated isolated cluster if `databaseMode = 'dedicated'`) | Enterprise tenant business data, members, custom roles, uploaded assets, audit logs, and configuration. Provides complete data isolation for dedicated tier customers. |
 
 ---
 
 ## 2. Table-to-Scope Mapping
 
 ### Primary DB Always
+
 - `tenants` (`Tenant`): Organization registry and database connection metadata.
 - `tenant_brandings` (`TenantBranding`): Organization themes & logos needed pre-login for custom domain/subdomain resolution.
 - `tenant_secrets` (`tenant_secrets`): Encrypted credentials and secret references.
@@ -26,9 +27,10 @@ This document defines the architectural division of data across the database top
 - `subscriptions` (`Subscription`), `subscription_events` (`SubscriptionEvent`), `invoices` (`Invoice`), `payments` (`Payment`), `refunds` (`Refund`): Billing and revenue control plane.
 - `platform_staff` (`PlatformStaff`), `platform_roles` (`PlatformRole`), `platform_audit_logs` (`PlatformAuditLog`), `platform_support_sessions` (`PlatformSupportSession`): Internal operations and backoffice operator auditing.
 - `app_modules` (`AppModule`), `permissions` (`Permission`): System application module definitions and global permissions.
-- `leads` (`Lead`): Pre-tenant CRM leads and sales inquiries.
 
 ### Tenant DB Always (Shared or Dedicated)
+
+- `leads` (`Lead`): CRM leads and sales pipeline.
 - `tenant_members` (`TenantMember`): Workspace memberships.
 - `tenant_member_roles` (`TenantMemberRole`): Role assignments to tenant members.
 - `roles` (`AppRole`): Custom tenant roles (system roles replicated or inherited).
