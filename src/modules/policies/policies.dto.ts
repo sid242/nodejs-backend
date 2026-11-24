@@ -181,7 +181,7 @@ export const evaluatePolicyDto = z.object({
   policyId: z.string().uuid().optional(),
   resource: z.string().min(1).max(50),
   action: z.string().min(1).max(50),
-  record: z.record(z.unknown()).optional().default({}),
+  record: z.record(z.string(), z.unknown()).optional().default({}),
   actor: z
     .object({
       userId: z.string().optional(),
@@ -189,7 +189,7 @@ export const evaluatePolicyDto = z.object({
       roleKeys: z.array(z.string()).optional().default([]),
       departmentId: z.string().nullable().optional(),
       regionId: z.string().nullable().optional(),
-      attributes: z.record(z.unknown()).optional(),
+      attributes: z.record(z.string(), z.unknown()).optional(),
     })
     .optional(),
   conditions: policyConditionsSchema.optional(),

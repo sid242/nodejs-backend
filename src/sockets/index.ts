@@ -10,7 +10,7 @@ import { ACCESS_TOKEN_COOKIE } from '@/constants/index';
 import { dynamicCorsOrigin } from '@/lib/cors';
 import { parseCookies } from '@/modules/auth/cookies';
 import { verifyAccessToken, verifySupportToken } from '@/modules/auth/tokens';
-import * as platformRepo from '@/modules/platform/platform.repository';
+import { loadActiveSupportAccess } from '@/modules/platform/support-access';
 import * as tenantsRepo from '@/modules/tenants/tenants.repository';
 
 const workspaceSlugSchema = z
@@ -68,19 +68,13 @@ export function initSocket(httpServer: HttpServer): SocketManager {
 
       try {
         const supportPayload = verifySupportToken(token);
-        const session = await platformRepo.findSupportSessionById(supportPayload.sess);
-        if (!session || session.status !== 'ACTIVE' || new Date(session.expiresAt) <= new Date()) {
-          throw new Error('unauthorized');
-        }
-        if (requestedSlug) {
-          const tenant = await tenantsRepo.findTenantBySlug(requestedSlug);
-          if (tenant?.id !== session.tenantId || tenant.status !== 'ACTIVE')
-            throw new Error('unauthorized');
-          socket.data.workspaceTenantId = tenant.id;
-        }
+        const { session, tenant } = await loadActiveSupportAccess(supportPayload);
+        if (requestedSlug && requestedSlug !== tenant.slug) throw new Error('unauthorized');
+        socket.data.workspaceTenantId = tenant.id;
         socket.data.isSupportSession = true;
         socket.data.supportSession = session;
-        socket.data.user = { id: session.targetUserId ?? session.staffId };
+        socket.data.supportClaims = supportPayload;
+        socket.data.user = { id: session.staffId };
         return next();
       } catch {
         // Continue to verify standard user token
@@ -97,7 +91,9 @@ export function initSocket(httpServer: HttpServer): SocketManager {
       if (!allowed) throw new Error('rate_limited');
       if (requestedSlug) {
         const tenant = await tenantsRepo.findTenantBySlug(requestedSlug);
-        if (!tenant || tenant.status !== 'ACTIVE') throw new Error('unauthorized');
+        if (!tenant || tenant.deletedAt || !['ACTIVE', 'TRIALING'].includes(tenant.status)) {
+          throw new Error('unauthorized');
+        }
         const member = await tenantsRepo.findTenantMember(tenant.id, payload.sub);
         if (!member || member.status !== 'ACTIVE') throw new Error('unauthorized');
         socket.data.workspaceTenantId = tenant.id;
@@ -110,7 +106,7 @@ export function initSocket(httpServer: HttpServer): SocketManager {
   io.on('connection', (socket: Socket) => {
     const user = socket.data.user as SocketUser;
     const userId = user?.id;
-    if (userId) {
+    if (userId && !socket.data.isSupportSession) {
       socket.join(`user:${userId}`); // personal room: lets workers target a user from anywhere
     }
 
@@ -118,8 +114,10 @@ export function initSocket(httpServer: HttpServer): SocketManager {
       socket.join('workspace-user:' + socket.data.workspaceTenantId + ':' + userId);
     }
 
-    if (socket.data.isSupportSession && socket.data.supportSession) {
-      const sess = socket.data.supportSession;
+    const support = socket.data.supportSession;
+    const workspaceId = socket.data.workspaceTenantId as string | undefined;
+    if (support) {
+      const sess = support;
       socket.join(`session:${sess.id}`);
       socket.join(`tenant:${sess.tenantId}`);
       logger.info(
@@ -129,6 +127,33 @@ export function initSocket(httpServer: HttpServer): SocketManager {
     } else {
       logger.debug({ userId, socketId: socket.id }, 'socket connected');
     }
+    const expiryTimer = support
+      ? setTimeout(
+          () => socket.disconnect(true),
+          Math.max(0, new Date(support.expiresAt).getTime() - Date.now()),
+        )
+      : undefined;
+    const accessTimer = workspaceId
+      ? setInterval(() => {
+          void (async () => {
+            if (support) {
+              await loadActiveSupportAccess(socket.data.supportClaims);
+              return;
+            }
+            const [tenant, member] = await Promise.all([
+              tenantsRepo.findTenantById(workspaceId),
+              tenantsRepo.findTenantMember(workspaceId, userId),
+            ]);
+            if (
+              !tenant ||
+              tenant.deletedAt ||
+              !['ACTIVE', 'TRIALING'].includes(tenant.status) ||
+              member?.status !== 'ACTIVE'
+            )
+              socket.disconnect(true);
+          })().catch(() => socket.disconnect(true));
+        }, 30_000)
+      : undefined;
 
     // Per-socket flood guard (a socket lives on exactly one node, so in-memory is fine).
     let windowStart = Date.now();
@@ -159,25 +184,19 @@ export function initSocket(httpServer: HttpServer): SocketManager {
      * - Public rooms ('public:*' or generic IDs) can be joined by authenticated users.
      */
     async function authorizeRoomAccess(u: SocketUser, roomId: string): Promise<boolean> {
+      if (support) {
+        await loadActiveSupportAccess(socket.data.supportClaims);
+        return roomId === `session:${support.id}` || roomId === `tenant:${support.tenantId}`;
+      }
       if (roomId.startsWith('user:') && roomId !== `user:${u.id}`) {
         return false;
       }
       if (roomId.startsWith('session:')) {
-        const sessId = roomId.slice('session:'.length);
-        if (socket.data.isSupportSession && socket.data.supportSession?.id === sessId) {
-          return true;
-        }
         return false;
       }
       if (roomId.startsWith('tenant:')) {
-        const parts = roomId.split(':');
-        const tenantId = parts[1];
-        if (!tenantId) return false;
-
-        // Audited support session staff granted troubleshooting access to tenant channel
-        if (socket.data.isSupportSession && socket.data.supportSession?.tenantId === tenantId) {
-          return true;
-        }
+        const tenantId = roomId.slice('tenant:'.length);
+        if (!workspaceId || tenantId !== workspaceId) return false;
 
         // Standard user must be an active member of this tenant
         try {
@@ -218,10 +237,14 @@ export function initSocket(httpServer: HttpServer): SocketManager {
       }
     });
 
-    socket.on('room:message', (payload: any, ack?: (res: any) => void) => {
+    socket.on('room:message', async (payload: any, ack?: (res: any) => void) => {
       try {
         const { roomId, text } = messageSchema.parse(payload);
-        if (!socket.rooms.has(`room:${roomId}`)) {
+        if (
+          support?.scope === 'READ_ONLY' ||
+          !socket.rooms.has(`room:${roomId}`) ||
+          !(await authorizeRoomAccess(user, roomId))
+        ) {
           ack?.({ ok: false, error: 'not_in_room' });
           return;
         }
@@ -238,7 +261,11 @@ export function initSocket(httpServer: HttpServer): SocketManager {
     });
 
     socket.on('error', (err) => logger.warn({ err, userId }, 'socket error'));
-    socket.on('disconnect', (reason) => logger.debug({ userId, reason }, 'socket disconnected'));
+    socket.on('disconnect', (reason) => {
+      clearTimeout(expiryTimer);
+      clearInterval(accessTimer);
+      logger.debug({ userId, reason }, 'socket disconnected');
+    });
   });
 
   return {

@@ -1,6 +1,7 @@
 import { Emitter } from '@socket.io/redis-emitter';
 
 import { env } from '@/config/env';
+import { logger } from '@/config/logger';
 import { createRedis } from '@/config/redis';
 
 // Lets ANY process (workers, cron, other services) push events to connected clients via Redis,
@@ -29,3 +30,15 @@ export const emitToRoom = (room: string, event: string, payload: any): void => {
 };
 
 export const closeSocketEmitter = (): Promise<string> => emitterClient.quit();
+
+export function disconnectWorkspaceMember(tenantId: string, userId: string): void {
+  const room = 'workspace-user:' + tenantId + ':' + userId;
+  emitter.in(room).disconnectSockets(true);
+  void emitterClient
+    .publish('sse:' + room, JSON.stringify({ event: 'workspace:revoked' }))
+    .catch((err: unknown) => logger.error({ err, tenantId }, 'Could not end workspace stream'));
+}
+
+export function disconnectSupportSession(sessionId: string): void {
+  emitter.in('session:' + sessionId).disconnectSockets(true);
+}

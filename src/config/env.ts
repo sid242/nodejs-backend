@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-const bool = z.enum(['true', 'false']).transform((v) => v === 'true');
+const bool = (def = false) =>
+  z
+    .enum(['true', 'false'])
+    .default(def ? 'true' : 'false')
+    .transform((v) => v === 'true');
 
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -13,7 +17,7 @@ const schema = z.object({
   CORS_ORIGINS: z
     .string()
     .default('http://localhost:5173,http://localhost:3000,http://localhost:3001'),
-  CORS_ALLOW_LAN: bool.default('true'),
+  CORS_ALLOW_LAN: bool(true),
 
   // Tenancy & Custom Domain Configuration
   APP_BASE_DOMAIN: z.string().default('example.com'),
@@ -52,14 +56,14 @@ const schema = z.object({
     .int()
     .default(60 * 60 * 24 * 7),
 
-  EXPOSE_DEV_TOKENS: bool.default('false'),
+  EXPOSE_DEV_TOKENS: bool(false),
   BOOTSTRAP_SUPERADMIN_EMAIL: z.string().email().optional(),
   BOOTSTRAP_SUPERADMIN_PASSWORD: z.string().min(8).optional(),
 
   AWS_REGION: z.string().default('ap-south-1'),
   S3_BUCKET: z.string().min(1),
   S3_ENDPOINT: z.string().optional(),
-  S3_FORCE_PATH_STYLE: bool.default('false'),
+  S3_FORCE_PATH_STYLE: bool(false),
   S3_MAX_UPLOAD_MB: z.coerce.number().default(10),
   S3_DELETE_CONCURRENCY: z.coerce.number().int().min(1).max(100).default(10),
 
@@ -68,7 +72,7 @@ const schema = z.object({
   SES_FROM_EMAIL: z.string().optional(),
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().default(587),
-  SMTP_SECURE: bool.default('false'),
+  SMTP_SECURE: bool(false),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM_EMAIL: z.string().optional(),
@@ -93,7 +97,7 @@ const schema = z.object({
   EMAIL_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(100).optional(),
   CLAMD_HOST: z.string().min(1).optional(),
   CLAMD_PORT: z.coerce.number().int().min(1).max(65535).default(3310),
-  ALLOW_UNSCANNED_FILES: bool.default('false'),
+  ALLOW_UNSCANNED_FILES: bool(false),
   FILE_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(100).optional(),
   MAINTENANCE_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(10).optional(),
   MAINTENANCE_BATCH_SIZE: z.coerce.number().int().min(1).max(10000).default(500),

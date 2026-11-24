@@ -1,0 +1,7 @@
+# Lines starting with '#' are comments.
+# Each line is a file pattern followed by one or more owners.
+
+# Critical infrastructure, authentication middleware, and tenancy boundaries
+/src/middleware/ @sid242
+/src/db/tenancy/ @sid242
+/.github/workflows/ @sid242

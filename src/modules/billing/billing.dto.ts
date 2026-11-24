@@ -27,7 +27,7 @@ export const createPlanDto = z.object({
   trialDays: z.coerce.number().int().min(0).default(14),
   billingInterval: z.enum(['MONTHLY', 'ANNUAL', 'LIFETIME']).default('MONTHLY'),
   limits: planLimitsDto,
-  entitlements: z.record(z.any()).optional(),
+  entitlements: z.record(z.string(), z.any()).optional(),
   moduleKeys: z.array(z.string()).optional(),
   isPublic: z.boolean().default(true),
   isActive: z.boolean().default(true),
@@ -41,7 +41,24 @@ export const createPlanDto = z.object({
   sortOrder: z.coerce.number().int().default(0),
 });
 
-export const updatePlanDto = createPlanDto.partial();
+export const updatePlanDto = createPlanDto
+  .extend({
+    priceMonthlyMinor: createPlanDto.shape.priceMonthlyMinor.removeDefault(),
+    priceYearlyMinor: createPlanDto.shape.priceYearlyMinor.removeDefault(),
+    currency: createPlanDto.shape.currency.removeDefault(),
+    trialDays: createPlanDto.shape.trialDays.removeDefault(),
+    billingInterval: createPlanDto.shape.billingInterval.removeDefault(),
+    isPublic: createPlanDto.shape.isPublic.removeDefault(),
+    isActive: createPlanDto.shape.isActive.removeDefault(),
+    isFeatured: createPlanDto.shape.isFeatured.removeDefault(),
+    features: createPlanDto.shape.features.removeDefault(),
+    pricePerSeatMinor: createPlanDto.shape.pricePerSeatMinor.removeDefault(),
+    includedSeats: createPlanDto.shape.includedSeats.removeDefault(),
+    version: createPlanDto.shape.version.removeDefault(),
+    ctaLabel: createPlanDto.shape.ctaLabel.removeDefault(),
+    sortOrder: createPlanDto.shape.sortOrder.removeDefault(),
+  })
+  .partial();
 
 export const planIdParamDto = z.object({
   id: z.string().uuid(),
@@ -128,7 +145,7 @@ export const billingWebhookDto = z.object({
   provider: z.string().trim().min(1).default('manual'),
   eventId: z.string().trim().min(1),
   eventType: z.string().trim().min(1),
-  payload: z.record(z.any()),
+  payload: z.record(z.string(), z.any()),
 });
 
 export const invoiceLineItemDto = z.object({

@@ -20,6 +20,16 @@ env:
   WORKER_SERVICE: app-worker
 
 jobs:
+  docker-build-check:
+    name: Verify Dockerfile build on PR
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build image (dry-run without push)
+        run: docker build -t app:pr-check .
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -58,30 +68,27 @@ jobs:
       - run: npm run db:check
       - run: npm run lint
       - run: npm run build
-      - name: Configure non-superuser runtime role (app_runtime)
+      - name: Configure non-superuser test fixture role
         run: |
           psql "postgresql://postgres:postgrespassword@localhost:5432/app_test" -c "
-            DO \$\$
-            BEGIN
-              IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_runtime') THEN
-                CREATE ROLE app_runtime WITH LOGIN PASSWORD 'app_runtime_password' NOINHERIT NOSUPERUSER NOBYPASSRLS;
-              ELSE
-                ALTER ROLE app_runtime WITH LOGIN PASSWORD 'app_runtime_password' NOINHERIT NOSUPERUSER NOBYPASSRLS;
-              END IF;
-            END \$\$;
-            GRANT CONNECT ON DATABASE app_test TO app_runtime;
-            GRANT USAGE, CREATE ON SCHEMA public TO app_runtime;
-            GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO app_runtime;
-            GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO app_runtime;
-            ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO app_runtime;
-            ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO app_runtime;
+            CREATE ROLE tenant_app_role NOLOGIN NOSUPERUSER NOBYPASSRLS;
+            CREATE ROLE app_platform_role NOLOGIN NOSUPERUSER NOBYPASSRLS;
+            CREATE ROLE app_ci_fixture WITH LOGIN PASSWORD 'app_ci_fixture_password' INHERIT NOSUPERUSER NOBYPASSRLS;
+            -- Fixture setup spans tenants. RLS tests explicitly switch into the tenant role.
+            GRANT app_platform_role TO app_ci_fixture;
+            GRANT tenant_app_role TO app_ci_fixture WITH INHERIT FALSE, SET TRUE;
+            GRANT CONNECT ON DATABASE app_test TO app_ci_fixture;
+            GRANT USAGE, CREATE ON SCHEMA public TO app_ci_fixture;
+            ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO app_ci_fixture;
+            ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO app_ci_fixture;
           "
         env:
           PGPASSWORD: postgrespassword
       - run: npm test
         env:
           DATABASE_MIGRATION_URL: postgresql://postgres:postgrespassword@localhost:5432/app_test
-          DATABASE_URL: postgresql://app_runtime:app_runtime_password@localhost:5432/app_test
+          DB_PROVISIONER_URL: postgresql://postgres:postgrespassword@localhost:5432/app_test
+          DATABASE_URL: postgresql://app_ci_fixture:app_ci_fixture_password@localhost:5432/app_test
           REDIS_URL: redis://localhost:6379
           JWT_ACCESS_SECRET: test_jwt_access_secret_for_ci_pipeline_32chars!
           JWT_REFRESH_SECRET: test_jwt_refresh_secret_for_ci_pipeline_32chars!
@@ -146,10 +153,17 @@ jobs:
             --network-configuration "awsvpcConfiguration={subnets=[${{ vars.PRIVATE_SUBNETS }}],securityGroups=[${{ vars.APP_SECURITY_GROUP }}],assignPublicIp=DISABLED}" \
             --overrides '{"containerOverrides":[{"name":"api","command":["node","dist/db/migrate-all.js"]}]}' \
             --query 'tasks[0].taskArn' --output text)
+          echo "Waiting for migration task $TASK_ARN to finish..."
           aws ecs wait tasks-stopped --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN"
           CODE=$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN" \
             --query 'tasks[0].containers[0].exitCode' --output text)
-          test "$CODE" = "0"
+          if [ "$CODE" != "0" ]; then
+            REASON=$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN" \
+              --query 'tasks[0].stoppedReason' --output text)
+            echo "Migration task failed with exit code $CODE. Reason: $REASON"
+            exit 1
+          fi
+          echo "Migration task succeeded with exit code 0."
 
       - uses: aws-actions/amazon-ecs-deploy-task-definition@df4a08a49c370d50426fe35c6280771a48075323 # v2.1.2
         with:
@@ -164,3 +178,17 @@ jobs:
           service: ${{ env.WORKER_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
+
+      - name: Post-deploy smoke test (/health/live and /health/ready)
+        run: |
+          if [ -n "$PROD_API_BASE_URL" ]; then
+            echo "Verifying API live probe..."
+            curl -f --retry 5 --retry-delay 5 --max-time 10 "$PROD_API_BASE_URL/health/live"
+            echo "Verifying API ready probe..."
+            curl -f --retry 3 --retry-delay 5 --max-time 10 "$PROD_API_BASE_URL/health/ready"
+            echo "Smoke test passed successfully."
+          else
+            echo "PROD_API_BASE_URL not set; skipping remote smoke test."
+          fi
+        env:
+          PROD_API_BASE_URL: ${{ vars.PROD_API_BASE_URL }}
