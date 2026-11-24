@@ -41,7 +41,10 @@ export interface AuthTokens {
 }
 
 export const verifyAccessToken = (token: string): AccessTokenPayload =>
-  jwt.verify(token, env.JWT_ACCESS_SECRET, { audience: 'customer-api' }) as AccessTokenPayload;
+  jwt.verify(token, env.JWT_ACCESS_SECRET, {
+    audience: 'customer-api',
+    algorithms: ['HS256'],
+  }) as AccessTokenPayload;
 
 export function issueSupportToken(
   claims: {
@@ -77,6 +80,7 @@ export function issueSupportToken(
 export function verifySupportToken(token: string): SupportTokenPayload {
   const payload = jwt.verify(token, env.JWT_SUPPORT_SECRET, {
     audience: 'customer-api',
+    algorithms: ['HS256'],
   }) as SupportTokenPayload;
   if (payload.typ !== 'SUPPORT' || !payload.sess || !payload.staffId || !payload.tenantId) {
     throw AppError.unauthorized('Invalid support token payload');
@@ -137,7 +141,9 @@ export async function consumeRefreshToken(token: string): Promise<string> {
 export async function consumeRefreshTokenDetails(
   token: string,
 ): Promise<{ userId: string; authMethod: string }> {
-  const payload = jwt.verify(token, env.JWT_REFRESH_SECRET) as JwtPayload;
+  const payload = jwt.verify(token, env.JWT_REFRESH_SECRET, {
+    algorithms: ['HS256'],
+  }) as JwtPayload;
   if (!payload.sub || !payload.jti) throw AppError.unauthorized('Invalid refresh token');
   const deleted = await redis.del(refreshKey(payload.sub, payload.jti));
   if (!deleted) throw AppError.unauthorized('Refresh token revoked or already used');
@@ -146,7 +152,9 @@ export async function consumeRefreshTokenDetails(
 
 export async function revokeRefreshToken(token: string): Promise<void> {
   try {
-    const payload = jwt.verify(token, env.JWT_REFRESH_SECRET) as JwtPayload;
+    const payload = jwt.verify(token, env.JWT_REFRESH_SECRET, {
+      algorithms: ['HS256'],
+    }) as JwtPayload;
     if (payload.sub && payload.jti) {
       await redis.del(refreshKey(payload.sub, payload.jti));
     }
