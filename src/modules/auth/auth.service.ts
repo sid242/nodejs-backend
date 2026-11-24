@@ -20,9 +20,6 @@ import type {
 } from '@/modules/auth/auth.dto';
 import * as authRepo from '@/modules/auth/auth.repository';
 import * as sessionsRepo from '@/modules/auth/sessions.repository';
-import * as loginEventsRepo from '@/modules/auth/user-login-events.repository';
-import { hashToken } from '@/modules/auth/verification.repository';
-import { assertSsoNotEnforced } from '@/modules/sso/sso.enforcement';
 import {
   consumeRefreshToken,
   createEmailVerificationToken,
@@ -40,7 +37,10 @@ import {
   createTwoFactorChallenge,
   type TwoFactorChallengeData,
 } from '@/modules/auth/two-factor.service';
+import * as loginEventsRepo from '@/modules/auth/user-login-events.repository';
+import { hashToken } from '@/modules/auth/verification.repository';
 import { rbacRepo } from '@/modules/rbac/rbac.repository';
+import { assertSsoNotEnforced } from '@/modules/sso/sso.enforcement';
 import {
   buildPlatformUrl,
   buildTenantUrl,
@@ -87,7 +87,11 @@ export async function register(
   // Slow/unreliable work goes to the queue, not the request path. jobId makes it idempotent.
   const verificationToken = await createEmailVerificationToken(user.id);
   await Promise.all([
-    emailQueue.add('welcome', { to: user.email, name: user.firstName }, { jobId: `welcome-${user.id}` }),
+    emailQueue.add(
+      'welcome',
+      { to: user.email, name: user.firstName },
+      { jobId: `welcome-${user.id}` },
+    ),
     emailQueue.add(
       'verify-email',
       { to: user.email, name: user.firstName, token: verificationToken },
@@ -320,7 +324,10 @@ export async function revokeOtherSessions(
   const count = await sessionsRepo.revokeOtherUserSessions(userId, currentSessionId);
   return {
     count,
-    message: count > 0 ? `${count} other session(s) revoked successfully.` : 'No other active sessions found.',
+    message:
+      count > 0
+        ? `${count} other session(s) revoked successfully.`
+        : 'No other active sessions found.',
   };
 }
 

@@ -14,10 +14,7 @@ export const webhookEndpoints = pgTable(
     url: text('url').notNull(), // HTTPS webhook callback URL
     description: text('description'),
     secretEncrypted: text('secretEncrypted').notNull(), // Master-encrypted HMAC signing secret (whsec_...)
-    events: text('events')
-      .array()
-      .notNull()
-      .$type<string[]>(), // e.g. ['member.created', 'file.uploaded', 'invitation.accepted']
+    events: text('events').array().notNull().$type<string[]>(), // e.g. ['member.created', 'file.uploaded', 'invitation.accepted']
     status: text('status').notNull().default('ACTIVE'), // 'ACTIVE' | 'DISABLED' | 'FAILING'
     createdByMemberId: uuid('createdByMemberId').references(() => tenantMembers.id, {
       onDelete: 'set null',

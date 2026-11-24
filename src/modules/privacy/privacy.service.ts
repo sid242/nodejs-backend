@@ -30,11 +30,7 @@ import * as privacyRepo from './privacy.repository';
 // User Data Export (DSAR)
 // -----------------------------------------------------------------------------
 
-export async function requestUserDataExport(
-  userId: string,
-  ip?: string,
-  userAgent?: string,
-) {
+export async function requestUserDataExport(userId: string, ip?: string, userAgent?: string) {
   const recent = await privacyRepo.getRecentUserDataExport(userId, 24);
   if (recent) {
     throw AppError.badRequest(
@@ -64,7 +60,10 @@ export async function requestUserDataExport(
       { removeOnComplete: true },
     );
   } catch (err) {
-    logger.warn({ err, requestId: request.id }, 'Could not enqueue export-user-data job, running inline fallback');
+    logger.warn(
+      { err, requestId: request.id },
+      'Could not enqueue export-user-data job, running inline fallback',
+    );
     processUserDataExport(request.id, userId).catch((processErr) => {
       logger.error({ processErr, requestId: request.id }, 'Inline user export fallback failed');
     });
@@ -274,7 +273,10 @@ export async function requestTenantDataExport(
       { removeOnComplete: true },
     );
   } catch (err) {
-    logger.warn({ err, requestId: request.id }, 'Could not enqueue export-tenant-data job, running inline fallback');
+    logger.warn(
+      { err, requestId: request.id },
+      'Could not enqueue export-tenant-data job, running inline fallback',
+    );
     processTenantDataExport(request.id, tenantId).catch((processErr) => {
       logger.error({ processErr, requestId: request.id }, 'Inline tenant export fallback failed');
     });
@@ -410,7 +412,10 @@ export async function processTenantDataExport(requestId: string, tenantId: strin
       completedAt: new Date(),
     });
 
-    logger.info({ requestId, tenantId, fileSizeBytes }, 'Tenant data export completed successfully');
+    logger.info(
+      { requestId, tenantId, fileSizeBytes },
+      'Tenant data export completed successfully',
+    );
   } catch (err: any) {
     logger.error({ err, requestId, tenantId }, 'Failed to process tenant data export');
     await privacyRepo.updateDataExportRequest(requestId, {
@@ -502,11 +507,7 @@ export async function requestAccountDeletion(
   };
 }
 
-export async function cancelAccountDeletion(
-  userId: string,
-  ip?: string,
-  userAgent?: string,
-) {
+export async function cancelAccountDeletion(userId: string, ip?: string, userAgent?: string) {
   const existing = await privacyRepo.getActiveAccountDeletionRequest(userId);
   if (!existing) {
     throw AppError.notFound('No active account deletion request found in cooling period.');
@@ -604,7 +605,9 @@ export async function requestTenantClosure(
 
   const underHold = await privacyRepo.isTenantUnderLegalHold(tenantId);
   if (underHold) {
-    throw AppError.forbidden('Tenant workspace is subject to an active legal hold and cannot be closed or purged.');
+    throw AppError.forbidden(
+      'Tenant workspace is subject to an active legal hold and cannot be closed or purged.',
+    );
   }
 
   const now = new Date();
@@ -1008,9 +1011,7 @@ export async function executeRetentionSweep(options?: { dryRun?: boolean }) {
     .where(lt(emailMessages.createdAt, emailCutoff))
     .limit(500);
 
-  const emailsToDelete = oldEmails
-    .filter((e) => !holdTenantIds.has(e.tenantId))
-    .map((e) => e.id);
+  const emailsToDelete = oldEmails.filter((e) => !holdTenantIds.has(e.tenantId)).map((e) => e.id);
 
   if (emailsToDelete.length > 0 && !options?.dryRun) {
     await db.delete(emailMessages).where(inArray(emailMessages.id, emailsToDelete));
@@ -1034,7 +1035,12 @@ export async function executeRetentionSweep(options?: { dryRun?: boolean }) {
     await db
       .update(dataExportRequests)
       .set({ downloadUrl: null, fileKey: null })
-      .where(inArray(dataExportRequests.id, staleExports.map((e) => e.id)));
+      .where(
+        inArray(
+          dataExportRequests.id,
+          staleExports.map((e) => e.id),
+        ),
+      );
   }
   results.staleExportsCleaned = staleExports.length;
 

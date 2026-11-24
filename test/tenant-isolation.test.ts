@@ -5,8 +5,8 @@ import { eq, inArray, sql } from 'drizzle-orm';
 import { closeDb, db } from '../src/config/db';
 import { env } from '../src/config/env';
 import { closeRedisClients } from '../src/config/redis';
-import { files, tenantMembers, tenants, users } from '../src/db/schema/index';
 import { withTenantTransaction } from '../src/db/rls';
+import { files, tenantMembers, tenants, users } from '../src/db/schema/index';
 import { AppError } from '../src/lib/errors';
 import { requireTenant, resolveTenantContext } from '../src/middleware/tenant';
 import { tenantsRepo } from '../src/modules/tenants/tenants.repository';
@@ -468,7 +468,11 @@ test('Multi-Tenant Edge Case 7: PostgreSQL Row-Level Security (RLS) enforces ker
     await withTenantTransaction(tenantB.id, async (tx) => {
       const rows = await tx.select().from(files);
       const matching = rows.find((r: any) => r.id === fileA.id);
-      assert.equal(matching, undefined, 'RLS must hide Tenant A files from Tenant B queries even without WHERE tenantId');
+      assert.equal(
+        matching,
+        undefined,
+        'RLS must hide Tenant A files from Tenant B queries even without WHERE tenantId',
+      );
     });
 
     // 4. Attempt to insert a row with tenantA.id inside tenantB transaction -> RLS WITH CHECK policy violation
@@ -533,7 +537,9 @@ test('Multi-Tenant Edge Case 8: RLS Inventory & Strict DDL Invariants', async ()
     'AppRole read policy must permit reading system roles where tenantId is NULL',
   );
   assert.ok(
-    appRoleDdl.includes('WITH CHECK (("tenantId" = NULLIF(current_setting(\'app.tenant_id\', true), \'\')::uuid))'),
+    appRoleDdl.includes(
+      "WITH CHECK ((\"tenantId\" = NULLIF(current_setting('app.tenant_id', true), '')::uuid))",
+    ),
     'AppRole write policy (WITH CHECK) must NEVER permit writing rows where tenantId is NULL',
   );
 

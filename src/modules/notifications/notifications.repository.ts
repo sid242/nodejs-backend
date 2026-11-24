@@ -1,14 +1,4 @@
-import {
-  and,
-  desc,
-  eq,
-  gte,
-  inArray,
-  isNull,
-  lt,
-  or,
-  sql,
-} from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 
 import { db } from '@/config/db';
 import {
@@ -21,6 +11,7 @@ import {
   type NotificationRecord,
   type PushSubscriptionRecord,
 } from '@/db/schema/index';
+
 import type {
   ListNotificationsQueryDto,
   NotificationCategory,
@@ -41,9 +32,7 @@ export async function findMany(
   const conditions = [eq(notifications.recipientUserId, userId)];
 
   if (tenantId) {
-    conditions.push(
-      or(eq(notifications.tenantId, tenantId), isNull(notifications.tenantId))!,
-    );
+    conditions.push(or(eq(notifications.tenantId, tenantId), isNull(notifications.tenantId))!);
   }
 
   if (query.unread) {
@@ -68,10 +57,7 @@ export async function findMany(
         conditions.push(
           or(
             lt(notifications.createdAt, cursorDate),
-            and(
-              eq(notifications.createdAt, cursorDate),
-              lt(notifications.id, cursorId),
-            ),
+            and(eq(notifications.createdAt, cursorDate), lt(notifications.id, cursorId)),
           )!,
         );
       }
@@ -106,10 +92,7 @@ export async function findMany(
   return { items, nextCursor, totalUnread };
 }
 
-export async function countUnread(
-  userId: string,
-  tenantId?: string | null,
-): Promise<number> {
+export async function countUnread(userId: string, tenantId?: string | null): Promise<number> {
   const conditions = [
     eq(notifications.recipientUserId, userId),
     isNull(notifications.readAt),
@@ -117,9 +100,7 @@ export async function countUnread(
   ];
 
   if (tenantId) {
-    conditions.push(
-      or(eq(notifications.tenantId, tenantId), isNull(notifications.tenantId))!,
-    );
+    conditions.push(or(eq(notifications.tenantId, tenantId), isNull(notifications.tenantId))!);
   }
 
   const [res] = await db
@@ -137,9 +118,7 @@ export async function findById(
   const [record] = await db
     .select()
     .from(notifications)
-    .where(
-      and(eq(notifications.id, id), eq(notifications.recipientUserId, userId)),
-    );
+    .where(and(eq(notifications.id, id), eq(notifications.recipientUserId, userId)));
   return record;
 }
 
@@ -169,10 +148,7 @@ export async function markAllAsRead(
   userId: string,
   options?: { category?: NotificationCategory; tenantId?: string },
 ): Promise<number> {
-  const conditions = [
-    eq(notifications.recipientUserId, userId),
-    isNull(notifications.readAt),
-  ];
+  const conditions = [eq(notifications.recipientUserId, userId), isNull(notifications.readAt)];
 
   if (options?.category) {
     conditions.push(eq(notifications.category, options.category));
@@ -180,10 +156,7 @@ export async function markAllAsRead(
 
   if (options?.tenantId) {
     conditions.push(
-      or(
-        eq(notifications.tenantId, options.tenantId),
-        isNull(notifications.tenantId),
-      )!,
+      or(eq(notifications.tenantId, options.tenantId), isNull(notifications.tenantId))!,
     );
   }
 
@@ -196,29 +169,19 @@ export async function markAllAsRead(
   return updated.length;
 }
 
-export async function archive(
-  id: string,
-  userId: string,
-): Promise<NotificationRecord | undefined> {
+export async function archive(id: string, userId: string): Promise<NotificationRecord | undefined> {
   const [updated] = await db
     .update(notifications)
     .set({ archivedAt: new Date() })
-    .where(
-      and(eq(notifications.id, id), eq(notifications.recipientUserId, userId)),
-    )
+    .where(and(eq(notifications.id, id), eq(notifications.recipientUserId, userId)))
     .returning();
   return updated;
 }
 
-export async function deleteNotification(
-  id: string,
-  userId: string,
-): Promise<boolean> {
+export async function deleteNotification(id: string, userId: string): Promise<boolean> {
   const deleted = await db
     .delete(notifications)
-    .where(
-      and(eq(notifications.id, id), eq(notifications.recipientUserId, userId)),
-    )
+    .where(and(eq(notifications.id, id), eq(notifications.recipientUserId, userId)))
     .returning({ id: notifications.id });
   return deleted.length > 0;
 }
@@ -260,7 +223,10 @@ export async function getPreferences(
     conditions.push(isNull(notificationPreferences.tenantId));
   }
 
-  return db.select().from(notificationPreferences).where(and(...conditions));
+  return db
+    .select()
+    .from(notificationPreferences)
+    .where(and(...conditions));
 }
 
 export async function upsertPreferences(
@@ -350,18 +316,10 @@ export async function upsertPushSubscription(
   return sub;
 }
 
-export async function deletePushSubscription(
-  userId: string,
-  endpoint: string,
-): Promise<boolean> {
+export async function deletePushSubscription(userId: string, endpoint: string): Promise<boolean> {
   const res = await db
     .delete(pushSubscriptions)
-    .where(
-      and(
-        eq(pushSubscriptions.userId, userId),
-        eq(pushSubscriptions.endpoint, endpoint),
-      ),
-    )
+    .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)))
     .returning({ id: pushSubscriptions.id });
   return res.length > 0;
 }
@@ -369,16 +327,11 @@ export async function deletePushSubscription(
 export async function getPushSubscriptionsForUser(
   userId: string,
 ): Promise<PushSubscriptionRecord[]> {
-  return db
-    .select()
-    .from(pushSubscriptions)
-    .where(eq(pushSubscriptions.userId, userId));
+  return db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
 }
 
 // Housekeeping
-export async function cleanupOldNotifications(
-  retentionDays = 90,
-): Promise<number> {
+export async function cleanupOldNotifications(retentionDays = 90): Promise<number> {
   const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
   const now = new Date();
 

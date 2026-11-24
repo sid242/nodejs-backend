@@ -495,7 +495,9 @@ export async function explainMemberAccess(
     const [tenantMod] = await tenantDb()
       .select()
       .from(tenantModules)
-      .where(and(eq(tenantModules.tenantId, tenantId), eq(tenantModules.moduleId, permission.moduleId)))
+      .where(
+        and(eq(tenantModules.tenantId, tenantId), eq(tenantModules.moduleId, permission.moduleId)),
+      )
       .limit(1);
     if (tenantMod && !tenantMod.isEnabled) {
       isModuleEnabled = false;
@@ -589,8 +591,7 @@ export async function explainMemberAccess(
   }
 
   const isGranted =
-    isModuleEnabled &&
-    (isOwner || directRoleMatches.length > 0 || groupRoleMatches.length > 0);
+    isModuleEnabled && (isOwner || directRoleMatches.length > 0 || groupRoleMatches.length > 0);
 
   if (reasons.length === 0) {
     reasons.push({

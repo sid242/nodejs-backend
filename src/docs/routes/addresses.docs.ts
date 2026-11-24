@@ -66,4 +66,3 @@ export function registerAddressesDocs(registry: OpenAPIRegistry): void {
     },
   });
 }
-

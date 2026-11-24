@@ -5,11 +5,7 @@ import { PgTable } from 'drizzle-orm/pg-core';
 
 import * as schema from '@/db/schema';
 import { getLatestSchemaTag, isSchemaVersionCurrent } from '@/db/schema-version';
-import {
-  isTenantTable,
-  PRIMARY_ONLY_TABLES,
-  TENANT_TABLES,
-} from '@/db/tenancy/tenant-tables';
+import { isTenantTable, PRIMARY_ONLY_TABLES, TENANT_TABLES } from '@/db/tenancy/tenant-tables';
 import {
   approveTenantDatabaseOperationDto,
   executeTenantDatabaseOperationDto,

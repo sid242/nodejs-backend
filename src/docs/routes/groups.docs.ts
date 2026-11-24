@@ -142,4 +142,3 @@ export function registerGroupsDocs(registry: OpenAPIRegistry): void {
     },
   });
 }
-

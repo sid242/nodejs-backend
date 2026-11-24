@@ -8,5 +8,3 @@ export * from './tenant-secrets';
 export * from './tenant-settings';
 export * from './tenant-security-policies';
 export * from './tenant-slug-history';
-
-

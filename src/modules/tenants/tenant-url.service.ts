@@ -1,8 +1,8 @@
 import { env } from '@/config/env';
-import { cache } from '@/lib/cache';
 import type { Tenant, TenantBranding } from '@/db/schema/index';
-import type { TenantEntitlements } from '@/modules/billing/billing.service';
-import { getTenantEntitlements } from '@/modules/billing/billing.service';
+import { cache } from '@/lib/cache';
+import { getTenantEntitlements, type TenantEntitlements } from '@/modules/billing/billing.service';
+
 import { tenantBrandingRepo } from './tenant-branding.repository';
 import { tenantsRepo } from './tenants.repository';
 
@@ -34,7 +34,8 @@ export function getEffectiveUrlMode(
   } = env,
 ): EffectiveUrlModeResult {
   const baseDomain = environment.APP_BASE_DOMAIN || 'localhost:3001';
-  const protocol = environment.APP_PROTOCOL || (baseDomain.includes('localhost') ? 'http' : 'https');
+  const protocol =
+    environment.APP_PROTOCOL || (baseDomain.includes('localhost') ? 'http' : 'https');
   const tenancyModes = (environment.TENANCY_MODES || 'path,subdomain,customDomain')
     .split(',')
     .map((m) => m.trim().toLowerCase());
@@ -54,9 +55,9 @@ export function getEffectiveUrlMode(
   );
   const canCustomDomain = Boolean(
     urlAccess.customDomain &&
-      (tenancyModes.includes('customdomain') || tenancyModes.includes('customDomain')) &&
-      hasVerifiedDomain &&
-      isSubscriptionActive,
+    (tenancyModes.includes('customdomain') || tenancyModes.includes('customDomain')) &&
+    hasVerifiedDomain &&
+    isSubscriptionActive,
   );
 
   const allowed = {
@@ -201,4 +202,3 @@ export async function getUserMembershipsWithCanonicalUrls(
   );
   return memberships;
 }
-

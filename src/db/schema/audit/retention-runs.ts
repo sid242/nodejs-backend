@@ -1,4 +1,5 @@
 import { integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+
 import { tenants } from '../tenancy/tenants';
 
 // scope: primary

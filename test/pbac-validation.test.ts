@@ -4,10 +4,23 @@ import { after, describe, it } from 'node:test';
 import { closeDb } from '../src/config/db';
 import { closeRedisClients } from '../src/config/redis';
 import { Policy } from '../src/db/schema/access/policies';
-import { evaluateAttributeCondition, evaluateConditionTree, evaluatePolicies } from '../src/modules/pbac/pbac.evaluator';
-import { isValidAction, isValidAttributePath, isValidResource, PBAC_REGISTRY } from '../src/modules/pbac/pbac.registry';
+import {
+  evaluateAttributeCondition,
+  evaluateConditionTree,
+  evaluatePolicies,
+} from '../src/modules/pbac/pbac.evaluator';
+import {
+  isValidAction,
+  isValidAttributePath,
+  isValidResource,
+  PBAC_REGISTRY,
+} from '../src/modules/pbac/pbac.registry';
 import { pbacService } from '../src/modules/pbac/pbac.service';
-import type { ActorContext, PolicyConditionTree, PolicyEvaluationContext } from '../src/modules/pbac/pbac.types';
+import type {
+  ActorContext,
+  PolicyConditionTree,
+  PolicyEvaluationContext,
+} from '../src/modules/pbac/pbac.types';
 import {
   createPolicyDto,
   getTreeStats,
@@ -53,57 +66,196 @@ describe('Step 05: PBAC Policy Validation & Hardening', () => {
   describe('5.1 Table-Driven Operator Evaluation & Null Handling', () => {
     interface OperatorTestCase {
       name: string;
-      condition: { attribute: string; operator: import('../src/modules/pbac/pbac.types').ConditionOperator; value: unknown };
+      condition: {
+        attribute: string;
+        operator: import('../src/modules/pbac/pbac.types').ConditionOperator;
+        value: unknown;
+      };
       expected: boolean;
     }
 
     const testCases: OperatorTestCase[] = [
       // $eq
-      { name: '$eq matching string', condition: { attribute: 'resource.departmentId', operator: '$eq', value: 'SALES' }, expected: true },
-      { name: '$eq non-matching string', condition: { attribute: 'resource.departmentId', operator: '$eq', value: 'FINANCE' }, expected: false },
-      { name: '$eq dynamic actor reference', condition: { attribute: 'resource.departmentId', operator: '$eq', value: 'actor.departmentId' }, expected: true },
-      { name: '$eq null matches null property', condition: { attribute: 'resource.notes', operator: '$eq', value: null }, expected: true },
-      { name: '$eq null matches undefined property', condition: { attribute: 'resource.nonexistent', operator: '$eq', value: null }, expected: true },
-      { name: '$eq null fails for defined property', condition: { attribute: 'resource.departmentId', operator: '$eq', value: null }, expected: false },
+      {
+        name: '$eq matching string',
+        condition: { attribute: 'resource.departmentId', operator: '$eq', value: 'SALES' },
+        expected: true,
+      },
+      {
+        name: '$eq non-matching string',
+        condition: { attribute: 'resource.departmentId', operator: '$eq', value: 'FINANCE' },
+        expected: false,
+      },
+      {
+        name: '$eq dynamic actor reference',
+        condition: {
+          attribute: 'resource.departmentId',
+          operator: '$eq',
+          value: 'actor.departmentId',
+        },
+        expected: true,
+      },
+      {
+        name: '$eq null matches null property',
+        condition: { attribute: 'resource.notes', operator: '$eq', value: null },
+        expected: true,
+      },
+      {
+        name: '$eq null matches undefined property',
+        condition: { attribute: 'resource.nonexistent', operator: '$eq', value: null },
+        expected: true,
+      },
+      {
+        name: '$eq null fails for defined property',
+        condition: { attribute: 'resource.departmentId', operator: '$eq', value: null },
+        expected: false,
+      },
 
       // $ne
-      { name: '$ne matching difference', condition: { attribute: 'resource.departmentId', operator: '$ne', value: 'ENGINEERING' }, expected: true },
-      { name: '$ne non-matching when equal', condition: { attribute: 'resource.departmentId', operator: '$ne', value: 'SALES' }, expected: false },
-      { name: '$ne null fails for null property', condition: { attribute: 'resource.notes', operator: '$ne', value: null }, expected: false },
-      { name: '$ne null succeeds for defined property', condition: { attribute: 'resource.departmentId', operator: '$ne', value: null }, expected: true },
+      {
+        name: '$ne matching difference',
+        condition: { attribute: 'resource.departmentId', operator: '$ne', value: 'ENGINEERING' },
+        expected: true,
+      },
+      {
+        name: '$ne non-matching when equal',
+        condition: { attribute: 'resource.departmentId', operator: '$ne', value: 'SALES' },
+        expected: false,
+      },
+      {
+        name: '$ne null fails for null property',
+        condition: { attribute: 'resource.notes', operator: '$ne', value: null },
+        expected: false,
+      },
+      {
+        name: '$ne null succeeds for defined property',
+        condition: { attribute: 'resource.departmentId', operator: '$ne', value: null },
+        expected: true,
+      },
 
       // $in & $nin
-      { name: '$in matching in array', condition: { attribute: 'resource.departmentId', operator: '$in', value: ['SALES', 'MARKETING'] }, expected: true },
-      { name: '$in not found in array', condition: { attribute: 'resource.departmentId', operator: '$in', value: ['HR', 'FINANCE'] }, expected: false },
-      { name: '$in null matches array containing null', condition: { attribute: 'resource.notes', operator: '$in', value: ['random', null] }, expected: true },
-      { name: '$nin succeeding when not in array', condition: { attribute: 'resource.departmentId', operator: '$nin', value: ['HR', 'LEGAL'] }, expected: true },
-      { name: '$nin failing when in array', condition: { attribute: 'resource.departmentId', operator: '$nin', value: ['SALES', 'HR'] }, expected: false },
+      {
+        name: '$in matching in array',
+        condition: {
+          attribute: 'resource.departmentId',
+          operator: '$in',
+          value: ['SALES', 'MARKETING'],
+        },
+        expected: true,
+      },
+      {
+        name: '$in not found in array',
+        condition: {
+          attribute: 'resource.departmentId',
+          operator: '$in',
+          value: ['HR', 'FINANCE'],
+        },
+        expected: false,
+      },
+      {
+        name: '$in null matches array containing null',
+        condition: { attribute: 'resource.notes', operator: '$in', value: ['random', null] },
+        expected: true,
+      },
+      {
+        name: '$nin succeeding when not in array',
+        condition: { attribute: 'resource.departmentId', operator: '$nin', value: ['HR', 'LEGAL'] },
+        expected: true,
+      },
+      {
+        name: '$nin failing when in array',
+        condition: { attribute: 'resource.departmentId', operator: '$nin', value: ['SALES', 'HR'] },
+        expected: false,
+      },
 
       // $gt & $gte
-      { name: '$gt numeric match', condition: { attribute: 'resource.score', operator: '$gt', value: 80 }, expected: true },
-      { name: '$gt numeric boundary fail', condition: { attribute: 'resource.score', operator: '$gt', value: 85 }, expected: false },
-      { name: '$gte numeric boundary match', condition: { attribute: 'resource.score', operator: '$gte', value: 85 }, expected: true },
-      { name: '$gt date comparison', condition: { attribute: 'resource.createdAt', operator: '$gt', value: '2025-12-31T23:59:59Z' }, expected: true },
-      { name: '$gt date boundary fail', condition: { attribute: 'resource.createdAt', operator: '$gt', value: '2026-02-01T00:00:00Z' }, expected: false },
+      {
+        name: '$gt numeric match',
+        condition: { attribute: 'resource.score', operator: '$gt', value: 80 },
+        expected: true,
+      },
+      {
+        name: '$gt numeric boundary fail',
+        condition: { attribute: 'resource.score', operator: '$gt', value: 85 },
+        expected: false,
+      },
+      {
+        name: '$gte numeric boundary match',
+        condition: { attribute: 'resource.score', operator: '$gte', value: 85 },
+        expected: true,
+      },
+      {
+        name: '$gt date comparison',
+        condition: {
+          attribute: 'resource.createdAt',
+          operator: '$gt',
+          value: '2025-12-31T23:59:59Z',
+        },
+        expected: true,
+      },
+      {
+        name: '$gt date boundary fail',
+        condition: {
+          attribute: 'resource.createdAt',
+          operator: '$gt',
+          value: '2026-02-01T00:00:00Z',
+        },
+        expected: false,
+      },
 
       // $lt & $lte
-      { name: '$lt numeric match', condition: { attribute: 'resource.score', operator: '$lt', value: 90 }, expected: true },
-      { name: '$lt numeric boundary fail', condition: { attribute: 'resource.score', operator: '$lt', value: 85 }, expected: false },
-      { name: '$lte numeric boundary match', condition: { attribute: 'resource.score', operator: '$lte', value: 85 }, expected: true },
+      {
+        name: '$lt numeric match',
+        condition: { attribute: 'resource.score', operator: '$lt', value: 90 },
+        expected: true,
+      },
+      {
+        name: '$lt numeric boundary fail',
+        condition: { attribute: 'resource.score', operator: '$lt', value: 85 },
+        expected: false,
+      },
+      {
+        name: '$lte numeric boundary match',
+        condition: { attribute: 'resource.score', operator: '$lte', value: 85 },
+        expected: true,
+      },
 
       // $contains
-      { name: '$contains case-insensitive substring', condition: { attribute: 'resource.name', operator: '$contains', value: 'global' }, expected: true },
-      { name: '$contains array element check', condition: { attribute: 'resource.tags', operator: '$contains', value: 'enterprise' }, expected: true },
-      { name: '$contains missing array element', condition: { attribute: 'resource.tags', operator: '$contains', value: 'churned' }, expected: false },
+      {
+        name: '$contains case-insensitive substring',
+        condition: { attribute: 'resource.name', operator: '$contains', value: 'global' },
+        expected: true,
+      },
+      {
+        name: '$contains array element check',
+        condition: { attribute: 'resource.tags', operator: '$contains', value: 'enterprise' },
+        expected: true,
+      },
+      {
+        name: '$contains missing array element',
+        condition: { attribute: 'resource.tags', operator: '$contains', value: 'churned' },
+        expected: false,
+      },
 
       // $startsWith
-      { name: '$startsWith string prefix match', condition: { attribute: 'resource.name', operator: '$startsWith', value: 'Acme' }, expected: true },
-      { name: '$startsWith string prefix non-match', condition: { attribute: 'resource.name', operator: '$startsWith', value: 'Global' }, expected: false },
+      {
+        name: '$startsWith string prefix match',
+        condition: { attribute: 'resource.name', operator: '$startsWith', value: 'Acme' },
+        expected: true,
+      },
+      {
+        name: '$startsWith string prefix non-match',
+        condition: { attribute: 'resource.name', operator: '$startsWith', value: 'Global' },
+        expected: false,
+      },
     ];
 
     for (const tc of testCases) {
       it(tc.name, () => {
-        const result = evaluateAttributeCondition(tc.condition as import('../src/modules/pbac/pbac.types').AttributeCondition, baseContext);
+        const result = evaluateAttributeCondition(
+          tc.condition as import('../src/modules/pbac/pbac.types').AttributeCondition,
+          baseContext,
+        );
         assert.equal(result, tc.expected);
       });
     }
@@ -126,13 +278,25 @@ describe('Step 05: PBAC Policy Validation & Hardening', () => {
     });
 
     it('evaluates null or undefined condition tree to false', () => {
-      assert.equal(evaluateConditionTree(null as unknown as PolicyConditionTree, baseContext), false);
-      assert.equal(evaluateConditionTree(undefined as unknown as PolicyConditionTree, baseContext), false);
+      assert.equal(
+        evaluateConditionTree(null as unknown as PolicyConditionTree, baseContext),
+        false,
+      );
+      assert.equal(
+        evaluateConditionTree(undefined as unknown as PolicyConditionTree, baseContext),
+        false,
+      );
     });
   });
 
   describe('5.3 Priority Tiers & Evaluation Semantics', () => {
-    const makePolicy = (id: string, name: string, effect: 'allow' | 'deny', priority: number, match: boolean): Policy => ({
+    const makePolicy = (
+      id: string,
+      name: string,
+      effect: 'allow' | 'deny',
+      priority: number,
+      match: boolean,
+    ): Policy => ({
       id,
       tenantId: 'tenant-1',
       name,
@@ -185,9 +349,7 @@ describe('Step 05: PBAC Policy Validation & Hardening', () => {
     });
 
     it('returns default_deny when no policies match', () => {
-      const policies: Policy[] = [
-        makePolicy('p1', 'Unmatched Policy', 'allow', 10, false),
-      ];
+      const policies: Policy[] = [makePolicy('p1', 'Unmatched Policy', 'allow', 10, false)];
 
       const result = evaluatePolicies(policies, baseContext);
       assert.equal(result.allowed, false);
@@ -233,9 +395,7 @@ describe('Step 05: PBAC Policy Validation & Hardening', () => {
                   {
                     all: [
                       {
-                        all: [
-                          { attribute: 'resource.name', operator: '$eq', value: 'Deep' },
-                        ],
+                        all: [{ attribute: 'resource.name', operator: '$eq', value: 'Deep' }],
                       },
                     ],
                   },
@@ -252,7 +412,9 @@ describe('Step 05: PBAC Policy Validation & Hardening', () => {
       const result = policyConditionsSchema.safeParse(deepTree);
       assert.equal(result.success, false);
       if (!result.success) {
-        assert.ok(result.error.issues.some((i) => i.message.includes('exceeds maximum allowed depth')));
+        assert.ok(
+          result.error.issues.some((i) => i.message.includes('exceeds maximum allowed depth')),
+        );
       }
     });
 
@@ -271,7 +433,9 @@ describe('Step 05: PBAC Policy Validation & Hardening', () => {
       const result = policyConditionsSchema.safeParse(tree);
       assert.equal(result.success, false);
       if (!result.success) {
-        assert.ok(result.error.issues.some((i) => i.message.includes('exceeds maximum allowed nodes')));
+        assert.ok(
+          result.error.issues.some((i) => i.message.includes('exceeds maximum allowed nodes')),
+        );
       }
     });
   });

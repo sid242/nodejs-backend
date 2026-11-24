@@ -25,7 +25,10 @@ interface MigrationFailure {
  */
 export async function runFleetMigrations(): Promise<void> {
   const latestTag = getLatestSchemaTag();
-  logger.info({ latestTag }, 'Initiating fleet database migration across primary and dedicated tenants');
+  logger.info(
+    { latestTag },
+    'Initiating fleet database migration across primary and dedicated tenants',
+  );
 
   // 1. Migrate primary database
   logger.info('Migrating primary PostgreSQL database...');
@@ -115,7 +118,8 @@ export async function runFleetMigrations(): Promise<void> {
 
           if (!connectionUrl) {
             const meta = tenant.metadata as Record<string, unknown> | null;
-            const dbName = (meta?.databaseName as string) || `tenant_${tenant.id.replace(/-/g, '_')}`;
+            const dbName =
+              (meta?.databaseName as string) || `tenant_${tenant.id.replace(/-/g, '_')}`;
             const targetUrl = new URL(env.DATABASE_URL);
             targetUrl.pathname = `/${dbName}`;
             connectionUrl = targetUrl.toString();
@@ -203,7 +207,10 @@ export async function runFleetMigrations(): Promise<void> {
     );
   }
 
-  logger.info({ totalMigrated: dedicatedTenants.length }, 'Fleet migrations completed successfully');
+  logger.info(
+    { totalMigrated: dedicatedTenants.length },
+    'Fleet migrations completed successfully',
+  );
 }
 
 // CLI entrypoint

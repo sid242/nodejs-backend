@@ -94,11 +94,15 @@ export function registerFilesDocs(registry: OpenAPIRegistry): void {
     method: 'get',
     path: '/api/v1/files',
     summary: 'List tenant files',
-    description: 'Returns list of files uploaded in current tenant workspace with folder, search, and pagination support.',
+    description:
+      'Returns list of files uploaded in current tenant workspace with folder, search, and pagination support.',
     tags: ['Files'],
     security: [{ [bearerAuth.name]: [] }],
     responses: {
-      200: successResponse(z.object({ items: z.array(FileSchema), total: z.number() }), 'List of tenant files'),
+      200: successResponse(
+        z.object({ items: z.array(FileSchema), total: z.number() }),
+        'List of tenant files',
+      ),
       401: errorResponse('Unauthorized'),
     },
   });
@@ -183,7 +187,8 @@ export function registerFilesDocs(registry: OpenAPIRegistry): void {
     method: 'delete',
     path: '/api/v1/files/{id}',
     summary: 'Delete file',
-    description: 'Soft-deletes file to trash by default, or permanently deletes if ?permanent=true is provided.',
+    description:
+      'Soft-deletes file to trash by default, or permanently deletes if ?permanent=true is provided.',
     tags: ['Files'],
     security: [{ [bearerAuth.name]: [] }],
     request: {
@@ -290,7 +295,8 @@ export function registerFilesDocs(registry: OpenAPIRegistry): void {
     method: 'post',
     path: '/api/v1/files/{id}/shares',
     summary: 'Create file share link',
-    description: 'Creates a public expiring share link with optional password and download count cap.',
+    description:
+      'Creates a public expiring share link with optional password and download count cap.',
     tags: ['Files - Sharing'],
     security: [{ [bearerAuth.name]: [] }],
     request: {

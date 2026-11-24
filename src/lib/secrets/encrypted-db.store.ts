@@ -1,9 +1,10 @@
 import { and, eq } from 'drizzle-orm';
 
 import { db } from '@/config/db';
+import { logger } from '@/config/logger';
 import { tenantSecrets } from '@/db/schema/tenancy/tenant-secrets';
 import { decrypt, encrypt, getActiveKeyId } from '@/lib/crypto';
-import { logger } from '@/config/logger';
+
 import type { SecretStore } from './secret-store.interface';
 
 export class EncryptedDbSecretStore implements SecretStore {

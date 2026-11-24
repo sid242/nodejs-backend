@@ -6,7 +6,10 @@ export const createFeatureFlagDto = z.object({
     .trim()
     .min(2)
     .max(64)
-    .regex(/^[a-z0-9_.-]+$/, 'Key must contain only lowercase alphanumeric, underscore, dot, or dash'),
+    .regex(
+      /^[a-z0-9_.-]+$/,
+      'Key must contain only lowercase alphanumeric, underscore, dot, or dash',
+    ),
   name: z.string().trim().min(1).max(100),
   description: z.string().trim().max(500).optional(),
   type: z.enum(['BOOLEAN', 'PERCENT', 'VARIANT']).default('BOOLEAN'),

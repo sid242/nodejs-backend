@@ -85,7 +85,10 @@ test('Phase 01 Unit: requireTenant requires valid tenant identifier with 400 TEN
     errResult = err;
   });
 
-  assert.ok(errResult, 'requireTenant must throw TENANT_REQUIRED when tenant identifier cannot be resolved');
+  assert.ok(
+    errResult,
+    'requireTenant must throw TENANT_REQUIRED when tenant identifier cannot be resolved',
+  );
   assert.equal(errResult.status, 400);
   assert.equal(errResult.code, 'TENANT_REQUIRED');
 });

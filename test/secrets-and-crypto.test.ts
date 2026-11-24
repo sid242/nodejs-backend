@@ -3,12 +3,7 @@ import { after, describe, it } from 'node:test';
 
 import { closeDb } from '@/config/db';
 import { closeRedisClients } from '@/config/redis';
-import {
-  decrypt,
-  encrypt,
-  getActiveKeyId,
-  needsReencryption,
-} from '@/lib/crypto';
+import { decrypt, encrypt, getActiveKeyId, needsReencryption } from '@/lib/crypto';
 import { hasValidBffSecret } from '@/middleware/tenant';
 import { scrubValue } from '@/observability/sentry';
 
@@ -72,7 +67,9 @@ describe('Secrets & Credential Handling Hardening (Gap Pack 02)', () => {
 
     it('rejects forged or wrong-length BFF secrets safely', () => {
       const shortReq = { headers: { 'x-bff-secret': 'too-short' } } as any;
-      const wrongReq = { headers: { 'x-bff-secret': 'completely-wrong-token-of-same-length' } } as any;
+      const wrongReq = {
+        headers: { 'x-bff-secret': 'completely-wrong-token-of-same-length' },
+      } as any;
       const emptyReq = { headers: {} } as any;
 
       assert.strictEqual(hasValidBffSecret(shortReq), false);

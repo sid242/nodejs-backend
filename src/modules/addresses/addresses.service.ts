@@ -5,9 +5,9 @@ import { withTenantTransaction } from '@/db/tenancy/rls';
 import { AppError } from '@/lib/errors';
 import { logSecurityEvent } from '@/modules/audit/audit.service';
 import { geoRepo } from '@/modules/geo/geo.repository';
+
 import type { AddressBody, AddressPatch } from './addresses.dto';
-import { addressRepo } from './addresses.repository';
-import type { OwnerScope } from './addresses.repository';
+import { addressRepo, type OwnerScope } from './addresses.repository';
 
 export async function resolveGeo(input: AddressBody | AddressPatch, isPatch = false) {
   const countryCode = input.countryCode ?? (isPatch ? undefined : 'IN');
@@ -97,7 +97,9 @@ export async function resolveGeo(input: AddressBody | AddressPatch, isPatch = fa
           throw AppError.badRequest('Village is not in the selected sub-district');
         }
       } else {
-        throw AppError.badRequest('localityKind must be CITY or VILLAGE when localityGeoId is provided');
+        throw AppError.badRequest(
+          'localityKind must be CITY or VILLAGE when localityGeoId is provided',
+        );
       }
     }
 
@@ -116,7 +118,10 @@ export async function resolveGeo(input: AddressBody | AddressPatch, isPatch = fa
     return {
       ...(state ? { stateGeoId: state.id, stateName: state.name } : {}),
       ...(district !== undefined
-        ? { districtGeoId: district ? district.id : null, districtName: district ? district.name : null }
+        ? {
+            districtGeoId: district ? district.id : null,
+            districtName: district ? district.name : null,
+          }
         : {}),
       ...(sub !== undefined
         ? { subdistrictGeoId: sub ? sub.id : null, subdistrictName: sub ? sub.name : null }
@@ -135,10 +140,7 @@ export async function resolveGeo(input: AddressBody | AddressPatch, isPatch = fa
   return {};
 }
 
-function executeWithScope<T>(
-  scope: OwnerScope,
-  fn: (tx: DbExecutor) => Promise<T>,
-): Promise<T> {
+function executeWithScope<T>(scope: OwnerScope, fn: (tx: DbExecutor) => Promise<T>): Promise<T> {
   if (scope.tenantId) {
     return withTenantTransaction(scope.tenantId, fn);
   }
@@ -313,11 +315,7 @@ export async function setDefaultAddress(
   return updated;
 }
 
-export async function deleteAddress(
-  id: string,
-  scope: OwnerScope,
-  userId: string,
-): Promise<void> {
+export async function deleteAddress(id: string, scope: OwnerScope, userId: string): Promise<void> {
   const existing = await addressRepo.findById(id, scope);
   if (!existing) {
     throw AppError.notFound('Address not found');

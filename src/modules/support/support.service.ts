@@ -105,11 +105,7 @@ export async function addTicketMessage(
   return message;
 }
 
-export async function updateTicket(
-  tenantId: string,
-  ticketId: string,
-  data: UpdateTicketDto,
-) {
+export async function updateTicket(tenantId: string, ticketId: string, data: UpdateTicketDto) {
   const ticket = await supportRepo.getTicketById(tenantId, ticketId);
   if (!ticket) {
     throw AppError.notFound('Support ticket not found');

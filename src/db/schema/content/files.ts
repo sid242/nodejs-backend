@@ -1,8 +1,17 @@
-import { bigint, boolean, index, integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import {
+  bigint,
+  boolean,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 import { fileScanStatusEnum, fileStatusEnum, fileVisibilityEnum } from '../enums';
-import { tenants } from '../tenancy/index';
 import { users } from '../identity/users';
+import { tenants } from '../tenancy/index';
 
 // scope: tenant
 export const fileFolders = pgTable(

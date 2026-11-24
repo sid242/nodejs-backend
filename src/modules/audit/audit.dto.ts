@@ -48,4 +48,3 @@ export const getEffectiveAccessQueryDto = z.object({
 });
 
 export type GetEffectiveAccessQueryDto = z.infer<typeof getEffectiveAccessQueryDto>;
-

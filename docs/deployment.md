@@ -54,6 +54,7 @@ This document specifies the production infrastructure architecture on AWS for th
 ## 2. Infrastructure Components
 
 ### 2.1 Load Balancing & Routing (ALB)
+
 - **ALB Rules**:
   - `admin.example.com/*` -> Routed to `app-web` (Platform Console) or `app-api` under `/api/v1/platform/*`.
   - `api.example.com/*` and `/api/*` -> Forwarded to `app-api` target group (HTTP port 3000).
@@ -64,6 +65,7 @@ This document specifies the production infrastructure architecture on AWS for th
   - `app-web`: Target group health check path `/api/health`, interval 15s, timeout 5s, 2 healthy thresholds.
 
 ### 2.2 ECS Fargate Compute Tasks
+
 - **`app-api`**:
   - Stateless REST API and Socket.IO server.
   - Memory: 1024 MB, CPU: 512 Units.
@@ -79,6 +81,7 @@ This document specifies the production infrastructure architecture on AWS for th
   - Memory: 1024 MB, CPU: 512 Units.
 
 ### 2.3 Database Tier (PostgreSQL + Connection Budgeting)
+
 - **Engine**: PostgreSQL 16 Multi-AZ.
 - **Connection Budget Formula**:
   $$\text{Total Connections} = (N_{\text{api}} + N_{\text{worker}}) \times \text{DB\_POOL\_MAX} + N_{\text{admin}}$$
@@ -92,6 +95,7 @@ This document specifies the production infrastructure architecture on AWS for th
   - Continuous WAL archiving with Point-in-Time Recovery (PITR) with 35 days window.
 
 ### 2.4 Caching & Messaging Tier (ElastiCache Redis)
+
 - **Engine**: Redis 7.x with replication group (1 Primary + 1 Read Replica).
 - **Logical Database Segmentation**:
   - `CACHE_REDIS_URL`: `redis://elasticache:6379/0` (Cache-aside with stampede mutex locks)
@@ -105,15 +109,15 @@ This document specifies the production infrastructure architecture on AWS for th
 
 All sensitive values are stored in **AWS Secrets Manager** and injected into ECS container definitions at launch:
 
-| Secret Name | Usage | Rotation Policy |
-| :--- | :--- | :--- |
-| `app/prod/jwt-access-secret` | Signs 15-min JWT access tokens | Key version rollover |
-| `app/prod/jwt-refresh-secret` | Signs 7-day refresh tokens | Key version rollover |
-| `app/prod/jwt-platform-secret` | Signs platform operator JWT tokens | Key version rollover |
-| `app/prod/jwt-support-secret` | Signs break-glass impersonation tokens | 90 days |
-| `app/prod/encryption-key` | AES-256-GCM envelope encryption | See `docs/secret-rotation.md` |
-| `app/prod/bff-shared-secret` | Internal Next.js BFF -> Express auth | Dual-secret rollover |
-| `app/prod/internal-api-secret` | Cron, orchestrator, and Caddy hooks | 90 days |
+| Secret Name                    | Usage                                  | Rotation Policy               |
+| :----------------------------- | :------------------------------------- | :---------------------------- |
+| `app/prod/jwt-access-secret`   | Signs 15-min JWT access tokens         | Key version rollover          |
+| `app/prod/jwt-refresh-secret`  | Signs 7-day refresh tokens             | Key version rollover          |
+| `app/prod/jwt-platform-secret` | Signs platform operator JWT tokens     | Key version rollover          |
+| `app/prod/jwt-support-secret`  | Signs break-glass impersonation tokens | 90 days                       |
+| `app/prod/encryption-key`      | AES-256-GCM envelope encryption        | See `docs/secret-rotation.md` |
+| `app/prod/bff-shared-secret`   | Internal Next.js BFF -> Express auth   | Dual-secret rollover          |
+| `app/prod/internal-api-secret` | Cron, orchestrator, and Caddy hooks    | 90 days                       |
 
 ---
 
@@ -122,6 +126,7 @@ All sensitive values are stored in **AWS Secrets Manager** and injected into ECS
 The system exports Prometheus metrics at `/metrics` and sends structured JSON logs to CloudWatch `/ecs/app-api`, `/ecs/app-worker`, and `/ecs/app-web`.
 
 ### Critical Production Alarms:
+
 1. **API 5xx Rate Alarm**:
    - Metric: CloudWatch HTTPCode_Target_5XX_Count > 1% of total requests over 3 consecutive 1-minute periods.
    - Severity: CRITICAL (P1 pager).
@@ -140,23 +145,30 @@ The system exports Prometheus metrics at `/metrics` and sends structured JSON lo
 ## 5. Deployment & Rollback Strategy
 
 ### 5.1 Zero-Downtime Rolling Deployments
+
 ECS rolling deployment configuration:
+
 - `minimumHealthyPercent`: 100%
 - `maximumPercent`: 200%
 
 When a new image is pushed to Amazon ECR:
+
 1. The one-off migration task runs `node dist/db/migrate-all.js` against the primary DB and all dedicated tenant databases.
 2. Once migrations succeed, ECS launches new Fargate tasks running the new container image.
 3. New tasks must pass ALB health checks (`/health/ready`) for 30 consecutive seconds.
 4. Traffic smoothly shifts to new tasks; old tasks receive `SIGTERM` and have 60 seconds (`stopTimeout`) to finish inflight requests.
 
 ### 5.2 Expand-Contract Database Schema Invariant
+
 To support zero-downtime rolling updates and instant rollbacks:
+
 - **Phase 1 (Expand)**: Add nullable columns or new tables in migrations. Both old and new replicas can run concurrently.
 - **Phase 2 (Deploy)**: Deploy application tasks that write to the new schema structures.
 - **Phase 3 (Contract)**: Drop or rename legacy columns in a subsequent release after all old replicas have been replaced.
 
 ### 5.3 Automated Rollback Procedure
+
 If ECS health checks fail or CloudWatch 5xx alarms trigger post-deployment:
+
 1. ECS deployment circuit breaker automatically rolls back the service to the previous Task Definition ARN.
 2. Because all database migrations adhere to the Expand-Contract pattern, the previous code version remains 100% compatible with the database schema without requiring an immediate database rollback.

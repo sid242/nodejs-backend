@@ -1,12 +1,5 @@
 import { isNotNull, sql } from 'drizzle-orm';
-import {
-  index,
-  pgTable,
-  text,
-  timestamp,
-  uniqueIndex,
-  uuid,
-} from 'drizzle-orm/pg-core';
+import { index, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { userGroupScopeEnum, userGroupStatusEnum } from '../enums';
 import { platformStaff } from '../platform/platform-staff';

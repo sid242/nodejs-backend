@@ -1,6 +1,9 @@
 import type { NextFunction, Request, Response } from 'express';
 
-import { getGlobalMaintenance, getTenantMaintenance } from '@/modules/maintenance/maintenance.service';
+import {
+  getGlobalMaintenance,
+  getTenantMaintenance,
+} from '@/modules/maintenance/maintenance.service';
 
 const EXEMPT_PATHS = [
   '/health',
@@ -64,7 +67,8 @@ export async function maintenanceMiddleware(
     res.status(503).json({
       error: {
         code: 'READ_ONLY_MODE',
-        message: activeState.message || 'System is currently operating in read-only maintenance mode.',
+        message:
+          activeState.message || 'System is currently operating in read-only maintenance mode.',
       },
       requestId,
     });
@@ -76,7 +80,9 @@ export async function maintenanceMiddleware(
   res.status(503).json({
     error: {
       code: 'MAINTENANCE',
-      message: activeState.message || 'System is currently undergoing scheduled maintenance. Please try again shortly.',
+      message:
+        activeState.message ||
+        'System is currently undergoing scheduled maintenance. Please try again shortly.',
     },
     requestId,
   });

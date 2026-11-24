@@ -1,8 +1,8 @@
 import { eq } from 'drizzle-orm';
 
 import { redis } from '@/config/redis';
-import { primaryDbHandle } from '@/db/tenancy/context';
 import { maintenanceConfig, type MaintenanceConfig } from '@/db/schema';
+import { primaryDbHandle } from '@/db/tenancy/context';
 import { AppError } from '@/lib/errors';
 
 export interface MaintenanceState {

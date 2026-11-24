@@ -84,9 +84,9 @@ export function sanitizeHtmlContent(html: string): string {
 export function extractVariables(html: string, subject = ''): string[] {
   const combined = `${html} ${subject}`;
   const matches = combined.match(/\{\{\{?([a-zA-Z0-9_.]+)\}?\}\}/g) || [];
-  return Array.from(
-    new Set(matches.map((m) => m.replace(/^\{\{\{?|\}?\}\}$/g, '').trim())),
-  ).filter(Boolean);
+  return Array.from(new Set(matches.map((m) => m.replace(/^\{\{\{?|\}?\}\}$/g, '').trim()))).filter(
+    Boolean,
+  );
 }
 
 function resolveNestedValue(obj: Record<string, any>, path: string): any {
@@ -131,7 +131,10 @@ function validateSystemTemplateVariables(slug: string, html: string, subject = '
 // Template CRUD
 // ---------------------------------------------------------------------------
 
-export async function listTemplates(tenantId: string, options: Partial<ListEmailTemplatesQueryDto> = {}) {
+export async function listTemplates(
+  tenantId: string,
+  options: Partial<ListEmailTemplatesQueryDto> = {},
+) {
   return repo.findTemplatesByTenant(tenantId, options);
 }
 
@@ -410,7 +413,10 @@ export async function testSendTemplate(
 // Delivery Logs & Messages
 // ---------------------------------------------------------------------------
 
-export async function listDeliveryLogs(tenantId: string, options: Partial<ListDeliveryLogsQueryDto> = {}) {
+export async function listDeliveryLogs(
+  tenantId: string,
+  options: Partial<ListDeliveryLogsQueryDto> = {},
+) {
   return repo.findEmailMessagesByTenant(tenantId, options);
 }
 
@@ -426,7 +432,10 @@ export async function getDeliveryLogById(id: string, tenantId: string): Promise<
 // Email Suppressions
 // ---------------------------------------------------------------------------
 
-export async function listSuppressions(tenantId: string, options: Partial<ListSuppressionsQueryDto> = {}) {
+export async function listSuppressions(
+  tenantId: string,
+  options: Partial<ListSuppressionsQueryDto> = {},
+) {
   return repo.findSuppressionsByTenant(tenantId, options);
 }
 
@@ -457,7 +466,9 @@ export async function deleteSuppression(
 // Bounce & Complaint Webhooks (AWS SES / SMTP Provider)
 // ---------------------------------------------------------------------------
 
-export async function handleBounceWebhook(payload: BounceWebhookDto): Promise<{ processed: number }> {
+export async function handleBounceWebhook(
+  payload: BounceWebhookDto,
+): Promise<{ processed: number }> {
   let processed = 0;
 
   // 1. AWS SNS Notification format parsing
@@ -474,7 +485,10 @@ export async function handleBounceWebhook(payload: BounceWebhookDto): Promise<{ 
 
   // Handle AWS SES Bounces
   if (notificationType === 'Bounce' && body.bounce?.bouncedRecipients) {
-    const recipients = body.bounce.bouncedRecipients as Array<{ emailAddress: string; diagnosticCode?: string }>;
+    const recipients = body.bounce.bouncedRecipients as Array<{
+      emailAddress: string;
+      diagnosticCode?: string;
+    }>;
     for (const r of recipients) {
       if (r?.emailAddress) {
         // Find recent email message to identify tenantId if missing

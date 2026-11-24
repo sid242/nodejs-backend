@@ -14,6 +14,7 @@ Repository: `sid242/nodejs-backend`
 ## 2. Layering and module boundaries
 
 Use the existing module/feature architecture. Keep responsibilities clear:
+
 - Routes/controllers: HTTP concerns, parse validated request, call application service, map result to response.
 - Middleware: authentication, tenant resolution, rate limits, request context.
 - Services/use cases: business rules and orchestration.

@@ -261,20 +261,14 @@ describe('Step 02: Razorpay Payment Flows Hardening', () => {
       }));
 
     // Find checkout order route
-    const checkoutOrderRoute = routes.find(
-      (r: any) =>
-        Array.isArray(r.path)
-          ? r.path.includes('/checkout/order')
-          : r.path === '/checkout/order',
+    const checkoutOrderRoute = routes.find((r: any) =>
+      Array.isArray(r.path) ? r.path.includes('/checkout/order') : r.path === '/checkout/order',
     );
     assert.ok(checkoutOrderRoute, 'checkout/order route exists');
 
     // Find subscription route
-    const subscriptionRoute = routes.find(
-      (r: any) =>
-        Array.isArray(r.path)
-          ? r.path.includes('/subscription')
-          : r.path === '/subscription',
+    const subscriptionRoute = routes.find((r: any) =>
+      Array.isArray(r.path) ? r.path.includes('/subscription') : r.path === '/subscription',
     );
     assert.ok(subscriptionRoute, 'subscription route exists');
   });

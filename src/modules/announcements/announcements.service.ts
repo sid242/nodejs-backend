@@ -1,11 +1,12 @@
 import { AppError } from '@/lib/errors';
-import * as repo from './announcements.repository';
+
 import type {
   CreateAnnouncementDto,
   CreateChangelogDto,
   UpdateAnnouncementDto,
   UpdateChangelogDto,
 } from './announcements.dto';
+import * as repo from './announcements.repository';
 
 export async function getActiveAnnouncements(context: {
   userId?: string;
@@ -44,7 +45,8 @@ export async function getActiveAnnouncements(context: {
     if (ann.audience === 'PLAN') {
       return Boolean(
         context.plan &&
-          (filter.includes(context.plan.toLowerCase()) || filter.includes(context.plan.toUpperCase())),
+        (filter.includes(context.plan.toLowerCase()) ||
+          filter.includes(context.plan.toUpperCase())),
       );
     }
 

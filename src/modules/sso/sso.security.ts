@@ -1,4 +1,5 @@
 import dns from 'node:dns/promises';
+
 import { env } from '@/config/env';
 import { AppError } from '@/lib/errors';
 
@@ -80,7 +81,12 @@ function isPrivateIPv6(ip: string): boolean {
   if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true;
 
   // fe80::/10 (Link-Local)
-  if (normalized.startsWith('fe8') || normalized.startsWith('fe9') || normalized.startsWith('fea') || normalized.startsWith('feb')) {
+  if (
+    normalized.startsWith('fe8') ||
+    normalized.startsWith('fe9') ||
+    normalized.startsWith('fea') ||
+    normalized.startsWith('feb')
+  ) {
     return true;
   }
 
@@ -129,7 +135,9 @@ export async function assertSafeUrl(
     hostname === '::1'
   ) {
     if (!allowHttp) {
-      throw AppError.badRequest('Requests to localhost or private network are forbidden (SSRF protection)');
+      throw AppError.badRequest(
+        'Requests to localhost or private network are forbidden (SSRF protection)',
+      );
     }
   }
 
@@ -142,9 +150,7 @@ export async function assertSafeUrl(
 
     for (const record of lookupResults) {
       const isDangerous =
-        record.family === 4
-          ? isPrivateIPv4(record.address)
-          : isPrivateIPv6(record.address);
+        record.family === 4 ? isPrivateIPv4(record.address) : isPrivateIPv6(record.address);
 
       if (isDangerous && !allowHttp) {
         throw AppError.badRequest(
@@ -154,7 +160,9 @@ export async function assertSafeUrl(
     }
   } catch (err: any) {
     if (err instanceof AppError) throw err;
-    throw AppError.badRequest(`DNS resolution failed for host '${hostname}': ${err?.message ?? 'Unknown error'}`);
+    throw AppError.badRequest(
+      `DNS resolution failed for host '${hostname}': ${err?.message ?? 'Unknown error'}`,
+    );
   }
 
   return url;

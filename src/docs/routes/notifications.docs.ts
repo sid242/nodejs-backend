@@ -17,10 +17,19 @@ export function registerNotificationsDocs(registry: OpenAPIRegistry): void {
     'Notification',
     z.object({
       id: z.string().uuid().openapi({ example: 'd3b07384-d113-40f4-9ed3-2051d95e6cf1' }),
-      tenantId: z.string().uuid().nullable().openapi({ example: 'c1b07384-d113-40f4-9ed3-2051d95e6cf2' }),
-      recipientUserId: z.string().uuid().openapi({ example: 'a2b07384-d113-40f4-9ed3-2051d95e6cf3' }),
+      tenantId: z
+        .string()
+        .uuid()
+        .nullable()
+        .openapi({ example: 'c1b07384-d113-40f4-9ed3-2051d95e6cf2' }),
+      recipientUserId: z
+        .string()
+        .uuid()
+        .openapi({ example: 'a2b07384-d113-40f4-9ed3-2051d95e6cf3' }),
       type: z.string().openapi({ example: 'team.member_invited' }),
-      category: z.enum(['SECURITY', 'ACCOUNT', 'BILLING', 'TEAM', 'FILES', 'SYSTEM', 'PRODUCT']).openapi({ example: 'TEAM' }),
+      category: z
+        .enum(['SECURITY', 'ACCOUNT', 'BILLING', 'TEAM', 'FILES', 'SYSTEM', 'PRODUCT'])
+        .openapi({ example: 'TEAM' }),
       severity: z.enum(['INFO', 'SUCCESS', 'WARNING', 'CRITICAL']).openapi({ example: 'INFO' }),
       title: z.string().openapi({ example: 'You have been invited to Acme Corp' }),
       body: z.string().openapi({ example: 'John has invited you to join Acme Corp as a member.' }),
@@ -74,7 +83,8 @@ export function registerNotificationsDocs(registry: OpenAPIRegistry): void {
     method: 'get',
     path: '/api/v1/notifications',
     summary: 'List user notifications',
-    description: 'Fetch paginated in-app notifications for the authenticated user, optionally scoped to tenant.',
+    description:
+      'Fetch paginated in-app notifications for the authenticated user, optionally scoped to tenant.',
     tags: ['Notifications'],
     security: [{ [bearerAuth.name]: [] }],
     request: {
@@ -200,7 +210,10 @@ export function registerNotificationsDocs(registry: OpenAPIRegistry): void {
       body: { content: { 'application/json': { schema: pushSubscribeDto } } },
     },
     responses: {
-      201: successResponse(z.object({ subscribed: z.boolean(), id: z.string().uuid() }), 'Web push subscribed'),
+      201: successResponse(
+        z.object({ subscribed: z.boolean(), id: z.string().uuid() }),
+        'Web push subscribed',
+      ),
       401: errorResponse('Unauthorized'),
     },
   });
@@ -224,7 +237,8 @@ export function registerNotificationsDocs(registry: OpenAPIRegistry): void {
     method: 'post',
     path: '/api/v1/notifications/broadcast',
     summary: 'Platform broadcast notification dispatch',
-    description: 'Allows platform operators to dispatch broadcast notifications across workspaces, plans, or users.',
+    description:
+      'Allows platform operators to dispatch broadcast notifications across workspaces, plans, or users.',
     tags: ['Platform', 'Notifications'],
     security: [{ [bearerAuth.name]: [] }],
     request: {

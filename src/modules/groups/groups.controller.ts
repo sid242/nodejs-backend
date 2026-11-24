@@ -38,11 +38,7 @@ export const updateGroup = asyncHandler(async (req: Request, res: Response) => {
 
 export const archiveGroup = asyncHandler(async (req: Request, res: Response) => {
   const groupId = (req.params.groupId ?? req.valid?.params?.groupId) as string;
-  const result = await groupsService.archiveTenantGroup(
-    req.tenant!.id,
-    groupId,
-    req.user!.id,
-  );
+  const result = await groupsService.archiveTenantGroup(req.tenant!.id, groupId, req.user!.id);
   AppResponse.ok(result, 'User group archived successfully').send(res);
 });
 
@@ -51,12 +47,7 @@ export const listGroupMembers = asyncHandler(async (req: Request, res: Response)
   const page = req.query.page ? Number(req.query.page) : 1;
   const limit = req.query.limit ? Number(req.query.limit) : 20;
 
-  const result = await groupsService.listTenantGroupMembers(
-    req.tenant!.id,
-    groupId,
-    page,
-    limit,
-  );
+  const result = await groupsService.listTenantGroupMembers(req.tenant!.id, groupId, page, limit);
   AppResponse.ok(result, 'Group members retrieved successfully').send(res);
 });
 
@@ -74,12 +65,7 @@ export const addGroupMembers = asyncHandler(async (req: Request, res: Response) 
 export const removeGroupMember = asyncHandler(async (req: Request, res: Response) => {
   const groupId = (req.params.groupId ?? req.valid?.params?.groupId) as string;
   const userId = (req.params.userId ?? req.valid?.params?.userId) as string;
-  await groupsService.removeTenantGroupMember(
-    req.tenant!.id,
-    groupId,
-    req.user!.id,
-    userId,
-  );
+  await groupsService.removeTenantGroupMember(req.tenant!.id, groupId, req.user!.id, userId);
   AppResponse.ok({ success: true }, 'Member removed from user group successfully').send(res);
 });
 
@@ -103,12 +89,7 @@ export const bindGroupRole = asyncHandler(async (req: Request, res: Response) =>
 export const unbindGroupRole = asyncHandler(async (req: Request, res: Response) => {
   const groupId = (req.params.groupId ?? req.valid?.params?.groupId) as string;
   const roleId = (req.params.roleId ?? req.valid?.params?.roleId) as string;
-  await groupsService.unbindTenantGroupRole(
-    req.tenant!.id,
-    groupId,
-    req.user!.id,
-    roleId,
-  );
+  await groupsService.unbindTenantGroupRole(req.tenant!.id, groupId, req.user!.id, roleId);
   AppResponse.ok({ success: true }, 'Role unbound from user group successfully').send(res);
 });
 

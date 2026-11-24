@@ -6,6 +6,7 @@ import { notificationLimiter } from '@/middleware/rate-limit';
 import { resolveTenantContext } from '@/middleware/tenant';
 import { validate } from '@/middleware/validate';
 import { PLATFORM_PERMISSIONS } from '@/modules/platform/platform.permissions';
+
 import * as controller from './notifications.controller';
 import {
   broadcastNotificationDto,
@@ -41,10 +42,18 @@ router.get('/preferences', controller.getPreferences);
 router.put('/preferences', validate({ body: updatePreferencesDto }), controller.updatePreferences);
 
 router.post('/push/subscribe', validate({ body: pushSubscribeDto }), controller.subscribePush);
-router.delete('/push/subscribe', validate({ body: pushUnsubscribeDto }), controller.unsubscribePush);
+router.delete(
+  '/push/subscribe',
+  validate({ body: pushUnsubscribeDto }),
+  controller.unsubscribePush,
+);
 
 router.post('/:id/read', validate({ params: notificationIdParamDto }), controller.markAsRead);
-router.post('/:id/archive', validate({ params: notificationIdParamDto }), controller.archiveNotification);
+router.post(
+  '/:id/archive',
+  validate({ params: notificationIdParamDto }),
+  controller.archiveNotification,
+);
 router.delete('/:id', validate({ params: notificationIdParamDto }), controller.deleteNotification);
 
 export default router;

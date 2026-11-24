@@ -4,7 +4,6 @@ import { and, asc, desc, eq, gte, ilike, inArray, isNull, lt, lte, or, sql } fro
 
 import type { DbExecutor } from '@/config/db';
 import { logger } from '@/config/logger';
-import { assertTenantScope, primaryDbHandle, tenantDb } from '@/db/tenancy/context';
 import {
   auditLogs,
   auditRetentionRuns,
@@ -14,8 +13,10 @@ import {
   type NewAuditLog,
   type TenantAuditPolicy,
 } from '@/db/schema/index';
+import { assertTenantScope, primaryDbHandle, tenantDb } from '@/db/tenancy/context';
 import { AppError } from '@/lib/errors';
 import { putObject } from '@/lib/s3';
+
 import { computeAuditRowHash } from './audit.crypto';
 
 function resolveAuditExecutor(tenantId?: string | null, executor?: DbExecutor): DbExecutor {
@@ -109,10 +110,7 @@ async function enrichAuditLogUsers(logs: AuditLog[]): Promise<EnrichedAuditLog[]
  * Append-only ingestion: Creates a new audit log record.
  * Normal application APIs never expose update or delete methods on auditLogs.
  */
-export async function createAuditLog(
-  data: NewAuditLog,
-  executor?: DbExecutor,
-): Promise<AuditLog> {
+export async function createAuditLog(data: NewAuditLog, executor?: DbExecutor): Promise<AuditLog> {
   const exec = resolveAuditExecutor(data.tenantId, executor);
 
   let finalData = data;
@@ -250,10 +248,7 @@ function buildConditions(filters: AuditLogFilters) {
     );
   if (filters?.resourceId)
     conditions.push(
-      or(
-        eq(auditLogs.resourceId, filters.resourceId),
-        eq(auditLogs.entityId, filters.resourceId),
-      ),
+      or(eq(auditLogs.resourceId, filters.resourceId), eq(auditLogs.entityId, filters.resourceId)),
     );
   if (filters?.result) conditions.push(eq(auditLogs.result, filters.result));
   if (filters?.source) conditions.push(eq(auditLogs.source, filters.source));

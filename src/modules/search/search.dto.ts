@@ -20,12 +20,10 @@ export const searchQueryDto = z.object({
     .optional()
     .transform((val) =>
       val
-        ? (val
+        ? val
             .split(',')
             .map((s) => s.trim().toLowerCase())
-            .filter((s): s is SearchCategory =>
-              SEARCH_CATEGORIES.includes(s as SearchCategory),
-            ))
+            .filter((s): s is SearchCategory => SEARCH_CATEGORIES.includes(s as SearchCategory))
         : undefined,
     ),
 });

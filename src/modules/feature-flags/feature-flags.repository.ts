@@ -1,40 +1,29 @@
 import { asc, desc, eq, sql } from 'drizzle-orm';
 
-import { primaryDbHandle } from '@/db/tenancy/context';
 import {
-  featureFlags,
   featureFlagRules,
+  featureFlags,
   type FeatureFlag,
   type FeatureFlagRule,
   type NewFeatureFlag,
   type NewFeatureFlagRule,
 } from '@/db/schema';
+import { primaryDbHandle } from '@/db/tenancy/context';
 
 export async function listFeatureFlags(): Promise<FeatureFlag[]> {
   const db = primaryDbHandle();
-  return db
-    .select()
-    .from(featureFlags)
-    .orderBy(desc(featureFlags.createdAt));
+  return db.select().from(featureFlags).orderBy(desc(featureFlags.createdAt));
 }
 
 export async function findFeatureFlagById(id: string): Promise<FeatureFlag | null> {
   const db = primaryDbHandle();
-  const [row] = await db
-    .select()
-    .from(featureFlags)
-    .where(eq(featureFlags.id, id))
-    .limit(1);
+  const [row] = await db.select().from(featureFlags).where(eq(featureFlags.id, id)).limit(1);
   return row ?? null;
 }
 
 export async function findFeatureFlagByKey(key: string): Promise<FeatureFlag | null> {
   const db = primaryDbHandle();
-  const [row] = await db
-    .select()
-    .from(featureFlags)
-    .where(eq(featureFlags.key, key))
-    .limit(1);
+  const [row] = await db.select().from(featureFlags).where(eq(featureFlags.key, key)).limit(1);
   return row ?? null;
 }
 
@@ -60,16 +49,16 @@ export async function updateFeatureFlag(
 
 export async function deleteFeatureFlag(id: string): Promise<boolean> {
   const db = primaryDbHandle();
-  const result = await db.delete(featureFlags).where(eq(featureFlags.id, id)).returning({ id: featureFlags.id });
+  const result = await db
+    .delete(featureFlags)
+    .where(eq(featureFlags.id, id))
+    .returning({ id: featureFlags.id });
   return result.length > 0;
 }
 
 export async function touchFeatureFlag(id: string): Promise<void> {
   const db = primaryDbHandle();
-  await db
-    .update(featureFlags)
-    .set({ lastEvaluatedAt: new Date() })
-    .where(eq(featureFlags.id, id));
+  await db.update(featureFlags).set({ lastEvaluatedAt: new Date() }).where(eq(featureFlags.id, id));
 }
 
 // ─── Rules Repository ────────────────────────────────────────────────────────

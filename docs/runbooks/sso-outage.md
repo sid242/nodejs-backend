@@ -3,6 +3,7 @@
 ## Severity: HIGH (P1)
 
 ### Trigger
+
 Alerts indicating spikes in 401/403 errors on `/api/v1/sso/saml/callback` or `/api/v1/sso/oidc/callback`, or tenant employees locked out due to IdP downtime / certificate expiration.
 
 ---

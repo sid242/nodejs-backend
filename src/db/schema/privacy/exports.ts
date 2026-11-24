@@ -1,4 +1,4 @@
-import { integer, index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { index, integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 import { dataExportScopeEnum, dataExportStatusEnum } from '../enums';
 import { users } from '../identity/users';

@@ -13,13 +13,13 @@ import * as sessionsRepo from '@/modules/auth/sessions.repository';
 import { issueTokens, type AuthTokens } from '@/modules/auth/tokens';
 import * as loginEventsRepo from '@/modules/auth/user-login-events.repository';
 import {
-  getUserMembershipsWithCanonicalUrls,
-  type UserMembershipSummary,
-} from '@/modules/tenants/tenant-url.service';
-import {
   createHashedVerificationToken,
   verifyAndConsumeHashedToken,
 } from '@/modules/auth/verification.repository';
+import {
+  getUserMembershipsWithCanonicalUrls,
+  type UserMembershipSummary,
+} from '@/modules/tenants/tenant-url.service';
 
 const APP_NAME = 'App';
 const RECOVERY_CODE_COUNT = 10;

@@ -42,7 +42,12 @@ export async function processMaintenance(job: Job): Promise<{ removed: number; f
     const expired = await db
       .update(platformSupportSessions)
       .set({ status: 'EXPIRED', endedAt: now })
-      .where(and(eq(platformSupportSessions.status, 'ACTIVE'), lt(platformSupportSessions.expiresAt, now)))
+      .where(
+        and(
+          eq(platformSupportSessions.status, 'ACTIVE'),
+          lt(platformSupportSessions.expiresAt, now),
+        ),
+      )
       .returning();
     if (expired.length > 0) {
       logger.info({ count: expired.length }, 'Expired stale platform support sessions');
@@ -58,7 +63,10 @@ export async function processMaintenance(job: Job): Promise<{ removed: number; f
       .where(and(eq(subscriptions.status, 'TRIALING'), lt(subscriptions.trialEndsAt, now)))
       .returning();
     if (expiredTrials.length > 0) {
-      logger.info({ count: expiredTrials.length }, 'Marked expired trialing subscriptions as EXPIRED');
+      logger.info(
+        { count: expiredTrials.length },
+        'Marked expired trialing subscriptions as EXPIRED',
+      );
     }
     return { removed: expiredTrials.length, failed: 0 };
   }
@@ -213,7 +221,8 @@ export async function processMaintenance(job: Job): Promise<{ removed: number; f
   }
 
   if (job.name === 'aggregate-platform-metrics') {
-    const { aggregateDailyPlatformSnapshot } = await import('@/modules/analytics/analytics.service');
+    const { aggregateDailyPlatformSnapshot } =
+      await import('@/modules/analytics/analytics.service');
     const result = await aggregateDailyPlatformSnapshot();
     return { removed: 1, failed: 0 };
   }

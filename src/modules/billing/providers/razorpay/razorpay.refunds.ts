@@ -44,9 +44,11 @@ export async function createRazorpayRefund(
       }
 
       // razorpay.payments.refund signature accepts paymentId and options
-      const refund = await (razorpay.payments as unknown as {
-        refund: (paymentId: string, payload: Record<string, unknown>) => Promise<unknown>;
-      }).refund(params.paymentId, payload);
+      const refund = await (
+        razorpay.payments as unknown as {
+          refund: (paymentId: string, payload: Record<string, unknown>) => Promise<unknown>;
+        }
+      ).refund(params.paymentId, payload);
 
       return refund as unknown as RazorpayRefundResult;
     },
@@ -61,7 +63,9 @@ export async function fetchRazorpayRefund(
   return executeGatewayCall(
     async () => {
       const razorpay = getRazorpayClient();
-      const refundsApi = (razorpay as unknown as { refunds: { fetch: (id: string) => Promise<unknown> } }).refunds;
+      const refundsApi = (
+        razorpay as unknown as { refunds: { fetch: (id: string) => Promise<unknown> } }
+      ).refunds;
       const refund = await refundsApi.fetch(refundId);
       return refund as unknown as RazorpayRefundResult;
     },

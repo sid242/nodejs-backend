@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+
 import { isSupportDeniedRoute } from '../../src/middleware/support';
 
 test('Support Session Scope & Route Denial Integration Invariants', async (t) => {
@@ -42,7 +43,10 @@ test('Support Session Scope & Route Denial Integration Invariants', async (t) =>
 
     // Database operations
     assert.strictEqual(
-      isSupportDeniedRoute({ method: 'POST', originalUrl: '/api/v1/platform/tenants/t1/db/switchover' } as any),
+      isSupportDeniedRoute({
+        method: 'POST',
+        originalUrl: '/api/v1/platform/tenants/t1/db/switchover',
+      } as any),
       true,
       'DB operations must be denied to support sessions',
     );

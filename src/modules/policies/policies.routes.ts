@@ -29,11 +29,7 @@ router.post(
 );
 
 // PBAC Registry (for dynamic UI builder)
-router.get(
-  '/registry',
-  requirePermission('roles:read'),
-  controller.getPolicyRegistry,
-);
+router.get('/registry', requirePermission('roles:read'), controller.getPolicyRegistry);
 
 // PBAC Dry-Run Evaluation (for UI test panel)
 router.post(

@@ -21,16 +21,8 @@ export interface WebhookDeliveryJobData {
 }
 
 export async function processWebhookDelivery(job: Job<WebhookDeliveryJobData>): Promise<void> {
-  const {
-    deliveryId,
-    endpointId,
-    url,
-    secretEncrypted,
-    eventId,
-    eventType,
-    payload,
-    attempt,
-  } = job.data;
+  const { deliveryId, endpointId, url, secretEncrypted, eventId, eventType, payload, attempt } =
+    job.data;
 
   const startTime = Date.now();
   let secret = '';
@@ -103,7 +95,10 @@ export async function processWebhookDelivery(job: Job<WebhookDeliveryJobData>): 
 
     isSuccess = response.ok;
   } catch (netErr: any) {
-    responseSnippet = netErr?.name === 'AbortError' ? 'Request timed out (10s)' : String(netErr?.message ?? 'Network error');
+    responseSnippet =
+      netErr?.name === 'AbortError'
+        ? 'Request timed out (10s)'
+        : String(netErr?.message ?? 'Network error');
     isSuccess = false;
   } finally {
     clearTimeout(timeoutId);

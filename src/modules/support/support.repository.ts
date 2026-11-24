@@ -42,7 +42,9 @@ export async function getTicketById(tenantId: string, ticketId: string) {
   const [ticket] = await tenantDb()
     .select()
     .from(schema.supportTickets)
-    .where(and(eq(schema.supportTickets.tenantId, tenantId), eq(schema.supportTickets.id, ticketId)))
+    .where(
+      and(eq(schema.supportTickets.tenantId, tenantId), eq(schema.supportTickets.id, ticketId)),
+    )
     .limit(1);
 
   return ticket;
@@ -88,7 +90,9 @@ export async function updateTicket(
       resolvedAt: data.status === 'RESOLVED' ? new Date() : undefined,
       updatedAt: new Date(),
     })
-    .where(and(eq(schema.supportTickets.tenantId, tenantId), eq(schema.supportTickets.id, ticketId)))
+    .where(
+      and(eq(schema.supportTickets.tenantId, tenantId), eq(schema.supportTickets.id, ticketId)),
+    )
     .returning();
 
   return updated;

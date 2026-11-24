@@ -12,14 +12,8 @@ import {
   tenants,
 } from '../src/db/schema/index';
 import { AppError } from '../src/lib/errors';
-import {
-  blockInSupportSession,
-  requireSupportOrUser,
-} from '../src/middleware/support';
-import {
-  issueSupportToken,
-  verifySupportToken,
-} from '../src/modules/auth/tokens';
+import { blockInSupportSession, requireSupportOrUser } from '../src/middleware/support';
+import { issueSupportToken, verifySupportToken } from '../src/modules/auth/tokens';
 import * as platformRepo from '../src/modules/platform/platform.repository';
 
 after(async () => {
@@ -245,7 +239,10 @@ test('blockInSupportSession rejects sensitive actions during support session', (
 
   assert.ok(caughtError instanceof AppError);
   assert.equal(caughtError.status, 403);
-  assert.match(caughtError.message, /Password change cannot be performed while inside a support session/);
+  assert.match(
+    caughtError.message,
+    /Password change cannot be performed while inside a support session/,
+  );
 
   // Normal user request succeeds
   const userReq: any = { isSupportSession: false };

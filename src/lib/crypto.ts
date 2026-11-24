@@ -77,13 +77,7 @@ export function getActiveKeyId(): string {
  */
 export function deriveKey(secret: string, context = 'general-secret'): Buffer {
   return Buffer.from(
-    crypto.hkdfSync(
-      'sha256',
-      secret,
-      'antigravity-envelope-salt-v1',
-      context,
-      32,
-    ),
+    crypto.hkdfSync('sha256', secret, 'antigravity-envelope-salt-v1', context, 32),
   );
 }
 

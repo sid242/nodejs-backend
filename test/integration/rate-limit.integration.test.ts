@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+
 import {
   authLimiter,
   billingPublicLimiter,
@@ -32,10 +33,6 @@ test('Rate Limiters Matrix Integration Invariants', async (t) => {
       'function',
       'billingPublicLimiter must be an express middleware',
     );
-    assert.strictEqual(
-      typeof authLimiter,
-      'function',
-      'authLimiter must be an express middleware',
-    );
+    assert.strictEqual(typeof authLimiter, 'function', 'authLimiter must be an express middleware');
   });
 });

@@ -5,8 +5,7 @@ import { db } from '@/config/db';
 import { GEO_LEVEL } from '@/db/geo';
 import { AppError } from '@/lib/errors';
 import { addressBodyDto } from '@/modules/addresses/addresses.dto';
-import { addressRepo } from '@/modules/addresses/addresses.repository';
-import type { OwnerScope } from '@/modules/addresses/addresses.repository';
+import { addressRepo, type OwnerScope } from '@/modules/addresses/addresses.repository';
 import * as addressService from '@/modules/addresses/addresses.service';
 import { geoRepo } from '@/modules/geo/geo.repository';
 
@@ -80,13 +79,37 @@ test('resolveGeo validates hierarchical consistency and PIN containment', async 
     // District 500: Pune (Maharashtra)
     500: { id: 500, levelId: GEO_LEVEL.DISTRICT, parentId: 27, name: 'Pune', isActive: true },
     // Sub-district 3500: Sabarmati (Ahmedabad)
-    3500: { id: 3500, levelId: GEO_LEVEL.SUBDISTRICT, parentId: 440, name: 'Sabarmati', isActive: true },
+    3500: {
+      id: 3500,
+      levelId: GEO_LEVEL.SUBDISTRICT,
+      parentId: 440,
+      name: 'Sabarmati',
+      isActive: true,
+    },
     // Sub-district 3600: Haveli (Pune)
-    3600: { id: 3600, levelId: GEO_LEVEL.SUBDISTRICT, parentId: 500, name: 'Haveli', isActive: true },
+    3600: {
+      id: 3600,
+      levelId: GEO_LEVEL.SUBDISTRICT,
+      parentId: 500,
+      name: 'Haveli',
+      isActive: true,
+    },
     // City 10001: Ahmedabad City (under district 440)
-    10001: { id: 10001, levelId: GEO_LEVEL.CITY, parentId: 440, name: 'Ahmedabad City', isActive: true },
+    10001: {
+      id: 10001,
+      levelId: GEO_LEVEL.CITY,
+      parentId: 440,
+      name: 'Ahmedabad City',
+      isActive: true,
+    },
     // Village 20001: Chandkheda (under sub-district 3500)
-    20001: { id: 20001, levelId: GEO_LEVEL.VILLAGE, parentId: 3500, name: 'Chandkheda', isActive: true },
+    20001: {
+      id: 20001,
+      levelId: GEO_LEVEL.VILLAGE,
+      parentId: 3500,
+      name: 'Chandkheda',
+      isActive: true,
+    },
   };
 
   (geoRepo as any).findByIds = async (ids: number[]) => {
@@ -142,7 +165,9 @@ test('resolveGeo validates hierarchical consistency and PIN containment', async 
         });
       },
       (err: any) => {
-        return err instanceof AppError && err.message.includes('District is not in the selected state');
+        return (
+          err instanceof AppError && err.message.includes('District is not in the selected state')
+        );
       },
     );
 
@@ -159,7 +184,10 @@ test('resolveGeo validates hierarchical consistency and PIN containment', async 
         });
       },
       (err: any) => {
-        return err instanceof AppError && err.message.includes('Sub-district is not in the selected district');
+        return (
+          err instanceof AppError &&
+          err.message.includes('Sub-district is not in the selected district')
+        );
       },
     );
 
@@ -194,7 +222,10 @@ test('resolveGeo validates hierarchical consistency and PIN containment', async 
         });
       },
       (err: any) => {
-        return err instanceof AppError && err.message.includes('PIN code does not belong to the selected state');
+        return (
+          err instanceof AppError &&
+          err.message.includes('PIN code does not belong to the selected state')
+        );
       },
     );
 
@@ -208,7 +239,9 @@ test('resolveGeo validates hierarchical consistency and PIN containment', async 
         });
       },
       (err: any) => {
-        return err instanceof AppError && err.message.includes('Location ids are only valid for India');
+        return (
+          err instanceof AppError && err.message.includes('Location ids are only valid for India')
+        );
       },
     );
 
@@ -225,7 +258,10 @@ test('resolveGeo validates hierarchical consistency and PIN containment', async 
         });
       },
       (err: any) => {
-        return err instanceof AppError && err.message.includes('District is required when city is provided');
+        return (
+          err instanceof AppError &&
+          err.message.includes('District is required when city is provided')
+        );
       },
     );
 
@@ -242,7 +278,9 @@ test('resolveGeo validates hierarchical consistency and PIN containment', async 
         });
       },
       (err: any) => {
-        return err instanceof AppError && err.message.includes('localityKind must be CITY or VILLAGE');
+        return (
+          err instanceof AppError && err.message.includes('localityKind must be CITY or VILLAGE')
+        );
       },
     );
   } finally {
@@ -373,17 +411,11 @@ test('Setting a default address clears the previous default for the same type', 
     isDefault: false,
   });
 
-  (addressRepo as any).clearDefaultForOwnerAndType = async (
-    _scope: OwnerScope,
-    type: string,
-  ) => {
+  (addressRepo as any).clearDefaultForOwnerAndType = async (_scope: OwnerScope, type: string) => {
     clearedType = type;
   };
 
-  (addressRepo as any).updateAddress = async (
-    _id: string,
-    data: any,
-  ) => {
+  (addressRepo as any).updateAddress = async (_id: string, data: any) => {
     updatedIsDefault = data.isDefault;
     return {
       id: 'addr-1',

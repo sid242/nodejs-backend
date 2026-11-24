@@ -7,20 +7,20 @@ import helmet from 'helmet';
 import { env } from '@/config/env';
 import { docsRouter } from '@/docs/index';
 import { dynamicCorsOrigin } from '@/lib/cors';
+import { requestContextMiddleware } from '@/lib/request-context';
 import { basicAuth } from '@/middleware/basic-auth';
 import { errorHandler, notFound } from '@/middleware/error';
 import { httpLogger } from '@/middleware/http-logger';
+import { maintenanceMiddleware } from '@/middleware/maintenance';
 import { globalLimiter } from '@/middleware/rate-limit';
+import { auditSupportActions } from '@/middleware/support';
+import publicApiRouter from '@/modules/developers/public-api.routes';
 import healthRoutes from '@/modules/health/health.routes';
 import internalRoutes from '@/modules/internal/internal.routes';
+import { ssoAuthRouter } from '@/modules/sso/sso.routes';
 import { metricsMiddleware, metricsRouter } from '@/observability/metrics';
 import { bullBoardRouter } from '@/queues/bull-board';
-import { auditSupportActions } from '@/middleware/support';
-import { maintenanceMiddleware } from '@/middleware/maintenance';
-import { requestContextMiddleware } from '@/lib/request-context';
 import apiRoutes from '@/routes';
-import { ssoAuthRouter } from '@/modules/sso/sso.routes';
-import publicApiRouter from '@/modules/developers/public-api.routes';
 
 export function createApp(): Express {
   const app = express();

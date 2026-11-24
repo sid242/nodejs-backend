@@ -287,7 +287,9 @@ export async function processDbOperation(job: Job<DbOpJobData>): Promise<any> {
               offset += batch.length;
 
               // Update progress in DB
-              const percent = Math.floor(((tIdx + offset / (totalRows || 1)) / TENANT_TABLES.length) * 90);
+              const percent = Math.floor(
+                ((tIdx + offset / (totalRows || 1)) / TENANT_TABLES.length) * 90,
+              );
               await db
                 .update(schema.tenantDbOperations)
                 .set({
@@ -580,7 +582,8 @@ export async function processDbOperation(job: Job<DbOpJobData>): Promise<any> {
 
           if (!connectionUrl) {
             const meta = tenant.metadata as Record<string, unknown> | null;
-            const dbName = (meta?.databaseName as string) || `tenant_${tenantId.replace(/-/g, '_')}`;
+            const dbName =
+              (meta?.databaseName as string) || `tenant_${tenantId.replace(/-/g, '_')}`;
             const targetUrl = new URL(env.DATABASE_URL);
             targetUrl.pathname = `/${dbName}`;
             connectionUrl = targetUrl.toString();

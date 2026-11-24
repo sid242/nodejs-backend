@@ -5,8 +5,8 @@ import {
   supportSessionScopeEnum,
   supportSessionStatusEnum,
 } from '../enums';
-import { tenantMembers, tenants } from '../tenancy/index';
 import { users } from '../identity/users';
+import { tenantMembers, tenants } from '../tenancy/index';
 import { platformStaff } from './platform-staff';
 
 // scope: primary

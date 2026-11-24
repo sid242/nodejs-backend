@@ -1,8 +1,8 @@
 import { and, asc, eq, gte, lte } from 'drizzle-orm';
 
 import { logger } from '@/config/logger';
-import { primaryDbHandle } from '@/db/tenancy/context';
 import { auditLogs, users, type NewAuditLog, type TenantAuditPolicy } from '@/db/schema/index';
+import { primaryDbHandle } from '@/db/tenancy/context';
 import { AppError } from '@/lib/errors';
 import * as billingService from '@/modules/billing/billing.service';
 

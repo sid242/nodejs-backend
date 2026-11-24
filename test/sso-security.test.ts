@@ -7,11 +7,7 @@ import * as authRepo from '@/modules/auth/auth.repository';
 import * as authService from '@/modules/auth/auth.service';
 import { assertSafeUrl, validateReturnTo } from '@/modules/sso/sso.security';
 import { ssoService } from '@/modules/sso/sso.service';
-import {
-  consumeSsoState,
-  createSsoState,
-  recordSamlAssertion,
-} from '@/modules/sso/sso.state';
+import { consumeSsoState, createSsoState, recordSamlAssertion } from '@/modules/sso/sso.state';
 
 after(async () => {
   await Promise.allSettled([closeRedisClients(), closeDb()]);
@@ -46,7 +42,9 @@ describe('SSO Security Hardening & Isolation Tests (Gap Pack 01)', () => {
         },
         (err: any) => {
           assert.strictEqual(err.status, 400);
-          assert.ok(err.message.includes('SSRF blocked') || err.message.includes('Insecure URL protocol'));
+          assert.ok(
+            err.message.includes('SSRF blocked') || err.message.includes('Insecure URL protocol'),
+          );
           return true;
         },
       );

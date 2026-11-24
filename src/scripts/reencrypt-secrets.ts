@@ -2,18 +2,8 @@ import { eq, isNotNull, sql } from 'drizzle-orm';
 
 import { closeDb, db } from '@/config/db';
 import { logger } from '@/config/logger';
-import {
-  tenantEmailConfigs,
-  tenantSecrets,
-  tenantSsoConfigs,
-  tenants,
-} from '@/db/schema/index';
-import {
-  decrypt,
-  encrypt,
-  getActiveKeyId,
-  needsReencryption,
-} from '@/lib/crypto';
+import { tenantEmailConfigs, tenants, tenantSecrets, tenantSsoConfigs } from '@/db/schema/index';
+import { decrypt, encrypt, getActiveKeyId, needsReencryption } from '@/lib/crypto';
 import { getSecretStore } from '@/lib/secrets';
 
 async function main() {

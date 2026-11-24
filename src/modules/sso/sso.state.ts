@@ -1,6 +1,8 @@
 import { randomBytes } from 'node:crypto';
+
 import { redis } from '@/config/redis';
 import { AppError } from '@/lib/errors';
+
 import { validateReturnTo } from './sso.security';
 
 export interface SsoStatePayload {
@@ -73,10 +75,7 @@ export async function consumeSsoState(stateId?: string | null): Promise<SsoState
  * Stores assertion ID in Redis with NX (not exists) flag.
  * If the assertion was already processed, throws unauthorized.
  */
-export async function recordSamlAssertion(
-  assertionId: string,
-  ttlSeconds = 300,
-): Promise<void> {
+export async function recordSamlAssertion(assertionId: string, ttlSeconds = 300): Promise<void> {
   if (!assertionId) {
     throw AppError.unauthorized('Missing SAML Assertion ID');
   }

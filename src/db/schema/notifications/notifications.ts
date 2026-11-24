@@ -16,8 +16,8 @@ import {
   notificationSeverityEnum,
 } from '../enums';
 import { users } from '../identity/users';
-import { tenants } from '../tenancy/tenants';
 import { tenantMembers } from '../tenancy/tenant-members';
+import { tenants } from '../tenancy/tenants';
 
 // scope: primary
 export const notifications = pgTable(

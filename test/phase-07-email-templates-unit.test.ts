@@ -1,15 +1,20 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
-
 import { eq } from 'drizzle-orm';
 
 import { closeDb, db } from '@/config/db';
 import { closeRedisClients } from '@/config/redis';
-import { emailMessages, emailSuppressions, emailTemplates, emailTemplateVersions, tenants, users } from '@/db/schema/index';
+import {
+  emailMessages,
+  emailSuppressions,
+  emailTemplates,
+  emailTemplateVersions,
+  tenants,
+  users,
+} from '@/db/schema/index';
 import { isPrivateOrReservedHost, sendEmail, verifySmtpConnection } from '@/lib/mailer';
 import * as repo from '@/modules/email-templates/email-templates.repository';
 import * as service from '@/modules/email-templates/email-templates.service';
-
 import { closeQueues } from '@/queues/index';
 import { closeSocketEmitter } from '@/sockets/emitter';
 
@@ -42,7 +47,9 @@ describe('Module 06 — Email Templates & Delivery Tests', () => {
   after(async () => {
     // Cleanup
     if (testTenantId) {
-      await db.delete(emailTemplateVersions).where(eq(emailTemplateVersions.tenantId, testTenantId));
+      await db
+        .delete(emailTemplateVersions)
+        .where(eq(emailTemplateVersions.tenantId, testTenantId));
       await db.delete(emailMessages).where(eq(emailMessages.tenantId, testTenantId));
       await db.delete(emailSuppressions).where(eq(emailSuppressions.tenantId, testTenantId));
       await db.delete(emailTemplates).where(eq(emailTemplates.tenantId, testTenantId));
@@ -51,12 +58,7 @@ describe('Module 06 — Email Templates & Delivery Tests', () => {
     if (testUserId) {
       await db.delete(users).where(eq(users.id, testUserId));
     }
-    await Promise.allSettled([
-      closeQueues(),
-      closeSocketEmitter(),
-      closeRedisClients(),
-      closeDb(),
-    ]);
+    await Promise.allSettled([closeQueues(), closeSocketEmitter(), closeRedisClients(), closeDb()]);
   });
 
   test('renderVariables escapes HTML in double braces {{var}} and preserves raw HTML in triple braces {{{var}}}', () => {
@@ -73,7 +75,8 @@ describe('Module 06 — Email Templates & Delivery Tests', () => {
   });
 
   test('renderVariables correctly resolves nested properties and maintains unprovided variables', () => {
-    const template = 'Hi {{user.firstName}}, your organization is {{tenant.name}} (ref: {{unknownCode}})';
+    const template =
+      'Hi {{user.firstName}}, your organization is {{tenant.name}} (ref: {{unknownCode}})';
     const rendered = service.renderVariables(template, {
       user: { firstName: 'Alice' },
       tenant: { name: 'Acme Corp' },

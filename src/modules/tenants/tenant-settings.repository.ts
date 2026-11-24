@@ -1,6 +1,5 @@
 import { eq } from 'drizzle-orm';
 
-import { tenantDb } from '@/db/tenancy/context';
 import {
   tenantSecurityPolicies,
   tenantSettings,
@@ -9,10 +8,9 @@ import {
   type TenantSecurityPolicyRecord,
   type TenantSettingRecord,
 } from '@/db/schema/index';
-import type {
-  UpdateTenantSecurityPolicyDto,
-  UpdateTenantSettingsDto,
-} from './tenants.dto';
+import { tenantDb } from '@/db/tenancy/context';
+
+import type { UpdateTenantSecurityPolicyDto, UpdateTenantSettingsDto } from './tenants.dto';
 
 export async function findSettingsByTenantId(
   tenantId: string,
