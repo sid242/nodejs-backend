@@ -262,6 +262,7 @@ test('tenant migration lifecycle: migrate to dedicated and rollback to shared', 
     {
       customDatabaseName: dedicatedDbName,
       poolLimit: 5,
+      connectionUrl: process.env.DB_PROVISIONER_URL,
     },
     'req-mig-test-1',
   );
