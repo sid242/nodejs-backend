@@ -47,10 +47,7 @@ export class ScimRepository {
   async listMembers(tenantId: string, options: ScimListMembersOptions) {
     assertTenantScope(tenantId);
 
-    const conditions = [
-      eq(tenantMembers.tenantId, tenantId),
-      isNull(tenantMembers.deletedAt),
-    ];
+    const conditions = [eq(tenantMembers.tenantId, tenantId), isNull(tenantMembers.deletedAt)];
 
     if (options.externalId) {
       conditions.push(eq(tenantMembers.externalId, options.externalId));

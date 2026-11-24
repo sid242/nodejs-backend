@@ -30,6 +30,7 @@ Read every document in this package before making changes. Also read the current
 ## Phase 0 — Establish baseline
 
 For each repository:
+
 - Confirm current commit SHA and working tree state.
 - Read all agent instructions.
 - Detect package manager from lockfiles; use the existing package manager.
@@ -44,6 +45,7 @@ Do not edit source in this phase.
 ## Phase 1 — Full source audit
 
 Search the entire tracked source, including tests, scripts and config, for:
+
 - `any`, `as any`, unsafe type assertions, `!` non-null assertions.
 - `@ts-ignore`, `@ts-nocheck`, `eslint-disable`, `@ts-expect-error`.
 - `==`/`!=`, nested ternaries, deep conditional chains, duplicated switch/mapping logic.
@@ -87,6 +89,7 @@ Prioritize tenant isolation, authentication/authorization, input validation, dat
 ## Phase 5 — Dependency modernization
 
 For every direct and important transitive dependency:
+
 - Record installed version from lockfile.
 - Record latest stable version compatible with supported Node/runtime/framework versions.
 - Check peer dependencies and breaking changes.
@@ -100,6 +103,7 @@ For every direct and important transitive dependency:
 ## Phase 6 — Refactor by bounded domain
 
 Refactor one module or feature at a time:
+
 1. Add/adjust tests.
 2. Improve types and validation.
 3. Simplify control flow.
@@ -112,6 +116,7 @@ Refactor one module or feature at a time:
 ## Required deliverables
 
 Create and maintain:
+
 - `docs/engineering/BASELINE_AUDIT.md`
 - `docs/engineering/DEPENDENCY_AUDIT.md`
 - `docs/engineering/QUALITY_BACKLOG.md`
@@ -119,6 +124,7 @@ Create and maintain:
 - `docs/engineering/REFACTOR_LOG.md`
 
 For every changed area include:
+
 - What was wrong.
 - Why the new implementation is better.
 - Behavior preserved or intentionally changed.
@@ -129,6 +135,7 @@ For every changed area include:
 ## Completion criteria
 
 A repository is not "production grade" merely because it compiles. Completion requires:
+
 - No new lint/type errors.
 - No unreviewed unsafe casts or ignored diagnostics.
 - Critical paths covered by meaningful tests.

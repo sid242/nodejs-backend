@@ -91,7 +91,9 @@ export function registerEmailTemplatesDocs(registry: OpenAPIRegistry): void {
     security: [{ [bearerAuth.name]: [] }],
     request: { query: listEmailTemplatesQueryDto },
     responses: {
-      200: successResponse(z.object({ templates: z.array(EmailTemplateSchema), total: z.number() })),
+      200: successResponse(
+        z.object({ templates: z.array(EmailTemplateSchema), total: z.number() }),
+      ),
       401: errorResponse('Unauthorized'),
     },
   });
@@ -194,7 +196,9 @@ export function registerEmailTemplatesDocs(registry: OpenAPIRegistry): void {
       body: { content: { 'application/json': { schema: testSendEmailTemplateDto } } },
     },
     responses: {
-      200: successResponse(z.object({ success: z.boolean(), message: z.string(), renderedSubject: z.string() })),
+      200: successResponse(
+        z.object({ success: z.boolean(), message: z.string(), renderedSubject: z.string() }),
+      ),
       403: errorResponse('Forbidden: test email must target user or active member'),
       429: errorResponse('Too Many Requests'),
     },
@@ -222,7 +226,9 @@ export function registerEmailTemplatesDocs(registry: OpenAPIRegistry): void {
     security: [{ [bearerAuth.name]: [] }],
     request: { query: listSuppressionsQueryDto },
     responses: {
-      200: successResponse(z.object({ suppressions: z.array(EmailSuppressionSchema), total: z.number() })),
+      200: successResponse(
+        z.object({ suppressions: z.array(EmailSuppressionSchema), total: z.number() }),
+      ),
     },
   });
 

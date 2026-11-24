@@ -365,11 +365,7 @@ export async function listLegalHolds(tenantId?: string) {
       .where(eq(tenantLegalHolds.tenantId, tenantId))
       .orderBy(desc(tenantLegalHolds.placedAt));
   }
-  return db
-    .select()
-    .from(tenantLegalHolds)
-    .orderBy(desc(tenantLegalHolds.placedAt))
-    .limit(100);
+  return db.select().from(tenantLegalHolds).orderBy(desc(tenantLegalHolds.placedAt)).limit(100);
 }
 
 export async function isTenantUnderLegalHold(tenantId: string): Promise<boolean> {
@@ -421,10 +417,7 @@ export async function recordConsent(data: {
       })
       .where(eq(users.id, data.userId));
   } else if (data.type === 'MARKETING') {
-    await db
-      .update(users)
-      .set({ marketingOptIn: true })
-      .where(eq(users.id, data.userId));
+    await db.update(users).set({ marketingOptIn: true }).where(eq(users.id, data.userId));
   }
 
   return record;

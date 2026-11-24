@@ -62,7 +62,7 @@ You connect independent free services via environment variables. There is no Lin
      ```env
      REDIS_URL=rediss://default:your_token@your-db.upstash.io:6379
      ```
-   - *Note on Redis URL Fallbacks*: `CACHE_REDIS_URL`, `QUEUE_REDIS_URL`, and `SOCKET_REDIS_URL` automatically fall back to `REDIS_URL` in `src/config/redis.ts`, meaning you do not need 4 separate Redis clusters in free-tier environments.
+   - _Note on Redis URL Fallbacks_: `CACHE_REDIS_URL`, `QUEUE_REDIS_URL`, and `SOCKET_REDIS_URL` automatically fall back to `REDIS_URL` in `src/config/redis.ts`, meaning you do not need 4 separate Redis clusters in free-tier environments.
 
 3. **S3 Storage ([Supabase](https://supabase.com) or [Backblaze B2](https://www.backblaze.com))**:
    - In Supabase, navigate to **Project Settings -> Storage** and enable S3 Access Keys:
@@ -99,6 +99,7 @@ You connect independent free services via environment variables. There is no Lin
 
 > [!WARNING]
 > **Free Tier Limits & Sleep Warnings**:
+>
 > - **Redis Command Limits (Upstash 10k cmd/day)**: BullMQ workers continuously poll queues using Redis commands (`BRPOPLPUSH` / `BLMOVE`). On Upstash's 10,000 commands/day free allowance, polling can deplete the quota within hours. For continuous background workers, run Redis on a small persistent VM (such as Oracle Cloud Always Free) or choose an Upstash plan with higher command limits.
 > - **Idle Sleeping Hosts**: Platforms like Render put inactive free containers to sleep after 15 minutes of inactivity. Sleeping suspends WebSocket connections and delays BullMQ cron/scheduled jobs until an inbound HTTP request wakes the container. Koyeb or an Oracle Cloud Always Free VM is recommended to maintain active background scheduling.
 

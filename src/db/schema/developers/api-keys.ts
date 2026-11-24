@@ -14,10 +14,7 @@ export const apiKeys = pgTable(
     name: text('name').notNull(),
     prefix: text('prefix').notNull(), // first 8 chars of raw random token for rapid lookup
     keyHash: text('keyHash').notNull(), // sha256 hex digest of full key
-    scopes: text('scopes')
-      .array()
-      .notNull()
-      .$type<string[]>(), // permission code subset (e.g. ['files:read', 'members:read'])
+    scopes: text('scopes').array().notNull().$type<string[]>(), // permission code subset (e.g. ['files:read', 'members:read'])
     createdByMemberId: uuid('createdByMemberId').references(() => tenantMembers.id, {
       onDelete: 'set null',
     }),
@@ -26,11 +23,7 @@ export const apiKeys = pgTable(
     expiresAt: timestamp('expiresAt', { precision: 3, mode: 'date' }),
     revokedAt: timestamp('revokedAt', { precision: 3, mode: 'date' }),
     rateLimitPerMin: integer('rateLimitPerMin').notNull().default(60),
-    allowedIps: text('allowedIps')
-      .array()
-      .notNull()
-      .$type<string[]>()
-      .default([]), // Optional CIDR or IP allowlist
+    allowedIps: text('allowedIps').array().notNull().$type<string[]>().default([]), // Optional CIDR or IP allowlist
     createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updatedAt', { precision: 3, mode: 'date' })
       .notNull()

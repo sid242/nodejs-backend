@@ -13,16 +13,31 @@ export const groupSlugSchema = z
 export const createGroupDto = z.object({
   name: z.string().trim().min(1, 'Name is required').max(100, 'Name cannot exceed 100 characters'),
   slug: groupSlugSchema.optional(),
-  description: z.string().trim().max(500, 'Description cannot exceed 500 characters').optional().nullable(),
+  description: z
+    .string()
+    .trim()
+    .max(500, 'Description cannot exceed 500 characters')
+    .optional()
+    .nullable(),
 });
 
 export type CreateGroupInput = z.infer<typeof createGroupDto>;
 
 export const updateGroupDto = z
   .object({
-    name: z.string().trim().min(1, 'Name cannot be empty').max(100, 'Name cannot exceed 100 characters').optional(),
+    name: z
+      .string()
+      .trim()
+      .min(1, 'Name cannot be empty')
+      .max(100, 'Name cannot exceed 100 characters')
+      .optional(),
     slug: groupSlugSchema.optional(),
-    description: z.string().trim().max(500, 'Description cannot exceed 500 characters').optional().nullable(),
+    description: z
+      .string()
+      .trim()
+      .max(500, 'Description cannot exceed 500 characters')
+      .optional()
+      .nullable(),
     status: z.enum(['ACTIVE', 'ARCHIVED']).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
@@ -99,4 +114,3 @@ export const addPlatformGroupMembersDto = z.object({
 });
 
 export type AddPlatformGroupMembersInput = z.infer<typeof addPlatformGroupMembersDto>;
-

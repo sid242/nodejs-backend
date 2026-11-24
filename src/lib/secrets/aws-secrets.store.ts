@@ -1,6 +1,7 @@
 import { logger } from '@/config/logger';
-import type { SecretStore } from './secret-store.interface';
+
 import { EncryptedDbSecretStore } from './encrypted-db.store';
+import type { SecretStore } from './secret-store.interface';
 
 /**
  * AWS Secrets Manager Driver.
@@ -35,11 +36,7 @@ export class AwsSecretsManagerStore implements SecretStore {
         return this.fallbackStore.put(name, value, tenantId);
       }
 
-      const {
-        SecretsManagerClient,
-        CreateSecretCommand,
-        PutSecretValueCommand,
-      } = awsSdk;
+      const { SecretsManagerClient, CreateSecretCommand, PutSecretValueCommand } = awsSdk;
 
       const client = new SecretsManagerClient({});
       const secretId = `tenants/${tenantId ?? 'default'}/${name}`;
@@ -66,7 +63,10 @@ export class AwsSecretsManagerStore implements SecretStore {
 
       return secretId;
     } catch (err: unknown) {
-      logger.warn({ err }, 'AWS Secrets Manager not accessible, persisting to encrypted DB fallback');
+      logger.warn(
+        { err },
+        'AWS Secrets Manager not accessible, persisting to encrypted DB fallback',
+      );
       return this.fallbackStore.put(name, value, tenantId);
     }
   }
@@ -81,7 +81,9 @@ export class AwsSecretsManagerStore implements SecretStore {
 
       const { SecretsManagerClient, DeleteSecretCommand } = awsSdk;
       const client = new SecretsManagerClient({});
-      await client.send(new DeleteSecretCommand({ SecretId: ref, ForceDeleteWithoutRecovery: true }));
+      await client.send(
+        new DeleteSecretCommand({ SecretId: ref, ForceDeleteWithoutRecovery: true }),
+      );
     } catch {
       await this.fallbackStore.delete(ref);
     }

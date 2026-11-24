@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 
 import { asyncHandler } from '@/lib/async-handler';
 import { AppError } from '@/lib/errors';
+
 import { ScimError } from './scim.dto';
 import { scimService } from './scim.service';
 
@@ -119,11 +120,7 @@ export function handleScimErrors(err: any, _req: Request, res: Response, next: N
 
   if (err instanceof AppError) {
     const scimType =
-      err.status === 409
-        ? 'uniqueness'
-        : err.status === 400
-          ? 'invalidValue'
-          : undefined;
+      err.status === 409 ? 'uniqueness' : err.status === 400 ? 'invalidValue' : undefined;
 
     res.status(err.status).json({
       schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],

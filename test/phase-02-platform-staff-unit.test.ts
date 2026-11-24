@@ -112,7 +112,19 @@ test('Phase 02 Unit: publicPlatformStaff projection protects sensitive authentic
 
   // MUST NEVER EXPOSE SECRETS OR TOKENS
   assert.equal(exposedKeys.includes('passwordHash'), false, 'passwordHash must never be exposed');
-  assert.equal(exposedKeys.includes('twoFactorSecret'), false, 'twoFactorSecret must never be exposed');
-  assert.equal(exposedKeys.includes('twoFactorRecoveryCodes'), false, 'recovery codes must never be exposed');
-  assert.equal(exposedKeys.includes('inviteTokenHash'), false, 'inviteTokenHash must never be exposed');
+  assert.equal(
+    exposedKeys.includes('twoFactorSecret'),
+    false,
+    'twoFactorSecret must never be exposed',
+  );
+  assert.equal(
+    exposedKeys.includes('twoFactorRecoveryCodes'),
+    false,
+    'recovery codes must never be exposed',
+  );
+  assert.equal(
+    exposedKeys.includes('inviteTokenHash'),
+    false,
+    'inviteTokenHash must never be exposed',
+  );
 });

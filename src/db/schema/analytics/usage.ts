@@ -1,7 +1,16 @@
-import { bigint, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  bigint,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
-import { tenants } from '../tenancy/tenants';
 import { tenantMembers } from '../tenancy/tenant-members';
+import { tenants } from '../tenancy/tenants';
 
 // scope: tenant
 export const usageEvents = pgTable(
@@ -15,7 +24,9 @@ export const usageEvents = pgTable(
     quantity: bigint('quantity', { mode: 'number' }).notNull().default(1),
     unit: text('unit').notNull().default('count'),
     occurredAt: timestamp('occurredAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
-    actorMemberId: uuid('actorMemberId').references(() => tenantMembers.id, { onDelete: 'set null' }),
+    actorMemberId: uuid('actorMemberId').references(() => tenantMembers.id, {
+      onDelete: 'set null',
+    }),
     resourceType: text('resourceType'),
     resourceId: text('resourceId'),
     idempotencyKey: text('idempotencyKey'),

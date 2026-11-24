@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+
 import { computeAuditRowHash, GENESIS_HASH } from '../../src/modules/audit/audit.crypto';
 
 test('Audit Cryptographic Immutability Integration Invariants', async (t) => {

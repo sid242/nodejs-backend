@@ -66,9 +66,18 @@ export async function requireScimAuth(
   }
 
   // Detect IP change and audit
-  if (tokenRecord.lastUsedAt && (tokenRecord as any).lastUsedIp && (tokenRecord as any).lastUsedIp !== clientIp) {
+  if (
+    tokenRecord.lastUsedAt &&
+    (tokenRecord as any).lastUsedIp &&
+    (tokenRecord as any).lastUsedIp !== clientIp
+  ) {
     logger.info(
-      { tokenId: tokenRecord.id, tenantId: tokenRecord.tenantId, oldIp: (tokenRecord as any).lastUsedIp, newIp: clientIp },
+      {
+        tokenId: tokenRecord.id,
+        tenantId: tokenRecord.tenantId,
+        oldIp: (tokenRecord as any).lastUsedIp,
+        newIp: clientIp,
+      },
       'SCIM bearer token used from new IP address',
     );
   }
@@ -99,4 +108,3 @@ export async function requireScimAuth(
     next(err);
   }
 }
-

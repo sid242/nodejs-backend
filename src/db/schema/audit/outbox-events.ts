@@ -31,4 +31,3 @@ export const outboxEvents = pgTable(
 
 export type OutboxEvent = typeof outboxEvents.$inferSelect;
 export type NewOutboxEvent = typeof outboxEvents.$inferInsert;
-

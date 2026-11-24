@@ -9,12 +9,12 @@ import { AppError } from '@/lib/errors';
 import { logSecurityEvent } from '@/modules/audit/audit.service';
 import * as authRepo from '@/modules/auth/auth.repository';
 import { issueTokens } from '@/modules/auth/tokens';
-import { assertSsoNotEnforced } from '@/modules/sso/sso.enforcement';
 import { enforceLimit } from '@/modules/billing/billing.service';
 import * as rbacRepo from '@/modules/rbac/rbac.repository';
 import * as rbacService from '@/modules/rbac/rbac.service';
-import * as tenantsRepo from '@/modules/tenants/tenants.repository';
+import { assertSsoNotEnforced } from '@/modules/sso/sso.enforcement';
 import { buildTenantUrl } from '@/modules/tenants/tenant-url.service';
+import * as tenantsRepo from '@/modules/tenants/tenants.repository';
 import { emailQueue } from '@/queues/index';
 
 import * as invitationsRepo from './invitations.repository';
@@ -93,7 +93,9 @@ export async function createTenantInvitation(
       // Permission subset check: operator cannot grant permissions they do not possess
       const targetRolePermKeys = await rbacRepo.getRolePermissionKeys(roleId);
       const callerPermSet = new Set(callerPerms.permissions);
-      const isSubset = targetRolePermKeys.every((p) => callerPermSet.has(p) || callerPermSet.has('*'));
+      const isSubset = targetRolePermKeys.every(
+        (p) => callerPermSet.has(p) || callerPermSet.has('*'),
+      );
       if (!isSubset) {
         throw AppError.forbidden('Cannot invite a member with permissions exceeding your own role');
       }
@@ -189,7 +191,11 @@ export async function listTenantInvitations(tenantId: string) {
   return invitationsRepo.listInvitations(tenantId);
 }
 
-export async function revokeTenantInvitation(tenantId: string, invitationId: string, actorUserId?: string) {
+export async function revokeTenantInvitation(
+  tenantId: string,
+  invitationId: string,
+  actorUserId?: string,
+) {
   const invitation = await invitationsRepo.findInvitationById(tenantId, invitationId);
   if (!invitation) throw AppError.notFound('Invitation not found');
   if (invitation.status !== 'PENDING') {
@@ -264,7 +270,9 @@ export async function previewInvitation(token: string) {
 
   if (invitation) {
     if (invitation.status !== 'PENDING') {
-      throw AppError.badRequest(`This invitation has already been ${invitation.status.toLowerCase()}`);
+      throw AppError.badRequest(
+        `This invitation has already been ${invitation.status.toLowerCase()}`,
+      );
     }
 
     if (new Date() > new Date(invitation.expiresAt)) {
@@ -290,7 +298,9 @@ export async function previewInvitation(token: string) {
   const [magicToken] = await db
     .select()
     .from(verificationTokens)
-    .where(and(eq(verificationTokens.tokenHash, tokenHash), eq(verificationTokens.type, 'MAGIC_LINK')))
+    .where(
+      and(eq(verificationTokens.tokenHash, tokenHash), eq(verificationTokens.type, 'MAGIC_LINK')),
+    )
     .limit(1);
 
   if (magicToken) {
@@ -352,7 +362,9 @@ export async function acceptTenantInvitation(
 
   if (invitation) {
     if (invitation.status !== 'PENDING') {
-      throw AppError.badRequest(`This invitation has already been ${invitation.status.toLowerCase()}`);
+      throw AppError.badRequest(
+        `This invitation has already been ${invitation.status.toLowerCase()}`,
+      );
     }
 
     if (new Date() > new Date(invitation.expiresAt)) {
@@ -394,7 +406,9 @@ export async function acceptTenantInvitation(
     } else {
       // New user path: requires name & password to set up new account
       if (!dto.password || dto.password.length < 8) {
-        throw AppError.badRequest('Password of at least 8 characters is required to create your account');
+        throw AppError.badRequest(
+          'Password of at least 8 characters is required to create your account',
+        );
       }
 
       const first =
@@ -402,10 +416,7 @@ export async function acceptTenantInvitation(
         invitation.firstName ||
         normalizedInvitedEmail.split('@')[0] ||
         'User';
-      const last =
-        dto.lastName?.trim() ||
-        invitation.lastName ||
-        'Member';
+      const last = dto.lastName?.trim() || invitation.lastName || 'Member';
       const passwordHash = await bcrypt.hash(dto.password, 12);
 
       const createdUser = await invitationsRepo.createInvitedUser({
@@ -473,7 +484,9 @@ export async function acceptTenantInvitation(
   const [magicToken] = await db
     .select()
     .from(verificationTokens)
-    .where(and(eq(verificationTokens.tokenHash, tokenHash), eq(verificationTokens.type, 'MAGIC_LINK')))
+    .where(
+      and(eq(verificationTokens.tokenHash, tokenHash), eq(verificationTokens.type, 'MAGIC_LINK')),
+    )
     .limit(1);
 
   if (!magicToken) {
@@ -511,9 +524,7 @@ export async function acceptTenantInvitation(
     targetTenantId: boundTenantId,
   });
 
-  const isPendingUser =
-    !targetUser.emailVerifiedAt ||
-    targetUser.status === 'PENDING_VERIFICATION';
+  const isPendingUser = !targetUser.emailVerifiedAt || targetUser.status === 'PENDING_VERIFICATION';
 
   let userForTokens: PublicUser;
 

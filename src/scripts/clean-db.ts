@@ -15,12 +15,7 @@ import {
 
 const DEMO_PASSWORD = 'Password@123456';
 
-const KEEP_TENANT_SLUGS = [
-  'acme-realty',
-  'nexus-estates',
-  'apex-dynamics',
-  'starlight-ventures',
-];
+const KEEP_TENANT_SLUGS = ['acme-realty', 'nexus-estates', 'apex-dynamics', 'starlight-ventures'];
 
 const KEEP_USER_EMAILS = [
   'sid.superadmin@yopmail.com',
@@ -183,7 +178,9 @@ async function main() {
   const finalUsers = await db.select().from(users);
   console.log(`\nActive Users (${finalUsers.length}):`);
   finalUsers.forEach((u) =>
-    console.log(`  - <${u.email}> "${u.firstName} ${u.lastName ?? ''}".trim() (Status: ${u.status})`),
+    console.log(
+      `  - <${u.email}> "${u.firstName} ${u.lastName ?? ''}".trim() (Status: ${u.status})`,
+    ),
   );
 
   const finalStaff = await db.select().from(platformStaff);

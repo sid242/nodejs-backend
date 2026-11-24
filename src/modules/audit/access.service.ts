@@ -204,13 +204,16 @@ export async function getEffectiveAccess(
       ),
     );
 
-  const groupsMap = new Map<string, {
-    id: string;
-    name: string;
-    slug: string;
-    status: string;
-    roles: Array<{ id: string; name: string; code: string }>;
-  }>();
+  const groupsMap = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      slug: string;
+      status: string;
+      roles: Array<{ id: string; name: string; code: string }>;
+    }
+  >();
 
   const groupRoles: Array<{
     id: string;
@@ -367,7 +370,9 @@ export async function simulateAccess(
   input: SimulateAccessDto,
 ): Promise<SimulationResult> {
   const trace: string[] = [];
-  trace.push(`[INIT] Starting access simulation for user "${input.userId}" on tenant "${tenantId}".`);
+  trace.push(
+    `[INIT] Starting access simulation for user "${input.userId}" on tenant "${tenantId}".`,
+  );
   trace.push(`[CHECK] Target permission evaluated: "${input.permission}".`);
 
   // Step 1: Check Tenant
@@ -389,7 +394,9 @@ export async function simulateAccess(
   }
 
   if (tenant.status !== 'ACTIVE') {
-    trace.push(`[DENY] Workspace status is "${tenant.status}". Only ACTIVE workspaces permit access.`);
+    trace.push(
+      `[DENY] Workspace status is "${tenant.status}". Only ACTIVE workspaces permit access.`,
+    );
     return {
       allowed: false,
       reason: `Workspace status is "${tenant.status}". Operations are suspended.`,
@@ -419,7 +426,9 @@ export async function simulateAccess(
   }
 
   if (user.status !== 'ACTIVE') {
-    trace.push(`[DENY] User status is "${user.status}". Inactive user accounts cannot access resources.`);
+    trace.push(
+      `[DENY] User status is "${user.status}". Inactive user accounts cannot access resources.`,
+    );
     return {
       allowed: false,
       reason: `User account is "${user.status}".`,

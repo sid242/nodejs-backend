@@ -66,11 +66,7 @@ export function isPrivateOrReservedHost(host: string): boolean {
   }
 
   // IPv6 checks
-  if (
-    normalized.startsWith('fc') ||
-    normalized.startsWith('fd') ||
-    normalized.startsWith('fe80')
-  ) {
+  if (normalized.startsWith('fc') || normalized.startsWith('fd') || normalized.startsWith('fe80')) {
     return true;
   }
 
@@ -143,7 +139,11 @@ export async function sendEmail({
   replyTo,
   relatedEntityType,
   relatedEntityId,
-}: SendEmailOptions): Promise<{ success: boolean; messageId?: string; skippedSuppressed?: boolean }> {
+}: SendEmailOptions): Promise<{
+  success: boolean;
+  messageId?: string;
+  skippedSuppressed?: boolean;
+}> {
   const normalizedTo = to.toLowerCase().trim();
 
   // Check suppression list if tenant-scoped

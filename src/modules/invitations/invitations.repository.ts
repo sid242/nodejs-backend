@@ -1,8 +1,6 @@
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 
 import type { DbExecutor } from '@/config/db';
-import { assertTenantScope, primaryDbHandle, tenantDb } from '@/db/tenancy/context';
-import { attachUsers } from '@/lib/attach-users';
 import {
   roles,
   tenantInvitations,
@@ -14,6 +12,8 @@ import {
   type TenantInvitation,
   type User,
 } from '@/db/schema';
+import { assertTenantScope, primaryDbHandle, tenantDb } from '@/db/tenancy/context';
+import { attachUsers } from '@/lib/attach-users';
 
 export interface InvitationWithDetails extends TenantInvitation {
   roleName?: string;
@@ -56,7 +56,9 @@ export async function findInvitationByTokenHash(
       .from(users)
       .where(eq(users.id, invitation.invitedByUserId))
       .limit(1);
-    invitedByName = inviter ? [inviter.firstName, inviter.lastName].filter(Boolean).join(' ') : null;
+    invitedByName = inviter
+      ? [inviter.firstName, inviter.lastName].filter(Boolean).join(' ')
+      : null;
   }
 
   return {
@@ -123,7 +125,9 @@ export async function findInvitationById(
       .from(users)
       .where(eq(users.id, invitation.invitedByUserId))
       .limit(1);
-    invitedByName = inviter ? [inviter.firstName, inviter.lastName].filter(Boolean).join(' ') : null;
+    invitedByName = inviter
+      ? [inviter.firstName, inviter.lastName].filter(Boolean).join(' ')
+      : null;
   }
 
   return {
@@ -285,10 +289,14 @@ export async function executeAcceptanceTransaction(
         .set({
           status: 'ACTIVE',
           deletedAt: null,
-          ...(data.memberMetadata?.memberCode ? { memberCode: data.memberMetadata.memberCode } : {}),
+          ...(data.memberMetadata?.memberCode
+            ? { memberCode: data.memberMetadata.memberCode }
+            : {}),
           ...(data.memberMetadata?.phone ? { phone: data.memberMetadata.phone } : {}),
           ...(data.memberMetadata?.jobTitle ? { jobTitle: data.memberMetadata.jobTitle } : {}),
-          ...(data.memberMetadata?.department ? { department: data.memberMetadata.department } : {}),
+          ...(data.memberMetadata?.department
+            ? { department: data.memberMetadata.department }
+            : {}),
         })
         .where(eq(tenantMembers.id, existingMember.id));
       memberId = existingMember.id;

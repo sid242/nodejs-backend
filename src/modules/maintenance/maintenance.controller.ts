@@ -21,6 +21,10 @@ export const getTenantMaintenance = asyncHandler(async (req: Request, res: Respo
 });
 
 export const setTenantMaintenance = asyncHandler(async (req: Request, res: Response) => {
-  const state = await service.setTenantMaintenance(String(req.params.tenantId), req.body, req.staff?.id);
+  const state = await service.setTenantMaintenance(
+    String(req.params.tenantId),
+    req.body,
+    req.staff?.id,
+  );
   return AppResponse.ok(state, 'Tenant maintenance mode updated').send(res);
 });

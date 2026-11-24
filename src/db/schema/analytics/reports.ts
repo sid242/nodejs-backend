@@ -1,7 +1,7 @@
 import { index, integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
-import { tenants } from '../tenancy/tenants';
 import { users } from '../identity/users';
+import { tenants } from '../tenancy/tenants';
 
 // scope: tenant
 export const reportDefinitions = pgTable(

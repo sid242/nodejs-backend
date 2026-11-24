@@ -67,7 +67,9 @@ router.get(
     }
 
     const entitlements = await getTenantEntitlements(branding?.tenantId);
-    const isSubscriptionActive = ['ACTIVE', 'TRIALING'].includes(entitlements?.subscriptionStatus ?? '');
+    const isSubscriptionActive = ['ACTIVE', 'TRIALING'].includes(
+      entitlements?.subscriptionStatus ?? '',
+    );
     const hasCustomDomainEntitlement = Boolean(entitlements?.limits?.urlAccess?.customDomain);
 
     if (!isSubscriptionActive || !hasCustomDomainEntitlement) {

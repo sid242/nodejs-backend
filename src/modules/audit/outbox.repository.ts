@@ -1,11 +1,7 @@
 import { asc, eq, sql } from 'drizzle-orm';
 
 import { db, type DbExecutor } from '@/config/db';
-import {
-  outboxEvents,
-  type NewOutboxEvent,
-  type OutboxEvent,
-} from '@/db/schema/index';
+import { outboxEvents, type NewOutboxEvent, type OutboxEvent } from '@/db/schema/index';
 
 /**
  * Inserts an event into the transactional outbox table within the caller's transaction/executor.

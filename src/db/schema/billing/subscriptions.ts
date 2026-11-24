@@ -12,8 +12,8 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { actorTypeEnum, subscriptionStatusEnum } from '../enums';
-import { plans } from './plans';
 import { tenants } from '../tenancy/tenants';
+import { plans } from './plans';
 
 // scope: primary
 export const subscriptions = pgTable(

@@ -22,7 +22,13 @@ export const updateTenantSsoConfigDto = z.object({
   oidcDiscoveryUrl: z.string().url('Must be a valid URL').optional().nullable(),
   enforceSso: z.boolean().default(false),
   allowedDomains: z
-    .array(z.string().trim().toLowerCase().regex(/^[a-z0-9.-]+\.[a-z]{2,}$/i, 'Invalid domain format'))
+    .array(
+      z
+        .string()
+        .trim()
+        .toLowerCase()
+        .regex(/^[a-z0-9.-]+\.[a-z]{2,}$/i, 'Invalid domain format'),
+    )
     .default([]),
   defaultRoleId: z.string().uuid().optional().nullable(),
   jitProvisioning: z.boolean().default(true),

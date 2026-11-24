@@ -1,11 +1,5 @@
 import { relations } from 'drizzle-orm';
-import {
-  pgTable,
-  text,
-  timestamp,
-  uniqueIndex,
-  uuid,
-} from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import { tenants } from './tenants';
 
@@ -30,9 +24,7 @@ export const tenantSecrets = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  (table) => [
-    uniqueIndex('tenant_secrets_tenant_name_unique').on(table.tenantId, table.name),
-  ],
+  (table) => [uniqueIndex('tenant_secrets_tenant_name_unique').on(table.tenantId, table.name)],
 );
 
 export const tenantSecretsRelations = relations(tenantSecrets, ({ one }) => ({

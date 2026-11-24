@@ -1,4 +1,13 @@
-import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import {
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 
 import { tenants } from '../tenancy/tenants';
 import { plans } from './plans';
@@ -23,9 +32,7 @@ export const entitlementDefinitions = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  (table) => [
-    uniqueIndex('EntitlementDefinition_key_unique').on(table.key),
-  ],
+  (table) => [uniqueIndex('EntitlementDefinition_key_unique').on(table.key)],
 );
 
 // scope: primary
@@ -106,9 +113,7 @@ export const billingWebhooks = pgTable(
     eventType: text('eventType').notNull(),
     payload: jsonb('payload').notNull(),
     status: text('status').notNull().default('PROCESSED'), // 'PENDING', 'PROCESSED', 'FAILED'
-    processedAt: timestamp('processedAt', { precision: 3, mode: 'date' })
-      .notNull()
-      .defaultNow(),
+    processedAt: timestamp('processedAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
     errorMessage: text('errorMessage'),
     createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
   },
@@ -128,4 +133,3 @@ export type TenantUsageRecord = typeof tenantUsageRecords.$inferSelect;
 export type NewTenantUsageRecord = typeof tenantUsageRecords.$inferInsert;
 export type BillingWebhook = typeof billingWebhooks.$inferSelect;
 export type NewBillingWebhook = typeof billingWebhooks.$inferInsert;
-

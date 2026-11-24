@@ -10,7 +10,10 @@ export interface EmailTemplateResult {
   html: string;
 }
 
-export function renderWelcomeEmail({ name, branding }: RenderWelcomeEmailOptions): EmailTemplateResult {
+export function renderWelcomeEmail({
+  name,
+  branding,
+}: RenderWelcomeEmailOptions): EmailTemplateResult {
   const companyName = branding?.companyName;
   const subject = companyName ? `Welcome to ${companyName}!` : 'Welcome aboard!';
   const previewText = companyName

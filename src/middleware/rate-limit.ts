@@ -212,7 +212,8 @@ export const scimLimiter = rateLimit({
     res.status(429).json({
       schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
       status: '429',
-      detail: 'Too many requests. SCIM rate limit exceeded (100 req/min). Please retry after cooldown.',
+      detail:
+        'Too many requests. SCIM rate limit exceeded (100 req/min). Please retry after cooldown.',
     });
   },
 });

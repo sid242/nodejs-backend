@@ -22,7 +22,10 @@ export async function processNotification(job: Job): Promise<void> {
       }
 
       if (!targetEmail) {
-        logger.warn({ jobId: job.id, userId }, 'Skipping notification email: recipient email not found');
+        logger.warn(
+          { jobId: job.id, userId },
+          'Skipping notification email: recipient email not found',
+        );
         return;
       }
 

@@ -2,8 +2,8 @@ import type { NextFunction, Request, Response } from 'express';
 
 import { ACCESS_TOKEN_COOKIE, AUTH_HEADERS } from '@/constants/index';
 import { AppError } from '@/lib/errors';
-import { verifyAccessToken, verifySupportToken } from '@/modules/auth/tokens';
 import { isSupportDeniedRoute } from '@/middleware/support';
+import { verifyAccessToken, verifySupportToken } from '@/modules/auth/tokens';
 
 export async function requireAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
   let token: string | undefined;

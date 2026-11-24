@@ -17,7 +17,9 @@ function getTenantId(req: Request): string {
 function getInvitationId(req: Request): string {
   const raw =
     (Array.isArray(req.params?.invId) ? req.params.invId[0] : req.params?.invId) ??
-    (Array.isArray(req.params?.invitationId) ? req.params.invitationId[0] : req.params?.invitationId) ??
+    (Array.isArray(req.params?.invitationId)
+      ? req.params.invitationId[0]
+      : req.params?.invitationId) ??
     (Array.isArray(req.params?.id) ? req.params.id[0] : req.params?.id);
   return String(raw ?? '');
 }
@@ -41,11 +43,7 @@ export const listInvitations = asyncHandler(async (req: Request, res: Response) 
 export const revokeInvitation = asyncHandler(async (req: Request, res: Response) => {
   const tenantId = getTenantId(req);
   const invId = getInvitationId(req);
-  const revoked = await invitationsService.revokeTenantInvitation(
-    tenantId,
-    invId,
-    req.user?.id,
-  );
+  const revoked = await invitationsService.revokeTenantInvitation(tenantId, invId, req.user?.id);
   return AppResponse.ok(revoked, 'Invitation revoked successfully').send(res);
 });
 

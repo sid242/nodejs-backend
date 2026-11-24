@@ -10,12 +10,14 @@ Database credentials, OIDC client secrets, and SMTP passwords are encrypted usin
 `v1:{keyId}:{ivHex}:{authTagHex}:{ciphertextHex}`
 
 ### Keyring Architecture
+
 - `ENCRYPTION_KEYS`: Comma-separated map of Key IDs to raw 32-byte secret values, e.g.:
   `ENCRYPTION_KEYS="k1:secret_alpha_32chars_minimum...,k2:secret_bravo_32chars_minimum..."`
 - `ENCRYPTION_ACTIVE_KEY`: The Key ID used for new writes and encryptions, e.g.:
   `ENCRYPTION_ACTIVE_KEY="k2"`
 
 ### Rotation Procedure
+
 1. **Generate New Key**: Generate a cryptographically random 32+ character key.
 2. **Add to Keyring without Switching Active**:
    Add the new key `k2` alongside the existing key `k1`:
@@ -50,11 +52,14 @@ Database credentials, OIDC client secrets, and SMTP passwords are encrypted usin
 The Next.js BFF and Express API authenticate internal proxy calls and tenant context overrides using `x-bff-secret`.
 
 ### Dual-Key Rollover Support
+
 The backend middleware accepts two simultaneous secrets during rotation:
+
 - `BFF_SHARED_SECRET`: The primary active secret.
 - `BFF_SHARED_SECRET_PREVIOUS`: The retired secret accepted during the rollover window.
 
 ### Rotation Procedure
+
 1. **Prepare New Secret**:
    Generate a new high-entropy string (≥32 chars): `new_bff_secret_xyz...`.
 2. **Deploy Backend with Dual Verification**:
@@ -81,11 +86,13 @@ The backend middleware accepts two simultaneous secrets during rotation:
 ## 3. JWT Access & Refresh Secrets
 
 ### JWT Access Secret (`JWT_ACCESS_SECRET`)
+
 - **TTL**: 15 minutes.
 - **Strategy**: Because access tokens expire in 15 minutes, rotating `JWT_ACCESS_SECRET` causes clients to refresh their tokens via their refresh token.
 - To achieve 100% zero re-login, rotate `JWT_ACCESS_SECRET` during low-traffic windows or verify against a dual-key window.
 
 ### JWT Refresh Secret (`JWT_REFRESH_SECRET`)
+
 - Refresh tokens are stored hashed (SHA-256) in Redis (`refresh_token:{hash}`).
 - Rotating `JWT_REFRESH_SECRET` can be performed by verifying tokens against `JWT_REFRESH_SECRET_PREVIOUS` during a 7-day rolling window if needed.
 
@@ -94,4 +101,5 @@ The backend middleware accepts two simultaneous secrets during rotation:
 ## 4. Internal API Secret (`INTERNAL_API_SECRET`)
 
 Used for secure service-to-service calls (e.g. domain verification webhooks, cron trigger workers).
+
 - Supports rolling replacement by deploying consumer and producer updates in lockstep.

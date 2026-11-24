@@ -2,8 +2,8 @@ import { index, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/
 
 import { accountDeletionStatusEnum } from '../enums';
 import { users } from '../identity/users';
-import { tenants } from '../tenancy/tenants';
 import { platformStaff } from '../platform/platform-staff';
+import { tenants } from '../tenancy/tenants';
 
 // scope: primary
 export const accountDeletionRequests = pgTable(

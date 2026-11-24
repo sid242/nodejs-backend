@@ -113,9 +113,13 @@ export const roles = pgTable(
     index('AppRole_tenantId_createdAt_idx').on(table.tenantId, table.createdAt),
     index('AppRole_scope_idx').on(table.scope),
     index('AppRole_isActive_idx').on(table.isActive),
-    uniqueIndex('AppRole_tenant_name_unique').on(table.tenantId, table.name).where(isNotNull(table.tenantId)),
+    uniqueIndex('AppRole_tenant_name_unique')
+      .on(table.tenantId, table.name)
+      .where(isNotNull(table.tenantId)),
     uniqueIndex('AppRole_system_name_unique').on(table.name).where(isNull(table.tenantId)),
-    uniqueIndex('AppRole_tenant_code_unique').on(table.tenantId, table.code).where(isNotNull(table.tenantId)),
+    uniqueIndex('AppRole_tenant_code_unique')
+      .on(table.tenantId, table.code)
+      .where(isNotNull(table.tenantId)),
     uniqueIndex('AppRole_system_code_unique').on(table.code).where(isNull(table.tenantId)),
   ],
 );

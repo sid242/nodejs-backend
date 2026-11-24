@@ -16,7 +16,9 @@ export function renderVerifyEmail({
 }: RenderVerifyEmailOptions): EmailTemplateResult {
   const primaryColor = branding?.primaryColor ?? '#4f46e5';
   const companyName = branding?.companyName;
-  const subject = companyName ? `Verify your email address for ${companyName}` : 'Verify your email address';
+  const subject = companyName
+    ? `Verify your email address for ${companyName}`
+    : 'Verify your email address';
   const previewText = 'Confirm your email address to secure your account.';
 
   const bodyContent = `

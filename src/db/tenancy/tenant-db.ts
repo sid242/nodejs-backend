@@ -116,8 +116,7 @@ export async function getTenantDb(tenantOrId?: TenantRoutingInput): Promise<Data
   try {
     const metadata = tenant.metadata as Record<string, unknown> | null | undefined;
     const dedicatedDbName =
-      (metadata?.databaseName as string) ||
-      `tenant_${tenant.id.replace(/-/g, '_')}`;
+      (metadata?.databaseName as string) || `tenant_${tenant.id.replace(/-/g, '_')}`;
 
     let baseConnectionUrl: string | null = null;
     if (tenant.databaseSecretRef) {
@@ -141,7 +140,10 @@ export async function getTenantDb(tenantOrId?: TenantRoutingInput): Promise<Data
 
     // Fast probe to verify database connectivity before caching pool
     await dedicatedClient`SELECT 1`.catch((probeErr) => {
-      logger.warn({ probeErr, tenantId: tenant.id }, 'Initial connectivity check to dedicated tenant database failed');
+      logger.warn(
+        { probeErr, tenantId: tenant.id },
+        'Initial connectivity check to dedicated tenant database failed',
+      );
       throw probeErr;
     });
 
@@ -201,12 +203,14 @@ export async function checkTenantDbHealth(
       if (record) {
         mode = record.databaseMode;
         key = record.databaseKey;
-        dbName = (record.metadata as Record<string, unknown> | null)?.databaseName as string | undefined;
+        dbName = (record.metadata as Record<string, unknown> | null)?.databaseName as
+          string | undefined;
       }
     } else if (tenantOrId) {
       mode = tenantOrId.databaseMode ?? 'shared';
       key = tenantOrId.databaseKey ?? 'primary';
-      dbName = (tenantOrId.metadata as Record<string, unknown> | null)?.databaseName as string | undefined;
+      dbName = (tenantOrId.metadata as Record<string, unknown> | null)?.databaseName as
+        string | undefined;
     }
 
     return {
@@ -299,10 +303,7 @@ export function initTenantDbInvalidationSubscriber(): void {
  * Closes and evicts a specific dedicated database pool from cache.
  * If broadcast is true, notifies all other cluster instances via Redis pub/sub.
  */
-export async function closeDedicatedPool(
-  poolKey: string,
-  broadcast = true,
-): Promise<boolean> {
+export async function closeDedicatedPool(poolKey: string, broadcast = true): Promise<boolean> {
   const entry = dedicatedPools.get(poolKey);
   if (entry) {
     try {

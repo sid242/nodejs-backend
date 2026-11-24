@@ -24,12 +24,14 @@ export async function listStates(): Promise<GeoItem[]> {
     .where(and(eq(geoEntities.levelId, GEO_LEVEL.STATE), eq(geoEntities.isActive, true)))
     .orderBy(asc(geoEntities.name));
 
-  return rows?.map((r) => ({
-    id: r.id,
-    name: r.name,
-    code: r.code,
-    levelId: r.levelId,
-  })) ?? [];
+  return (
+    rows?.map((r) => ({
+      id: r.id,
+      name: r.name,
+      code: r.code,
+      levelId: r.levelId,
+    })) ?? []
+  );
 }
 
 export async function listChildren(
@@ -57,12 +59,14 @@ export async function listChildren(
     .orderBy(asc(geoEntities.name))
     .limit(limit);
 
-  return rows?.map((r) => ({
-    id: r.id,
-    name: r.name,
-    code: r.code,
-    levelId: r.levelId,
-  })) ?? [];
+  return (
+    rows?.map((r) => ({
+      id: r.id,
+      name: r.name,
+      code: r.code,
+      levelId: r.levelId,
+    })) ?? []
+  );
 }
 
 export async function findByIds(ids: number[]) {
@@ -111,13 +115,15 @@ export async function ancestorChainOf(entityId: number): Promise<any[]> {
     SELECT id, parent_id, level_id, name, source_code AS code FROM up ORDER BY level_id ASC`);
 
   const list = Array.isArray(rows) ? rows : (rows?.rows ?? []);
-  return list?.map((item: any) => ({
-    id: Number(item.id),
-    parentId: item.parent_id ? Number(item.parent_id) : null,
-    levelId: Number(item.level_id),
-    name: String(item.name),
-    code: item.code ? String(item.code) : null,
-  })) ?? [];
+  return (
+    list?.map((item: any) => ({
+      id: Number(item.id),
+      parentId: item.parent_id ? Number(item.parent_id) : null,
+      levelId: Number(item.level_id),
+      name: String(item.name),
+      code: item.code ? String(item.code) : null,
+    })) ?? []
+  );
 }
 
 export async function lookupPoint(lat: number, lng: number): Promise<any[]> {
@@ -125,12 +131,14 @@ export async function lookupPoint(lat: number, lng: number): Promise<any[]> {
     sql`SELECT level, entity_id AS id, name, source_code AS code FROM geo.geo_lookup(${lat}, ${lng})`,
   );
   const list = Array.isArray(rows) ? rows : (rows?.rows ?? []);
-  return list?.map((item: any) => ({
-    level: item.level,
-    id: item.id ? Number(item.id) : null,
-    name: item.name,
-    code: item.code,
-  })) ?? [];
+  return (
+    list?.map((item: any) => ({
+      level: item.level,
+      id: item.id ? Number(item.id) : null,
+      name: item.name,
+      code: item.code,
+    })) ?? []
+  );
 }
 
 export const geoRepo = {

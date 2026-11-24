@@ -1,17 +1,13 @@
 import assert from 'node:assert/strict';
 import { after, describe, it } from 'node:test';
 
-import {
-  bindRoleDto,
-  groupRoleParamsDto,
-  listGroupsQueryDto,
-} from '@/modules/groups/groups.dto';
-import * as groupsService from '@/modules/groups/groups.service';
-import { groupsRepo } from '@/modules/groups/groups.repository';
-import { rbacRepo } from '@/modules/rbac/rbac.repository';
-import { cache } from '@/lib/cache';
-import { closeRedisClients } from '@/config/redis';
 import { closeDb } from '@/config/db';
+import { closeRedisClients } from '@/config/redis';
+import { cache } from '@/lib/cache';
+import { bindRoleDto, groupRoleParamsDto, listGroupsQueryDto } from '@/modules/groups/groups.dto';
+import { groupsRepo } from '@/modules/groups/groups.repository';
+import * as groupsService from '@/modules/groups/groups.service';
+import { rbacRepo } from '@/modules/rbac/rbac.repository';
 
 describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
   const mockTenantId = '11111111-1111-1111-1111-111111111111';
@@ -95,13 +91,14 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
 
     it('throws 400 when attempting to bind a role to an ARCHIVED group', async () => {
       const origFindGroup = groupsRepo.findGroupById;
-      groupsRepo.findGroupById = async () => ({
-        id: mockGroupId,
-        name: 'Archived Group',
-        status: 'ARCHIVED',
-        scope: 'TENANT',
-        tenantId: mockTenantId,
-      } as any);
+      groupsRepo.findGroupById = async () =>
+        ({
+          id: mockGroupId,
+          name: 'Archived Group',
+          status: 'ARCHIVED',
+          scope: 'TENANT',
+          tenantId: mockTenantId,
+        }) as any;
 
       try {
         await assert.rejects(
@@ -125,20 +122,22 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
       const origFindGroup = groupsRepo.findGroupById;
       const origFindRole = rbacRepo.findRoleById;
 
-      groupsRepo.findGroupById = async () => ({
-        id: mockGroupId,
-        name: 'Active Group',
-        status: 'ACTIVE',
-        scope: 'TENANT',
-        tenantId: mockTenantId,
-      } as any);
+      groupsRepo.findGroupById = async () =>
+        ({
+          id: mockGroupId,
+          name: 'Active Group',
+          status: 'ACTIVE',
+          scope: 'TENANT',
+          tenantId: mockTenantId,
+        }) as any;
 
-      rbacRepo.findRoleById = async () => ({
-        id: mockRoleId,
-        name: 'Platform Staff Admin',
-        scope: 'PLATFORM',
-        tenantId: null,
-      } as any);
+      rbacRepo.findRoleById = async () =>
+        ({
+          id: mockRoleId,
+          name: 'Platform Staff Admin',
+          scope: 'PLATFORM',
+          tenantId: null,
+        }) as any;
 
       try {
         await assert.rejects(
@@ -163,20 +162,22 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
       const origFindGroup = groupsRepo.findGroupById;
       const origFindRole = rbacRepo.findRoleById;
 
-      groupsRepo.findGroupById = async () => ({
-        id: mockGroupId,
-        name: 'Active Group',
-        status: 'ACTIVE',
-        scope: 'TENANT',
-        tenantId: mockTenantId,
-      } as any);
+      groupsRepo.findGroupById = async () =>
+        ({
+          id: mockGroupId,
+          name: 'Active Group',
+          status: 'ACTIVE',
+          scope: 'TENANT',
+          tenantId: mockTenantId,
+        }) as any;
 
-      rbacRepo.findRoleById = async () => ({
-        id: mockRoleId,
-        name: 'Foreign Org Manager',
-        scope: 'TENANT',
-        tenantId: '99999999-9999-9999-9999-999999999999', // Different tenant
-      } as any);
+      rbacRepo.findRoleById = async () =>
+        ({
+          id: mockRoleId,
+          name: 'Foreign Org Manager',
+          scope: 'TENANT',
+          tenantId: '99999999-9999-9999-9999-999999999999', // Different tenant
+        }) as any;
 
       try {
         await assert.rejects(
@@ -206,20 +207,22 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
       let boundRoleCall: { groupId: string; roleId: string } | null = null;
       let invalidatedPrefix = '';
 
-      groupsRepo.findGroupById = async () => ({
-        id: mockGroupId,
-        name: 'Finance Team',
-        status: 'ACTIVE',
-        scope: 'TENANT',
-        tenantId: mockTenantId,
-      } as any);
+      groupsRepo.findGroupById = async () =>
+        ({
+          id: mockGroupId,
+          name: 'Finance Team',
+          status: 'ACTIVE',
+          scope: 'TENANT',
+          tenantId: mockTenantId,
+        }) as any;
 
-      rbacRepo.findRoleById = async () => ({
-        id: mockRoleId,
-        name: 'Finance Manager',
-        scope: 'TENANT',
-        tenantId: mockTenantId,
-      } as any);
+      rbacRepo.findRoleById = async () =>
+        ({
+          id: mockRoleId,
+          name: 'Finance Manager',
+          scope: 'TENANT',
+          tenantId: mockTenantId,
+        }) as any;
 
       groupsRepo.bindRoleToGroup = async (gId: string, rId: string) => {
         boundRoleCall = { groupId: gId, roleId: rId };
@@ -264,13 +267,14 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
       const boundRoleCalls: Array<{ groupId: string; roleId: string }> = [];
       let invalidatedPrefix = '';
 
-      groupsRepo.findGroupById = async () => ({
-        id: mockGroupId,
-        name: 'Sales Team',
-        status: 'ACTIVE',
-        scope: 'TENANT',
-        tenantId: mockTenantId,
-      } as any);
+      groupsRepo.findGroupById = async () =>
+        ({
+          id: mockGroupId,
+          name: 'Sales Team',
+          status: 'ACTIVE',
+          scope: 'TENANT',
+          tenantId: mockTenantId,
+        }) as any;
 
       rbacRepo.findRoleById = async (id: string) => {
         if (id === mockRoleId) {
@@ -333,18 +337,20 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
       const origFindRole = rbacRepo.findRoleById;
       const origUnbind = groupsRepo.unbindRoleFromGroup;
 
-      groupsRepo.findGroupById = async () => ({
-        id: mockGroupId,
-        name: 'Finance Team',
-        status: 'ACTIVE',
-        scope: 'TENANT',
-        tenantId: mockTenantId,
-      } as any);
+      groupsRepo.findGroupById = async () =>
+        ({
+          id: mockGroupId,
+          name: 'Finance Team',
+          status: 'ACTIVE',
+          scope: 'TENANT',
+          tenantId: mockTenantId,
+        }) as any;
 
-      rbacRepo.findRoleById = async () => ({
-        id: mockRoleId,
-        name: 'Finance Manager',
-      } as any);
+      rbacRepo.findRoleById = async () =>
+        ({
+          id: mockRoleId,
+          name: 'Finance Manager',
+        }) as any;
 
       groupsRepo.unbindRoleFromGroup = async () => false;
 
@@ -380,18 +386,20 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
       let unbindCall: { groupId: string; roleId: string } | null = null;
       let invalidatedPrefix = '';
 
-      groupsRepo.findGroupById = async () => ({
-        id: mockGroupId,
-        name: 'Finance Team',
-        status: 'ACTIVE',
-        scope: 'TENANT',
-        tenantId: mockTenantId,
-      } as any);
+      groupsRepo.findGroupById = async () =>
+        ({
+          id: mockGroupId,
+          name: 'Finance Team',
+          status: 'ACTIVE',
+          scope: 'TENANT',
+          tenantId: mockTenantId,
+        }) as any;
 
-      rbacRepo.findRoleById = async () => ({
-        id: mockRoleId,
-        name: 'Finance Manager',
-      } as any);
+      rbacRepo.findRoleById = async () =>
+        ({
+          id: mockRoleId,
+          name: 'Finance Manager',
+        }) as any;
 
       groupsRepo.unbindRoleFromGroup = async (gId: string, rId: string) => {
         unbindCall = { groupId: gId, roleId: rId };
@@ -427,11 +435,12 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
       const origFindGroup = groupsRepo.findGroupById;
       const origContributed = groupsRepo.getGroupContributedPermissions;
 
-      groupsRepo.findGroupById = async () => ({
-        id: mockGroupId,
-        name: 'Empty Group',
-        status: 'ACTIVE',
-      } as any);
+      groupsRepo.findGroupById = async () =>
+        ({
+          id: mockGroupId,
+          name: 'Empty Group',
+          status: 'ACTIVE',
+        }) as any;
 
       groupsRepo.getGroupContributedPermissions = async () => [];
 
@@ -449,16 +458,8 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
     it('calculates effective permissions unioning direct roles and active group roles with provenance', async () => {
       const origEffective = rbacRepo.getEffectivePermissions;
 
-      rbacRepo.getEffectivePermissions = async (
-        _userId: string,
-        _tenantId: string,
-      ) => {
-        const permissions = [
-          'members:read',
-          'files:read',
-          'billing:read',
-          'invoices:create',
-        ];
+      rbacRepo.getEffectivePermissions = async (_userId: string, _tenantId: string) => {
+        const permissions = ['members:read', 'files:read', 'billing:read', 'invoices:create'];
 
         const provenance = {
           directRoles: ['Member'],
@@ -490,10 +491,7 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
     it('excludes group roles when group status is ARCHIVED', async () => {
       const origEffective = rbacRepo.getEffectivePermissions;
 
-      rbacRepo.getEffectivePermissions = async (
-        _userId: string,
-        _tenantId: string,
-      ) => {
+      rbacRepo.getEffectivePermissions = async (_userId: string, _tenantId: string) => {
         return {
           roles: ['Member'],
           permissions: ['members:read', 'files:read'],
@@ -517,10 +515,7 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
     it('returns empty group contribution if member status in workspace is not ACTIVE', async () => {
       const origEffective = rbacRepo.getEffectivePermissions;
 
-      rbacRepo.getEffectivePermissions = async (
-        _userId: string,
-        _tenantId: string,
-      ) => {
+      rbacRepo.getEffectivePermissions = async (_userId: string, _tenantId: string) => {
         return {
           roles: [],
           permissions: [],
@@ -544,12 +539,13 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
 
       let invalidatedKey = '';
 
-      groupsRepo.findGroupById = async () => ({
-        id: mockGroupId,
-        name: 'Finance Team',
-        scope: 'TENANT',
-        tenantId: mockTenantId,
-      } as any);
+      groupsRepo.findGroupById = async () =>
+        ({
+          id: mockGroupId,
+          name: 'Finance Team',
+          scope: 'TENANT',
+          tenantId: mockTenantId,
+        }) as any;
 
       groupsRepo.removeGroupMember = async () => true;
 
@@ -586,12 +582,13 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
 
       let invalidatedTenant = '';
 
-      groupsRepo.findGroupById = async () => ({
-        id: mockGroupId,
-        name: 'Support Team',
-        scope: 'TENANT',
-        tenantId: mockTenantId,
-      } as any);
+      groupsRepo.findGroupById = async () =>
+        ({
+          id: mockGroupId,
+          name: 'Support Team',
+          scope: 'TENANT',
+          tenantId: mockTenantId,
+        }) as any;
 
       groupsRepo.validateActiveTenantMembers = async () => [mockUserId];
       groupsRepo.findExistingMemberIds = async () => [];

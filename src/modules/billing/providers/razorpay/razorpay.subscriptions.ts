@@ -146,7 +146,10 @@ export async function cancelRazorpaySubscription(
       lowerMsg.includes('in cancelled state') ||
       lowerMsg.includes('in canceled state')
     ) {
-      logger.info({ subscriptionId }, 'Razorpay subscription already cancelled, treating as success');
+      logger.info(
+        { subscriptionId },
+        'Razorpay subscription already cancelled, treating as success',
+      );
       return {
         id: subscriptionId,
         entity: 'subscription',

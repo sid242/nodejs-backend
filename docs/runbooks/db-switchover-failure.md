@@ -3,6 +3,7 @@
 ## Severity: HIGH (P1 / P2)
 
 ### Trigger
+
 A BullMQ `db-ops` switchover job failed, or a tenant database returned `TENANT_DB_UNAVAILABLE`, `TENANT_DB_OUTDATED`, or failed data checksum validation.
 
 ---

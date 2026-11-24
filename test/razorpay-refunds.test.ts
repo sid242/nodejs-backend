@@ -71,9 +71,11 @@ describe('Step 03: Razorpay Refunds, Resilience, and GST Hardening', () => {
     it('treats "already cancelled" error from Razorpay as idempotent success', async () => {
       const origCancel = razorpayGateway.cancelRazorpaySubscription;
       try {
-        const mockResult = await cancelRazorpaySubscription('sub_already_cancelled_test').catch((err: unknown) => {
-          return err;
-        });
+        const mockResult = await cancelRazorpaySubscription('sub_already_cancelled_test').catch(
+          (err: unknown) => {
+            return err;
+          },
+        );
         assert.ok(mockResult);
       } finally {
         razorpayGateway.cancelRazorpaySubscription = origCancel;
@@ -91,11 +93,13 @@ describe('Step 03: Razorpay Refunds, Resilience, and GST Hardening', () => {
               from: () => ({
                 where: () => ({
                   for: () => ({
-                    limit: async () => [{
-                      id: 'pay-001',
-                      status: 'FAILED',
-                      amountMinor: 5000,
-                    }],
+                    limit: async () => [
+                      {
+                        id: 'pay-001',
+                        status: 'FAILED',
+                        amountMinor: 5000,
+                      },
+                    ],
                   }),
                 }),
               }),
@@ -133,14 +137,16 @@ describe('Step 03: Razorpay Refunds, Resilience, and GST Hardening', () => {
               from: () => ({
                 where: () => ({
                   for: () => ({
-                    limit: async () => [{
-                      id: 'pay-002',
-                      status: 'PAID',
-                      amountMinor: 10000,
-                      providerPaymentId: 'pay_rzp_002',
-                      tenantId: 'tenant-002',
-                      currency: 'INR',
-                    }],
+                    limit: async () => [
+                      {
+                        id: 'pay-002',
+                        status: 'PAID',
+                        amountMinor: 10000,
+                        providerPaymentId: 'pay_rzp_002',
+                        tenantId: 'tenant-002',
+                        currency: 'INR',
+                      },
+                    ],
                   }),
                 }),
               }),
@@ -166,7 +172,9 @@ describe('Step 03: Razorpay Refunds, Resilience, and GST Hardening', () => {
           updatedAt: new Date(),
         } as unknown as Refund;
 
-        billingRepo.findRefundsByPaymentId = (async () => [fakeRefund]) as unknown as typeof billingRepo.findRefundsByPaymentId;
+        billingRepo.findRefundsByPaymentId = (async () => [
+          fakeRefund,
+        ]) as unknown as typeof billingRepo.findRefundsByPaymentId;
 
         await assert.rejects(
           async () => {
@@ -206,14 +214,16 @@ describe('Step 03: Razorpay Refunds, Resilience, and GST Hardening', () => {
               from: () => ({
                 where: () => ({
                   for: () => ({
-                    limit: async () => [{
-                      id: 'pay-003',
-                      status: 'PAID',
-                      amountMinor: 10000,
-                      providerPaymentId: 'pay_rzp_003',
-                      tenantId: 'tenant-003',
-                      currency: 'INR',
-                    }],
+                    limit: async () => [
+                      {
+                        id: 'pay-003',
+                        status: 'PAID',
+                        amountMinor: 10000,
+                        providerPaymentId: 'pay_rzp_003',
+                        tenantId: 'tenant-003',
+                        currency: 'INR',
+                      },
+                    ],
                   }),
                 }),
               }),
@@ -222,9 +232,21 @@ describe('Step 03: Razorpay Refunds, Resilience, and GST Hardening', () => {
           return cb(fakeTx);
         }) as unknown as typeof db.transaction;
 
-        billingRepo.findRefundsByPaymentId = (async () => []) as unknown as typeof billingRepo.findRefundsByPaymentId;
+        billingRepo.findRefundsByPaymentId =
+          (async () => []) as unknown as typeof billingRepo.findRefundsByPaymentId;
 
-        billingRepo.createRefund = (async (data: { status?: string; tenantId: string; paymentId: string; amountMinor: number; requestedBy: string; provider?: string; providerRefundId?: string | null; currency?: string; reason?: string | null; processedAt?: Date | null }) => {
+        billingRepo.createRefund = (async (data: {
+          status?: string;
+          tenantId: string;
+          paymentId: string;
+          amountMinor: number;
+          requestedBy: string;
+          provider?: string;
+          providerRefundId?: string | null;
+          currency?: string;
+          reason?: string | null;
+          processedAt?: Date | null;
+        }) => {
           createdStatus = data.status ?? 'PENDING';
           return {
             id: 'rfnd-pending-003',
@@ -299,14 +321,16 @@ describe('Step 03: Razorpay Refunds, Resilience, and GST Hardening', () => {
               from: () => ({
                 where: () => ({
                   for: () => ({
-                    limit: async () => [{
-                      id: 'pay-004',
-                      status: 'PAID',
-                      amountMinor: 10000,
-                      providerPaymentId: 'pay_rzp_004',
-                      tenantId: 'tenant-004',
-                      currency: 'INR',
-                    }],
+                    limit: async () => [
+                      {
+                        id: 'pay-004',
+                        status: 'PAID',
+                        amountMinor: 10000,
+                        providerPaymentId: 'pay_rzp_004',
+                        tenantId: 'tenant-004',
+                        currency: 'INR',
+                      },
+                    ],
                   }),
                 }),
               }),
@@ -315,8 +339,20 @@ describe('Step 03: Razorpay Refunds, Resilience, and GST Hardening', () => {
           return cb(fakeTx);
         }) as unknown as typeof db.transaction;
 
-        billingRepo.findRefundsByPaymentId = (async () => []) as unknown as typeof billingRepo.findRefundsByPaymentId;
-        billingRepo.createRefund = (async (data: { status?: string; tenantId: string; paymentId: string; amountMinor: number; requestedBy: string; provider?: string; providerRefundId?: string | null; currency?: string; reason?: string | null; processedAt?: Date | null }) => ({
+        billingRepo.findRefundsByPaymentId =
+          (async () => []) as unknown as typeof billingRepo.findRefundsByPaymentId;
+        billingRepo.createRefund = (async (data: {
+          status?: string;
+          tenantId: string;
+          paymentId: string;
+          amountMinor: number;
+          requestedBy: string;
+          provider?: string;
+          providerRefundId?: string | null;
+          currency?: string;
+          reason?: string | null;
+          processedAt?: Date | null;
+        }) => ({
           id: 'rfnd-004',
           tenantId: data.tenantId,
           paymentId: data.paymentId,
@@ -333,7 +369,10 @@ describe('Step 03: Razorpay Refunds, Resilience, and GST Hardening', () => {
           updatedAt: new Date(),
         })) as unknown as typeof billingRepo.createRefund;
 
-        billingRepo.updateRefund = (async (id: string, data: { status?: string; providerRefundId?: string; processedAt?: Date }) => ({
+        billingRepo.updateRefund = (async (
+          id: string,
+          data: { status?: string; providerRefundId?: string; processedAt?: Date },
+        ) => ({
           id,
           tenantId: 'tenant-004',
           paymentId: 'pay-004',
@@ -503,7 +542,8 @@ describe('Step 03: Razorpay Refunds, Resilience, and GST Hardening', () => {
           } as unknown as BillingWebhook,
         })) as unknown as typeof billingRepo.recordWebhookReceived;
 
-        billingRepo.updateBillingWebhookStatus = (async () => null) as unknown as typeof billingRepo.updateBillingWebhookStatus;
+        billingRepo.updateBillingWebhookStatus = (async () =>
+          null) as unknown as typeof billingRepo.updateBillingWebhookStatus;
 
         const fakePayment = {
           id: 'pay-auth-001',
@@ -528,7 +568,8 @@ describe('Step 03: Razorpay Refunds, Resilience, and GST Hardening', () => {
           updatedAt: new Date(),
         } as unknown as Payment;
 
-        billingRepo.findPaymentByOrderId = (async () => fakePayment) as unknown as typeof billingRepo.findPaymentByOrderId;
+        billingRepo.findPaymentByOrderId = (async () =>
+          fakePayment) as unknown as typeof billingRepo.findPaymentByOrderId;
 
         billingRepo.updatePayment = (async (_id: string, data: { status?: string }) => {
           updatedStatus = data.status ?? '';
@@ -598,7 +639,8 @@ describe('Step 03: Razorpay Refunds, Resilience, and GST Hardening', () => {
           } as unknown as BillingWebhook,
         })) as unknown as typeof billingRepo.recordWebhookReceived;
 
-        billingRepo.updateBillingWebhookStatus = (async () => null) as unknown as typeof billingRepo.updateBillingWebhookStatus;
+        billingRepo.updateBillingWebhookStatus = (async () =>
+          null) as unknown as typeof billingRepo.updateBillingWebhookStatus;
 
         const fakeRefund = {
           id: 'rfnd-local-002',
@@ -617,7 +659,8 @@ describe('Step 03: Razorpay Refunds, Resilience, and GST Hardening', () => {
           updatedAt: new Date(),
         } as unknown as Refund;
 
-        billingRepo.findRefundByProviderRefundId = (async () => fakeRefund) as unknown as typeof billingRepo.findRefundByProviderRefundId;
+        billingRepo.findRefundByProviderRefundId = (async () =>
+          fakeRefund) as unknown as typeof billingRepo.findRefundByProviderRefundId;
 
         billingRepo.updateRefund = (async (_id: string, data: { status?: string }) => {
           refundStatus = data.status ?? '';
@@ -655,7 +698,8 @@ describe('Step 03: Razorpay Refunds, Resilience, and GST Hardening', () => {
           updatedAt: new Date(),
         } as unknown as Payment;
 
-        billingRepo.findPaymentById = (async () => fakePayment) as unknown as typeof billingRepo.findPaymentById;
+        billingRepo.findPaymentById = (async () =>
+          fakePayment) as unknown as typeof billingRepo.findPaymentById;
 
         billingRepo.updatePayment = (async (_id: string, data: { status?: string }) => {
           recalculatedPaymentStatus = data.status ?? '';

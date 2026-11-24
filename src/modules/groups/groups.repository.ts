@@ -1,8 +1,6 @@
 import { and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 
 import type { DbExecutor } from '@/config/db';
-import { assertTenantScope, primaryDbHandle, tenantDb } from '@/db/tenancy/context';
-import { attachUsers } from '@/lib/attach-users';
 import {
   permissions,
   platformStaff,
@@ -18,6 +16,8 @@ import {
   type UserGroup,
   type UserGroupMember,
 } from '@/db/schema';
+import { assertTenantScope, primaryDbHandle, tenantDb } from '@/db/tenancy/context';
+import { attachUsers } from '@/lib/attach-users';
 
 function resolveGroupExecutor(
   scope?: 'PLATFORM' | 'TENANT',
@@ -48,10 +48,7 @@ export interface GroupWithMemberCount extends UserGroup {
   memberCount: number;
 }
 
-export async function createGroup(
-  data: NewUserGroup,
-  executor?: DbExecutor,
-): Promise<UserGroup> {
+export async function createGroup(data: NewUserGroup, executor?: DbExecutor): Promise<UserGroup> {
   const exec = resolveGroupExecutor(data.scope, data.tenantId ?? undefined, executor);
   const [record] = await exec.insert(userGroups).values(data).returning();
   return record!;
@@ -165,10 +162,7 @@ export async function listGroups(
   const whereClause = and(...conditions);
 
   // Total count
-  const countRows = await exec
-    .select({ totalCount: count() })
-    .from(userGroups)
-    .where(whereClause);
+  const countRows = await exec.select({ totalCount: count() }).from(userGroups).where(whereClause);
   const total = Number(countRows?.[0]?.totalCount ?? 0);
   if (total === 0) {
     return { items: [], total: 0, page, limit };
@@ -518,10 +512,7 @@ export async function bindRoleToGroup(
   executor?: DbExecutor,
 ): Promise<void> {
   const exec = executor ?? tenantDb();
-  await exec
-    .insert(userGroupRoles)
-    .values({ groupId, roleId })
-    .onConflictDoNothing();
+  await exec.insert(userGroupRoles).values({ groupId, roleId }).onConflictDoNothing();
 }
 
 export async function unbindRoleFromGroup(

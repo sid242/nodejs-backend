@@ -11,13 +11,13 @@
 
 ## 1. Static Analysis & Tooling Baseline
 
-| Command | Status | Result / Diagnostics |
-| :--- | :--- | :--- |
-| `npm run typecheck` (`tsc --noEmit`) | **PASS** | 0 errors. TypeScript compiles cleanly under strict settings. |
-| `npm run lint` (`eslint .`) | **PASS** | 0 errors. 2 empty-catch statements in `scripts/start-all.mjs` remediated; unused variable warnings inventoried. |
-| `npm run format:check` | **FLAGGED** | Style formatting delta across legacy files. Prettier configuration in place. |
-| `npm run db:check` | **PASS** | Drizzle schema and `_journal.json` migrations synchronized. |
-| `npm run build` (`tsup`) | **PASS** | Production bundles for API and Worker compiled cleanly to `dist/`. |
+| Command                              | Status      | Result / Diagnostics                                                                                            |
+| :----------------------------------- | :---------- | :-------------------------------------------------------------------------------------------------------------- |
+| `npm run typecheck` (`tsc --noEmit`) | **PASS**    | 0 errors. TypeScript compiles cleanly under strict settings.                                                    |
+| `npm run lint` (`eslint .`)          | **PASS**    | 0 errors. 2 empty-catch statements in `scripts/start-all.mjs` remediated; unused variable warnings inventoried. |
+| `npm run format:check`               | **FLAGGED** | Style formatting delta across legacy files. Prettier configuration in place.                                    |
+| `npm run db:check`                   | **PASS**    | Drizzle schema and `_journal.json` migrations synchronized.                                                     |
+| `npm run build` (`tsup`)             | **PASS**    | Production bundles for API and Worker compiled cleanly to `dist/`.                                              |
 
 ---
 
@@ -25,12 +25,12 @@
 
 Automated scan across `src/`:
 
-| Metric | Count | Observations |
-| :--- | :---: | :--- |
-| `any` / `as any` occurrences | **182** | Concentrated in API handlers, DTO boundary mapping, generic socket payload handling, and DB query mapping. ESLint rule `@typescript-eslint/no-explicit-any` was disabled to accommodate this backlog. |
-| `@ts-ignore` / `@ts-expect-error` | **3** | Found in `src/lib/secrets/aws-secrets.store.ts` (lines 15, 32, 76) for optional AWS SDK secrets manager dependency. |
-| `eslint-disable` occurrences | **0** | Clean; no inline blanket suppression directives. |
-| `TODO` / `FIXME` / `HACK` | **0** | Clean; no unaddressed debt tags in tracked source. |
+| Metric                            |  Count  | Observations                                                                                                                                                                                          |
+| :-------------------------------- | :-----: | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `any` / `as any` occurrences      | **182** | Concentrated in API handlers, DTO boundary mapping, generic socket payload handling, and DB query mapping. ESLint rule `@typescript-eslint/no-explicit-any` was disabled to accommodate this backlog. |
+| `@ts-ignore` / `@ts-expect-error` |  **3**  | Found in `src/lib/secrets/aws-secrets.store.ts` (lines 15, 32, 76) for optional AWS SDK secrets manager dependency.                                                                                   |
+| `eslint-disable` occurrences      |  **0**  | Clean; no inline blanket suppression directives.                                                                                                                                                      |
+| `TODO` / `FIXME` / `HACK`         |  **0**  | Clean; no unaddressed debt tags in tracked source.                                                                                                                                                    |
 
 ---
 

@@ -4,7 +4,6 @@
  * Spawns both the HTTP API server (dist/server.js) and the BullMQ worker (dist/worker.js).
  * Forwards termination signals (SIGTERM, SIGINT) and exits immediately if either child process dies.
  */
-
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,7 +31,9 @@ function launch(name, targetPath) {
 
   child.on('exit', (code, signal) => {
     if (isShuttingDown) return;
-    console.warn(`[supervisor] Process ${name} exited with code ${code ?? signal}. Terminating stack...`);
+    console.warn(
+      `[supervisor] Process ${name} exited with code ${code ?? signal}. Terminating stack...`,
+    );
     shutdown(code ?? 1);
   });
 
@@ -64,8 +65,16 @@ function shutdown(exitCode = 0) {
   // Hard exit fallback after 10s if processes don't exit cleanly
   setTimeout(() => {
     console.warn('[supervisor] Force-terminating remaining processes (SIGKILL)...');
-    try { server.kill('SIGKILL'); } catch (_err) { /* ignore */ }
-    try { worker.kill('SIGKILL'); } catch (_err) { /* ignore */ }
+    try {
+      server.kill('SIGKILL');
+    } catch (_err) {
+      /* ignore */
+    }
+    try {
+      worker.kill('SIGKILL');
+    } catch (_err) {
+      /* ignore */
+    }
     process.exit(exitCode);
   }, 10000).unref();
 }

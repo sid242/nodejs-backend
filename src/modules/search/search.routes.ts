@@ -4,6 +4,7 @@ import { requireAuth } from '@/middleware/auth';
 import { searchLimiter } from '@/middleware/rate-limit';
 import { resolveTenantContext } from '@/middleware/tenant';
 import { validate } from '@/middleware/validate';
+
 import * as controller from './search.controller';
 import { searchQueryDto } from './search.dto';
 

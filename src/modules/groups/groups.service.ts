@@ -103,12 +103,18 @@ export async function updateTenantGroup(
   }
 
   if (existing.status === 'ARCHIVED' && input.status !== 'ACTIVE') {
-    throw AppError.badRequest('Cannot modify an archived group unless restoring it to ACTIVE status');
+    throw AppError.badRequest(
+      'Cannot modify an archived group unless restoring it to ACTIVE status',
+    );
   }
 
   let newSlug: string | undefined = undefined;
   if (input.slug && input.slug.toLowerCase() !== existing.slug) {
-    const slugCheck = await groupsRepo.findGroupBySlug(input.slug.toLowerCase(), 'TENANT', tenantId);
+    const slugCheck = await groupsRepo.findGroupBySlug(
+      input.slug.toLowerCase(),
+      'TENANT',
+      tenantId,
+    );
     if (slugCheck && slugCheck.id !== groupId) {
       throw AppError.conflict(`A group with slug "${input.slug}" already exists in this workspace`);
     }
@@ -119,7 +125,9 @@ export async function updateTenantGroup(
     ...(input.name ? { name: input.name } : {}),
     ...(newSlug ? { slug: newSlug } : {}),
     ...(input.description !== undefined ? { description: input.description } : {}),
-    ...(input.status ? { status: input.status, archivedAt: input.status === 'ARCHIVED' ? new Date() : null } : {}),
+    ...(input.status
+      ? { status: input.status, archivedAt: input.status === 'ARCHIVED' ? new Date() : null }
+      : {}),
     updatedBy: actorUserId,
   });
 
@@ -142,11 +150,7 @@ export async function updateTenantGroup(
   return updated;
 }
 
-export async function archiveTenantGroup(
-  tenantId: string,
-  groupId: string,
-  actorUserId: string,
-) {
+export async function archiveTenantGroup(tenantId: string, groupId: string, actorUserId: string) {
   const existing = await groupsRepo.findGroupById(groupId, 'TENANT', tenantId);
   if (!existing) {
     throw AppError.notFound('User group not found');
@@ -194,10 +198,9 @@ export async function addTenantGroupMembers(
   const activeTenantUserIds = await groupsRepo.validateActiveTenantMembers(tenantId, input.userIds);
   const inactiveOrNonMembers = input.userIds.filter((id) => !activeTenantUserIds.includes(id));
   if (inactiveOrNonMembers.length > 0) {
-    throw AppError.badRequest(
-      'One or more users are not active members of this organization',
-      { invalidUserIds: inactiveOrNonMembers },
-    );
+    throw AppError.badRequest('One or more users are not active members of this organization', {
+      invalidUserIds: inactiveOrNonMembers,
+    });
   }
 
   // 2. Identify members already in this group
@@ -424,10 +427,7 @@ export async function getTenantGroupPermissions(tenantId: string, groupId: strin
 // PLATFORM GROUP SERVICES
 // ============================================================================
 
-export async function createPlatformGroup(
-  actorStaffId: string,
-  input: CreateGroupInput,
-) {
+export async function createPlatformGroup(actorStaffId: string, input: CreateGroupInput) {
   const slug = input.slug ? input.slug.toLowerCase() : slugify(input.name);
   if (!slug) {
     throw AppError.badRequest('Invalid group name for slug generation');
@@ -495,7 +495,9 @@ export async function updatePlatformGroup(
   }
 
   if (existing.status === 'ARCHIVED' && input.status !== 'ACTIVE') {
-    throw AppError.badRequest('Cannot modify an archived group unless restoring it to ACTIVE status');
+    throw AppError.badRequest(
+      'Cannot modify an archived group unless restoring it to ACTIVE status',
+    );
   }
 
   let newSlug: string | undefined = undefined;
@@ -511,7 +513,9 @@ export async function updatePlatformGroup(
     ...(input.name ? { name: input.name } : {}),
     ...(newSlug ? { slug: newSlug } : {}),
     ...(input.description !== undefined ? { description: input.description } : {}),
-    ...(input.status ? { status: input.status, archivedAt: input.status === 'ARCHIVED' ? new Date() : null } : {}),
+    ...(input.status
+      ? { status: input.status, archivedAt: input.status === 'ARCHIVED' ? new Date() : null }
+      : {}),
     updatedBy: actorStaffId,
   });
 
@@ -579,10 +583,9 @@ export async function addPlatformGroupMembers(
   const activeStaffIds = await groupsRepo.validateActivePlatformStaff(input.staffIds);
   const inactiveStaffIds = input.staffIds.filter((id) => !activeStaffIds.includes(id));
   if (inactiveStaffIds.length > 0) {
-    throw AppError.badRequest(
-      'One or more staff accounts are not active platform staff members',
-      { invalidStaffIds: inactiveStaffIds },
-    );
+    throw AppError.badRequest('One or more staff accounts are not active platform staff members', {
+      invalidStaffIds: inactiveStaffIds,
+    });
   }
 
   // 2. Identify staff members already in this group
@@ -663,4 +666,3 @@ export async function listPlatformGroupMembers(groupId: string, page = 1, limit 
 
   return groupsRepo.listPlatformGroupMembers(groupId, page, limit);
 }
-

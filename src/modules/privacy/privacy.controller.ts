@@ -15,12 +15,14 @@ export const requestUserDataExport = asyncHandler(async (req: Request, res: Resp
   const userAgent = req.headers['user-agent'];
 
   const request = await service.requestUserDataExport(userId, ip, userAgent);
-  res.status(202).json(
-    AppResponse.created(
-      request,
-      'Data export request submitted. You will be notified once processing completes.',
-    ),
-  );
+  res
+    .status(202)
+    .json(
+      AppResponse.created(
+        request,
+        'Data export request submitted. You will be notified once processing completes.',
+      ),
+    );
 });
 
 export const listUserDataExports = asyncHandler(async (req: Request, res: Response) => {
@@ -36,12 +38,14 @@ export const requestAccountDeletion = asyncHandler(async (req: Request, res: Res
   const userAgent = req.headers['user-agent'];
 
   const result = await service.requestAccountDeletion(userId, { password, reason }, ip, userAgent);
-  res.status(202).json(
-    AppResponse.ok(
-      result,
-      'Account deletion request recorded. Your account enters a 14-day cooling period before permanent anonymization.',
-    ),
-  );
+  res
+    .status(202)
+    .json(
+      AppResponse.ok(
+        result,
+        'Account deletion request recorded. Your account enters a 14-day cooling period before permanent anonymization.',
+      ),
+    );
 });
 
 export const cancelAccountDeletion = asyncHandler(async (req: Request, res: Response) => {
@@ -70,12 +74,14 @@ export const requestTenantDataExport = asyncHandler(async (req: Request, res: Re
   const userAgent = req.headers['user-agent'];
 
   const request = await service.requestTenantDataExport(tenantId, actorUserId, ip, userAgent);
-  res.status(202).json(
-    AppResponse.created(
-      request,
-      'Workspace data export initiated. Download link will be available upon completion.',
-    ),
-  );
+  res
+    .status(202)
+    .json(
+      AppResponse.created(
+        request,
+        'Workspace data export initiated. Download link will be available upon completion.',
+      ),
+    );
 });
 
 export const listTenantDataExports = asyncHandler(async (req: Request, res: Response) => {
@@ -99,12 +105,14 @@ export const requestTenantClosure = asyncHandler(async (req: Request, res: Respo
     ip,
     userAgent,
   );
-  res.status(202).json(
-    AppResponse.ok(
-      result,
-      'Workspace deactivated and scheduled for purge. A 30-day grace period is now active.',
-    ),
-  );
+  res
+    .status(202)
+    .json(
+      AppResponse.ok(
+        result,
+        'Workspace deactivated and scheduled for purge. A 30-day grace period is now active.',
+      ),
+    );
 });
 
 export const cancelTenantClosure = asyncHandler(async (req: Request, res: Response) => {

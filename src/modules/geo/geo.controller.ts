@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 
 import { asyncHandler } from '@/lib/async-handler';
 import { AppResponse } from '@/lib/responses';
+
 import type { GetChildrenQuery, LookupQuery, PinParam } from './geo.dto';
 import * as geoService from './geo.service';
 
@@ -27,4 +28,3 @@ export const lookup = asyncHandler(async (req: Request, res: Response) => {
   const data = await geoService.lookupCoordinates(lat, lng);
   return AppResponse.ok(data).send(res);
 });
-

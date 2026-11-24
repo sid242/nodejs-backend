@@ -12,10 +12,7 @@ import { AppError } from '../src/lib/errors';
 import { requirePlatformAuth, requirePlatformPermission } from '../src/middleware/platform';
 import { resolveTenantContext } from '../src/middleware/tenant';
 import * as authRepo from '../src/modules/auth/auth.repository';
-import {
-  createMagicLinkToken,
-  verifyAndConsumeMagicLinkToken,
-} from '../src/modules/auth/tokens';
+import { createMagicLinkToken, verifyAndConsumeMagicLinkToken } from '../src/modules/auth/tokens';
 import * as billingService from '../src/modules/billing/billing.service';
 import * as platformService from '../src/modules/platform/platform.service';
 import { rbacRepo } from '../src/modules/rbac/rbac.repository';

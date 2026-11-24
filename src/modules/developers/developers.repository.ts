@@ -63,11 +63,7 @@ export async function findApiKeyByKeyHash(
   keyHash: string,
   executor: DbExecutor = tenantDb(),
 ): Promise<ApiKeyRecord | null> {
-  const [key] = await executor
-    .select()
-    .from(apiKeys)
-    .where(eq(apiKeys.keyHash, keyHash))
-    .limit(1);
+  const [key] = await executor.select().from(apiKeys).where(eq(apiKeys.keyHash, keyHash)).limit(1);
   return key ?? null;
 }
 

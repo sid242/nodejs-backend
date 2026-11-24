@@ -71,10 +71,7 @@ export const auditLogs = pgTable(
       table.source,
       table.createdAt,
     ),
-    index('AuditLog_tenantId_supportSessionId_idx').on(
-      table.tenantId,
-      table.supportSessionId,
-    ),
+    index('AuditLog_tenantId_supportSessionId_idx').on(table.tenantId, table.supportSessionId),
     index('AuditLog_tenantId_entityType_entityId_idx').on(
       table.tenantId,
       table.entityType,

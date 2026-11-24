@@ -1,14 +1,8 @@
 import { and, eq, ilike, isNull, or } from 'drizzle-orm';
 
+import { emailTemplates, files, roles, tenantMembers, userGroups, users } from '@/db/schema/index';
 import { tenantDb } from '@/db/tenancy/context';
-import {
-  emailTemplates,
-  files,
-  roles,
-  tenantMembers,
-  userGroups,
-  users,
-} from '@/db/schema/index';
+
 import type { SearchItem } from './search.dto';
 
 export async function searchMembers(
