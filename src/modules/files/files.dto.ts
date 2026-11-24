@@ -16,23 +16,23 @@ export const ALLOWED_TYPES = [
 ] as const;
 
 export const fileIdParamDto = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
 });
 export type FileIdParamDto = z.infer<typeof fileIdParamDto>;
 
 export const folderIdParamDto = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
 });
 export type FolderIdParamDto = z.infer<typeof folderIdParamDto>;
 
 export const shareIdParamDto = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
 });
 export type ShareIdParamDto = z.infer<typeof shareIdParamDto>;
 
 export const fileAndShareIdParamDto = z.object({
-  id: z.string().uuid(),
-  shareId: z.string().uuid(),
+  id: z.string().guid(),
+  shareId: z.string().guid(),
 });
 export type FileAndShareIdParamDto = z.infer<typeof fileAndShareIdParamDto>;
 
@@ -46,7 +46,7 @@ export const requestUploadDto = z.object({
   contentType: z.string().refine((val) => (ALLOWED_TYPES as readonly string[]).includes(val), {
     message: 'Unsupported or disallowed file content type',
   }),
-  folderId: z.string().uuid().optional().nullable(),
+  folderId: z.string().guid().optional().nullable(),
   description: z.string().max(1000).optional().nullable(),
   tags: z.array(z.string().min(1).max(50)).max(20).optional(),
 });
@@ -56,21 +56,21 @@ export const updateFileDto = z.object({
   filename: z.string().min(1).max(255).optional(),
   description: z.string().max(1000).optional().nullable(),
   tags: z.array(z.string().min(1).max(50)).max(20).optional(),
-  folderId: z.string().uuid().optional().nullable(),
+  folderId: z.string().guid().optional().nullable(),
   visibility: z.enum(['PRIVATE', 'TENANT', 'PUBLIC_LINK']).optional(),
 });
 export type UpdateFileDto = z.infer<typeof updateFileDto>;
 
 export const createFolderDto = z.object({
   name: z.string().min(1).max(100),
-  parentId: z.string().uuid().optional().nullable(),
+  parentId: z.string().guid().optional().nullable(),
   color: z.string().max(30).optional().nullable(),
 });
 export type CreateFolderDto = z.infer<typeof createFolderDto>;
 
 export const updateFolderDto = z.object({
   name: z.string().min(1).max(100).optional(),
-  parentId: z.string().uuid().optional().nullable(),
+  parentId: z.string().guid().optional().nullable(),
   color: z.string().max(30).optional().nullable(),
 });
 export type UpdateFolderDto = z.infer<typeof updateFolderDto>;

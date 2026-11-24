@@ -19,7 +19,7 @@ export const listApiKeysQueryDto = z.object({
 export type ListApiKeysQueryDto = z.infer<typeof listApiKeysQueryDto>;
 
 export const apiKeyIdParamDto = z.object({
-  keyId: z.string().uuid(),
+  keyId: z.string().guid(),
 });
 
 export type ApiKeyIdParamDto = z.infer<typeof apiKeyIdParamDto>;
@@ -56,7 +56,7 @@ export const updateWebhookEndpointDto = z.object({
 export type UpdateWebhookEndpointDto = z.infer<typeof updateWebhookEndpointDto>;
 
 export const webhookEndpointIdParamDto = z.object({
-  endpointId: z.string().uuid(),
+  endpointId: z.string().guid(),
 });
 
 export type WebhookEndpointIdParamDto = z.infer<typeof webhookEndpointIdParamDto>;
@@ -70,8 +70,8 @@ export const listDeliveriesQueryDto = z.object({
 export type ListDeliveriesQueryDto = z.infer<typeof listDeliveriesQueryDto>;
 
 export const deliveryIdParamDto = z.object({
-  endpointId: z.string().uuid(),
-  deliveryId: z.string().uuid(),
+  endpointId: z.string().guid(),
+  deliveryId: z.string().guid(),
 });
 
 export type DeliveryIdParamDto = z.infer<typeof deliveryIdParamDto>;

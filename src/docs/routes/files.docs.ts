@@ -76,7 +76,9 @@ export function registerFilesDocs(registry: OpenAPIRegistry): void {
       fileId: z.string().uuid().openapi({ example: 'd3b07384-d113-40f4-9ed3-2051d95e6cf1' }),
       upload: z.object({
         url: z.string().url().openapi({ example: 'https://my-bucket.s3.amazonaws.com/' }),
-        fields: z.record(z.string()).openapi({ description: 'Form fields for S3 direct POST' }),
+        fields: z
+          .record(z.string(), z.string())
+          .openapi({ description: 'Form fields for S3 direct POST' }),
       }),
     }),
   );

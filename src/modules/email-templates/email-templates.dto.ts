@@ -21,26 +21,26 @@ export const emailDeliveryStatuses = [
 export const emailSuppressionReasons = ['BOUNCE', 'COMPLAINT', 'UNSUBSCRIBE', 'MANUAL'] as const;
 
 export const templateIdParamDto = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
 });
 
 export type TemplateIdParamDto = z.infer<typeof templateIdParamDto>;
 
 export const templateIdAndVersionParamDto = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
   version: z.coerce.number().int().min(1),
 });
 
 export type TemplateIdAndVersionParamDto = z.infer<typeof templateIdAndVersionParamDto>;
 
 export const suppressionIdParamDto = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
 });
 
 export type SuppressionIdParamDto = z.infer<typeof suppressionIdParamDto>;
 
 export const deliveryLogIdParamDto = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
 });
 
 export type DeliveryLogIdParamDto = z.infer<typeof deliveryLogIdParamDto>;
@@ -83,7 +83,14 @@ export const createEmailTemplateDto = z.object({
 export type CreateEmailTemplateDto = z.infer<typeof createEmailTemplateDto>;
 export type CreateEmailTemplateInput = z.input<typeof createEmailTemplateDto>;
 
-export const updateEmailTemplateDto = createEmailTemplateDto.partial();
+export const updateEmailTemplateDto = createEmailTemplateDto
+  .extend({
+    locale: createEmailTemplateDto.shape.locale.removeDefault(),
+    category: createEmailTemplateDto.shape.category.removeDefault(),
+    status: createEmailTemplateDto.shape.status.removeDefault(),
+    isSystemOverride: createEmailTemplateDto.shape.isSystemOverride.removeDefault(),
+  })
+  .partial();
 export type UpdateEmailTemplateDto = z.infer<typeof updateEmailTemplateDto>;
 
 export const listEmailTemplatesQueryDto = z.object({
@@ -150,7 +157,7 @@ export const bounceWebhookDto = z.object({
   complaint: z.any().optional(),
   reason: z.string().optional(),
   details: z.string().optional(),
-  tenantId: z.string().uuid().optional(),
+  tenantId: z.string().guid().optional(),
 });
 
 export type BounceWebhookDto = z.infer<typeof bounceWebhookDto>;

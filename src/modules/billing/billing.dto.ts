@@ -27,7 +27,7 @@ export const createPlanDto = z.object({
   trialDays: z.coerce.number().int().min(0).default(14),
   billingInterval: z.enum(['MONTHLY', 'ANNUAL', 'LIFETIME']).default('MONTHLY'),
   limits: planLimitsDto,
-  entitlements: z.record(z.any()).optional(),
+  entitlements: z.record(z.string(), z.any()).optional(),
   moduleKeys: z.array(z.string()).optional(),
   isPublic: z.boolean().default(true),
   isActive: z.boolean().default(true),
@@ -41,10 +41,27 @@ export const createPlanDto = z.object({
   sortOrder: z.coerce.number().int().default(0),
 });
 
-export const updatePlanDto = createPlanDto.partial();
+export const updatePlanDto = createPlanDto
+  .extend({
+    priceMonthlyMinor: createPlanDto.shape.priceMonthlyMinor.removeDefault(),
+    priceYearlyMinor: createPlanDto.shape.priceYearlyMinor.removeDefault(),
+    currency: createPlanDto.shape.currency.removeDefault(),
+    trialDays: createPlanDto.shape.trialDays.removeDefault(),
+    billingInterval: createPlanDto.shape.billingInterval.removeDefault(),
+    isPublic: createPlanDto.shape.isPublic.removeDefault(),
+    isActive: createPlanDto.shape.isActive.removeDefault(),
+    isFeatured: createPlanDto.shape.isFeatured.removeDefault(),
+    features: createPlanDto.shape.features.removeDefault(),
+    pricePerSeatMinor: createPlanDto.shape.pricePerSeatMinor.removeDefault(),
+    includedSeats: createPlanDto.shape.includedSeats.removeDefault(),
+    version: createPlanDto.shape.version.removeDefault(),
+    ctaLabel: createPlanDto.shape.ctaLabel.removeDefault(),
+    sortOrder: createPlanDto.shape.sortOrder.removeDefault(),
+  })
+  .partial();
 
 export const planIdParamDto = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
 });
 
 export const listPlansQueryDto = z.object({
@@ -66,7 +83,7 @@ export const listPlansQueryDto = z.object({
 });
 
 export const tenantSubscriptionParamDto = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
 });
 
 export const updateSubscriptionDto = z.object({
@@ -83,7 +100,7 @@ export const updateSubscriptionDto = z.object({
 });
 
 export const assignSubscriptionDto = z.object({
-  tenantId: z.string().uuid(),
+  tenantId: z.string().guid(),
   planKey: z.string().trim().min(1).max(50).toUpperCase(),
   startDate: z.coerce.date().optional(),
   isTrial: z.boolean().default(false),
@@ -96,7 +113,7 @@ export const assignSubscriptionDto = z.object({
 });
 
 export const listPlatformSubscriptionsQueryDto = z.object({
-  tenantId: z.string().uuid().optional(),
+  tenantId: z.string().guid().optional(),
   planKey: z.string().trim().optional(),
   status: z
     .enum(['TRIALING', 'ACTIVE', 'PAST_DUE', 'PAUSED', 'CANCELED', 'EXPIRED', 'ALL'])
@@ -128,7 +145,7 @@ export const billingWebhookDto = z.object({
   provider: z.string().trim().min(1).default('manual'),
   eventId: z.string().trim().min(1),
   eventType: z.string().trim().min(1),
-  payload: z.record(z.any()),
+  payload: z.record(z.string(), z.any()),
 });
 
 export const invoiceLineItemDto = z.object({
@@ -147,18 +164,18 @@ export const listInvoicesQueryDto = z.object({
 export const listPlatformInvoicesQueryDto = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  tenantId: z.string().uuid().optional(),
+  tenantId: z.string().guid().optional(),
   status: z.enum(['DRAFT', 'OPEN', 'PAID', 'VOID', 'UNCOLLECTABLE']).optional(),
 });
 
 export const invoiceIdParamDto = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
 });
 
 export const createInvoiceDto = z.object({
-  tenantId: z.string().uuid(),
-  planId: z.string().uuid().optional(),
-  subscriptionId: z.string().uuid().optional(),
+  tenantId: z.string().guid(),
+  planId: z.string().guid().optional(),
+  subscriptionId: z.string().guid().optional(),
   amountCents: z.coerce.number().int().min(0),
   taxCents: z.coerce.number().int().min(0).default(0),
   currency: z.string().trim().length(3).default('INR'),
@@ -213,13 +230,13 @@ export const listPaymentsQueryDto = z.object({
 });
 
 export const listPlatformPaymentsQueryDto = listPaymentsQueryDto.extend({
-  tenantId: z.string().uuid().optional(),
+  tenantId: z.string().guid().optional(),
   providerOrderId: z.string().trim().optional(),
   providerPaymentId: z.string().trim().optional(),
 });
 
 export const paymentIdParamDto = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
 });
 
 export const issueRefundDto = z.object({

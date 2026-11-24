@@ -51,7 +51,7 @@ export const listGroupsQueryDto = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().trim().optional(),
   status: z.enum(['ACTIVE', 'ARCHIVED', 'ALL']).default('ACTIVE'),
-  roleId: z.string().trim().uuid('Invalid role ID').optional(),
+  roleId: z.string().trim().guid('Invalid role ID').optional(),
   sortBy: z.enum(['createdAt', 'name', 'updatedAt', 'slug']).default('createdAt'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
@@ -60,7 +60,7 @@ export type ListGroupsQuery = z.infer<typeof listGroupsQueryDto>;
 
 export const bindRoleDto = z.object({
   roleIds: z
-    .array(z.string().trim().uuid('Invalid role ID format'))
+    .array(z.string().trim().guid('Invalid role ID format'))
     .min(1, 'At least one role ID is required'),
   expiresAt: z.string().datetime().optional().nullable(),
   reason: z.string().trim().max(255).optional(),
@@ -69,35 +69,35 @@ export const bindRoleDto = z.object({
 export type BindRoleInput = z.infer<typeof bindRoleDto>;
 
 export const groupRoleParamsDto = z.object({
-  groupId: z.string().trim().uuid('Invalid group ID format'),
-  roleId: z.string().trim().uuid('Invalid role ID format'),
+  groupId: z.string().trim().guid('Invalid group ID format'),
+  roleId: z.string().trim().guid('Invalid role ID format'),
 });
 
 export type GroupRoleParams = z.infer<typeof groupRoleParamsDto>;
 
 export const groupIdParamDto = z.object({
-  groupId: z.string().trim().uuid('Invalid group ID format'),
+  groupId: z.string().trim().guid('Invalid group ID format'),
 });
 
 export type GroupIdParam = z.infer<typeof groupIdParamDto>;
 
 export const groupMemberParamsDto = z.object({
-  groupId: z.string().trim().uuid('Invalid group ID format'),
-  userId: z.string().trim().uuid('Invalid user ID format'),
+  groupId: z.string().trim().guid('Invalid group ID format'),
+  userId: z.string().trim().guid('Invalid user ID format'),
 });
 
 export type GroupMemberParams = z.infer<typeof groupMemberParamsDto>;
 
 export const platformGroupMemberParamsDto = z.object({
-  groupId: z.string().trim().uuid('Invalid group ID format'),
-  staffId: z.string().trim().uuid('Invalid staff ID format'),
+  groupId: z.string().trim().guid('Invalid group ID format'),
+  staffId: z.string().trim().guid('Invalid staff ID format'),
 });
 
 export type PlatformGroupMemberParams = z.infer<typeof platformGroupMemberParamsDto>;
 
 export const addTenantGroupMembersDto = z.object({
   userIds: z
-    .array(z.string().trim().uuid('Invalid user ID'))
+    .array(z.string().trim().guid('Invalid user ID'))
     .min(1, 'At least one user ID is required')
     .max(100, 'Cannot add more than 100 members at once')
     .transform((ids) => Array.from(new Set(ids))),
@@ -107,7 +107,7 @@ export type AddTenantGroupMembersInput = z.infer<typeof addTenantGroupMembersDto
 
 export const addPlatformGroupMembersDto = z.object({
   staffIds: z
-    .array(z.string().trim().uuid('Invalid staff ID'))
+    .array(z.string().trim().guid('Invalid staff ID'))
     .min(1, 'At least one staff ID is required')
     .max(100, 'Cannot add more than 100 members at once')
     .transform((ids) => Array.from(new Set(ids))),

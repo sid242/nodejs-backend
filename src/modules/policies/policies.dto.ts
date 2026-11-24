@@ -177,11 +177,11 @@ export const updatePolicyDto = z
 export type UpdatePolicyDto = z.infer<typeof updatePolicyDto>;
 
 export const evaluatePolicyDto = z.object({
-  roleId: z.string().uuid().optional(),
-  policyId: z.string().uuid().optional(),
+  roleId: z.string().guid().optional(),
+  policyId: z.string().guid().optional(),
   resource: z.string().min(1).max(50),
   action: z.string().min(1).max(50),
-  record: z.record(z.unknown()).optional().default({}),
+  record: z.record(z.string(), z.unknown()).optional().default({}),
   actor: z
     .object({
       userId: z.string().optional(),
@@ -189,7 +189,7 @@ export const evaluatePolicyDto = z.object({
       roleKeys: z.array(z.string()).optional().default([]),
       departmentId: z.string().nullable().optional(),
       regionId: z.string().nullable().optional(),
-      attributes: z.record(z.unknown()).optional(),
+      attributes: z.record(z.string(), z.unknown()).optional(),
     })
     .optional(),
   conditions: policyConditionsSchema.optional(),
@@ -198,20 +198,20 @@ export const evaluatePolicyDto = z.object({
 export type EvaluatePolicyDto = z.infer<typeof evaluatePolicyDto>;
 
 export const policyIdParamDto = z.object({
-  policyId: z.string().uuid(),
+  policyId: z.string().guid(),
 });
 
 export type PolicyIdParamDto = z.infer<typeof policyIdParamDto>;
 
 export const policyRoleParamDto = z.object({
-  policyId: z.string().uuid(),
-  roleId: z.string().uuid(),
+  policyId: z.string().guid(),
+  roleId: z.string().guid(),
 });
 
 export type PolicyRoleParamDto = z.infer<typeof policyRoleParamDto>;
 
 export const roleIdParamDto = z.object({
-  roleId: z.string().uuid(),
+  roleId: z.string().guid(),
 });
 
 export type RoleIdParamDto = z.infer<typeof roleIdParamDto>;

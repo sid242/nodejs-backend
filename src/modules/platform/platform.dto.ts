@@ -14,7 +14,7 @@ export const listStaffQueryDto = z.object({
   department: z.string().trim().optional(),
   employeeCode: z.string().trim().optional(),
   status: z.enum(['INVITED', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED']).optional(),
-  roleId: z.string().uuid().optional(),
+  roleId: z.string().guid().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   sortBy: z
@@ -36,7 +36,7 @@ export const createStaffDto = z.object({
   email: z.string().trim().email(),
   displayName: z.string().trim().min(2).max(100),
   password: z.string().min(8).max(100),
-  roleId: z.string().uuid(),
+  roleId: z.string().guid(),
   employeeCode: z.string().trim().max(50).optional(),
   department: z.string().trim().max(100).optional(),
   jobTitle: z.string().trim().max(100).optional(),
@@ -51,7 +51,7 @@ export type CheckStaffEmailQueryDto = z.infer<typeof checkStaffEmailQueryDto>;
 export const inviteStaffDto = z.object({
   email: z.string().trim().email(),
   displayName: z.string().trim().min(2).max(100),
-  roleId: z.string().uuid(),
+  roleId: z.string().guid(),
   employeeCode: z.string().trim().max(50).optional(),
   department: z.string().trim().max(100).optional(),
   jobTitle: z.string().trim().max(100).optional(),
@@ -78,7 +78,7 @@ export const updateStaffDto = z.object({
   department: z.string().trim().max(100).nullable().optional(),
   jobTitle: z.string().trim().max(100).nullable().optional(),
   status: z.enum(['INVITED', 'ACTIVE', 'SUSPENDED', 'DEACTIVATED']).optional(),
-  roleId: z.string().uuid().optional(),
+  roleId: z.string().guid().optional(),
 });
 export type UpdateStaffDto = z.infer<typeof updateStaffDto>;
 
@@ -134,14 +134,14 @@ export type UpdatePlatformRoleDto = z.infer<typeof updatePlatformRoleDto>;
 export const startSupportSessionDto = z.object({
   mode: z.enum(['TENANT_SCOPED', 'AS_MEMBER']).default('TENANT_SCOPED'),
   scope: z.enum(['READ_ONLY', 'ASSIST', 'FULL', 'FULL_ADMIN']).default('READ_ONLY'),
-  targetMemberId: z.string().uuid().optional(),
-  targetUserId: z.string().uuid().optional(),
+  targetMemberId: z.string().guid().optional(),
+  targetUserId: z.string().guid().optional(),
   reason: z.string().trim().min(5).max(500),
   ticketRef: z.string().trim().min(1).max(100).optional(),
   durationMinutes: z.coerce.number().int().min(5).max(120).default(30),
   acknowledgement: z.boolean().default(true),
   tenantConsent: z.boolean().optional(),
-  approvedByStaffId: z.string().uuid().optional(),
+  approvedByStaffId: z.string().guid().optional(),
 });
 export type StartSupportSessionDto = z.infer<typeof startSupportSessionDto>;
 
@@ -153,9 +153,9 @@ export type EndSupportSessionDto = z.infer<typeof endSupportSessionDto>;
 export const listSupportSessionsQueryDto = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  tenantId: z.string().uuid().optional(),
-  staffId: z.string().uuid().optional(),
-  targetUserId: z.string().uuid().optional(),
+  tenantId: z.string().guid().optional(),
+  staffId: z.string().guid().optional(),
+  targetUserId: z.string().guid().optional(),
   status: z.enum(['ACTIVE', 'EXPIRED', 'TERMINATED']).optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
@@ -171,11 +171,11 @@ export type ListSupportSessionsQueryDto = z.infer<typeof listSupportSessionsQuer
 export const queryPlatformAuditLogsDto = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(50),
-  actorStaffId: z.string().uuid().optional(),
+  actorStaffId: z.string().guid().optional(),
   action: z.string().optional(),
   targetType: z.string().optional(),
   targetId: z.string().optional(),
-  tenantId: z.string().uuid().optional(),
+  tenantId: z.string().guid().optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
 });
@@ -263,7 +263,7 @@ export const provisionTenantDto = z.object({
   databaseConfig: z
     .object({
       databaseName: z.string().trim().max(63).optional(),
-      poolLimit: z.coerce.number().int().min(1).max(50).default(5).optional(),
+      poolLimit: z.coerce.number().int().min(1).max(50).optional(),
       databaseKey: z.string().trim().max(100).optional(),
       connectionUrl: z.string().trim().url().or(z.literal('')).optional(),
     })
@@ -321,7 +321,7 @@ export const activateTenantDto = z.object({
 export type ActivateTenantDto = z.infer<typeof activateTenantDto>;
 
 export const updatePlatformTenantSubscriptionDto = z.object({
-  planId: z.string().uuid().optional(),
+  planId: z.string().guid().optional(),
   seatCount: z.coerce.number().int().min(1).optional(),
   status: z.enum(['ACTIVE', 'TRIALING', 'PAST_DUE', 'CANCELED', 'EXPIRED']).optional(),
   cancelAtPeriodEnd: z.boolean().optional(),
@@ -333,7 +333,7 @@ export type UpdatePlatformTenantSubscriptionDto = z.infer<
 
 export const migrateTenantDatabaseDto = z.object({
   customDatabaseName: z.string().trim().max(63).optional(),
-  poolLimit: z.coerce.number().int().min(1).max(50).default(5).optional(),
+  poolLimit: z.coerce.number().int().min(1).max(50).optional(),
   connectionUrl: z.string().trim().url().optional(),
 });
 export type MigrateTenantDatabaseDto = z.infer<typeof migrateTenantDatabaseDto>;
@@ -342,7 +342,7 @@ export const listTenantDatabasesQueryDto = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().trim().optional(),
-  tenantId: z.string().uuid().optional(),
+  tenantId: z.string().guid().optional(),
   strategy: z.enum(['shared', 'dedicated', 'ALL']).optional(),
   provisioningStatus: z
     .enum(['ACTIVE', 'PENDING', 'PROVISIONING', 'FAILED', 'SUSPENDED', 'DEACTIVATED', 'ALL'])
@@ -368,9 +368,9 @@ export const executeTenantDatabaseOperationDto = z.object({
   targetVersion: z.string().trim().max(50).optional(),
   maintenanceWindow: z.string().trim().max(100).optional(),
   reason: z.string().trim().min(5, 'Reason must be at least 5 characters').max(500),
-  backupConfirmed: z.boolean().default(false).optional(),
-  discardDedicatedData: z.boolean().default(false).optional(),
-  approvedByStaffId: z.string().uuid().optional(),
+  backupConfirmed: z.boolean().optional(),
+  discardDedicatedData: z.boolean().optional(),
+  approvedByStaffId: z.string().guid().optional(),
   poolLimit: z.coerce.number().int().min(1).max(50).optional(),
   customDatabaseName: z.string().trim().max(63).optional(),
   connectionUrl: z.string().trim().url().optional(),
