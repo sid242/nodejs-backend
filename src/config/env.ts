@@ -113,6 +113,12 @@ const schema = z.object({
   // Observability & Sentry
   SENTRY_DSN: z.string().optional(),
   SENTRY_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(1.0),
+
+  // Row-Level Security (RLS) Pilot Enforcement
+  RLS_ENFORCEMENT_PILOT: z.preprocess(
+    (val) => val === 'true' || val === true,
+    z.boolean().default(false),
+  ),
 });
 
 const parsed = schema.safeParse(process.env);

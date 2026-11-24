@@ -1,6 +1,8 @@
 import crypto from 'node:crypto';
+import { sql } from 'drizzle-orm';
 import type { NextFunction, Request, Response } from 'express';
 
+import type { Database } from '@/config/db';
 import { env } from '@/config/env';
 import { logger } from '@/config/logger';
 import { redis } from '@/config/redis';
@@ -14,6 +16,38 @@ import { resolveUserPermissions, SYSTEM_ROLES } from '@/modules/rbac/rbac.servic
 import { ssoRepo } from '@/modules/sso/sso.repository';
 import * as tenantsRepo from '@/modules/tenants/tenants.repository';
 import * as usersRepo from '@/modules/users/users.repository';
+
+export function isRlsPilotEnabled(
+  tenant?: { databaseMode?: string; metadata?: any },
+  req?: Request,
+): boolean {
+  const mode = tenant?.databaseMode ?? (req?.tenant as any)?.databaseMode;
+  // Dedicated database mode is already isolated at the database instance level
+  if (mode === 'dedicated') {
+    return false;
+  }
+
+  // 1. Global toggle via environment variable
+  if (env.RLS_ENFORCEMENT_PILOT) {
+    return true;
+  }
+
+  // 2. Per-tenant metadata flag (canary rollout)
+  const meta = tenant?.metadata ?? (req?.tenant as any)?.metadata;
+  if (meta && typeof meta === 'object') {
+    if (meta.enforceRls === true || meta.rlsPilot === true || meta.enableRlsTransaction === true) {
+      return true;
+    }
+  }
+
+  // 3. Request-level canary header (for pilot verification)
+  const pilotHeader = req?.headers?.['x-rls-pilot'] || req?.headers?.['x-enforce-rls'];
+  if (pilotHeader === 'true' || pilotHeader === '1') {
+    return true;
+  }
+
+  return false;
+}
 
 function safeCompareSecrets(input: string, expected?: string): boolean {
   if (!expected || !input) return false;
@@ -45,7 +79,7 @@ export function hasValidBffSecret(req: Request): boolean {
 
 export async function resolveTenantContext(
   req: Request,
-  _res: Response,
+  res: Response,
   next: NextFunction,
 ): Promise<void> {
   if (req.isSupportSession && req.tenant) {
@@ -276,6 +310,7 @@ export async function resolveTenantContext(
       status: tenant.status,
       plan: tenant.plan,
       databaseMode: (tenant as any).databaseMode ?? 'shared',
+      metadata: (tenant as any).metadata,
     };
 
     req.db = await getTenantDb({
@@ -298,6 +333,58 @@ export async function resolveTenantContext(
     }
 
     req.permissions = effectivePermissions;
+
+    if (isRlsPilotEnabled(req.tenant, req)) {
+      return req.db
+        .transaction(async (tx) => {
+          await tx.execute(sql`SET LOCAL ROLE tenant_app_role`);
+          await tx.execute(sql`SELECT set_config('app.tenant_id', ${tenant.id}, true)`);
+
+          return new Promise<void>((resolve, reject) => {
+            let settled = false;
+            const done = () => {
+              if (!settled) {
+                settled = true;
+                resolve();
+              }
+            };
+
+            if (typeof res?.once === 'function') {
+              res.once('finish', done);
+              res.once('close', done);
+              res.once('error', (err) => {
+                if (!settled) {
+                  settled = true;
+                  reject(err);
+                }
+              });
+            }
+
+            runWithTenantDb(
+              {
+                tenantId: tenant.id,
+                db: tx as unknown as Database,
+                tx,
+                databaseMode: req.tenant?.databaseMode ?? 'shared',
+              },
+              () => {
+                next();
+                if (typeof res?.once !== 'function') {
+                  done();
+                }
+              },
+            );
+          });
+        })
+        .catch((err) => {
+          if (!res.headersSent) {
+            next(err);
+          } else {
+            logger.error({ err, tenantId: tenant.id }, 'Error in RLS pilot transaction');
+          }
+        });
+    }
+
     return runWithTenantDb(
       {
         tenantId: tenant.id,
@@ -323,7 +410,66 @@ export async function requireTenant(
         databaseMode: req.tenant.databaseMode ?? 'shared',
       });
     }
-    return next();
+
+    if (isRlsPilotEnabled(req.tenant, req)) {
+      return req.db
+        .transaction(async (tx) => {
+          await tx.execute(sql`SET LOCAL ROLE tenant_app_role`);
+          await tx.execute(sql`SELECT set_config('app.tenant_id', ${req.tenant!.id}, true)`);
+
+          return new Promise<void>((resolve, reject) => {
+            let settled = false;
+            const done = () => {
+              if (!settled) {
+                settled = true;
+                resolve();
+              }
+            };
+
+            if (typeof res?.once === 'function') {
+              res.once('finish', done);
+              res.once('close', done);
+              res.once('error', (err) => {
+                if (!settled) {
+                  settled = true;
+                  reject(err);
+                }
+              });
+            }
+
+            runWithTenantDb(
+              {
+                tenantId: req.tenant!.id,
+                db: tx as unknown as Database,
+                tx,
+                databaseMode: req.tenant?.databaseMode ?? 'shared',
+              },
+              () => {
+                next();
+                if (typeof res?.once !== 'function') {
+                  done();
+                }
+              },
+            );
+          });
+        })
+        .catch((err) => {
+          if (!res.headersSent) {
+            next(err);
+          } else {
+            logger.error({ err, tenantId: req.tenant?.id }, 'Error in RLS pilot transaction');
+          }
+        });
+    }
+
+    return runWithTenantDb(
+      {
+        tenantId: req.tenant.id,
+        db: req.db,
+        databaseMode: req.tenant.databaseMode ?? 'shared',
+      },
+      () => next(),
+    );
   }
 
   if (!req.user && !req.staff && !req.isSupportSession) {

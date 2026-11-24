@@ -92,3 +92,31 @@ The following operations execute **before** or **outside** a resolved tenant con
    - SCIM HTTP Authorization header resolves tenant mapping from the primary SCIM token registry.
 6. **Support Delegation Session Handshake (`findSupportSessionById`)**:
    - Audited support sessions resolve through `PlatformSupportSession` (primary cluster).
+
+---
+
+## 5. Runtime Enforcement & RLS Pilot
+
+Multi-tenant database requests are governed by a dual-layer isolation model:
+
+1. **Application-Layer Scoping (Baseline)**:
+   - All repository queries explicitly specify `WHERE "tenantId" = ...`.
+   - Write paths invoke `assertTenantScope(targetTenantId)` to throw 403 Forbidden on mismatched execution context.
+
+2. **PostgreSQL Kernel-Enforced RLS Pilot (Activated via Flag)**:
+   - Governed by `isRlsPilotEnabled` in `src/middleware/tenant.ts`.
+   - Active when:
+     - `RLS_ENFORCEMENT_PILOT=true` in environment configuration, OR
+     - `tenant.metadata.rlsPilot = true` / `tenant.metadata.enforceRls = true` (per-tenant canary pilot), OR
+     - Request header `x-rls-pilot: true` is present.
+   - **Execution Lifecycle**:
+     - Express middleware initiates a transaction on `req.db`.
+     - Runs `SET LOCAL ROLE tenant_app_role` to downgrade session privileges from connection owner to non-superuser `tenant_app_role` (`NOBYPASSRLS`).
+     - Runs `SELECT set_config('app.tenant_id', tenant.id, true)` to locally bind tenant identity to the transaction scope.
+     - Binds the active `tx` handle to `AsyncLocalStorage` via `runWithTenantDb`.
+     - Because `tenantDb()` resolves `store?.tx ?? store?.db`, all 40+ domain modules execute directly within the RLS transaction.
+     - Commits cleanly on `res.once('finish')` / `res.once('close')`.
+
+3. **Dedicated Database Tenants**:
+   - Enterprise tenants with `databaseMode: 'dedicated'` run on isolated PostgreSQL databases created during provisioning.
+   - Dedicated tenants bypass shared RLS transactions, maintaining physical database-level isolation.
