@@ -7,8 +7,8 @@ import { AppError } from '@/lib/errors';
 import { logSecurityEvent } from '@/modules/audit/audit.service';
 import { verifyAccessToken, verifySupportToken } from '@/modules/auth/tokens';
 import * as platformRepo from '@/modules/platform/platform.repository';
+import { loadActiveSupportAccess } from '@/modules/platform/support-access';
 import { resolveUserPermissions, SYSTEM_ROLES } from '@/modules/rbac/rbac.service';
-import * as tenantsRepo from '@/modules/tenants/tenants.repository';
 
 export const SUPPORT_SCOPE_PRESETS = {
   READ_ONLY: [
@@ -154,40 +154,10 @@ export async function requireSupportOrUser(
   try {
     const supportPayload = verifySupportToken(token);
 
-    // Fail-closed DB check for support session
-    const session = await platformRepo.findSupportSessionById(supportPayload.sess);
-    if (!session) {
-      return next(AppError.unauthorized('Support session not found or revoked'));
-    }
-
-    if (session.status !== 'ACTIVE') {
-      return next(
-        AppError.forbidden(`Support session is currently ${session.status.toLowerCase()}`),
-      );
-    }
-
-    if (new Date(session.expiresAt) <= new Date()) {
-      await platformRepo.terminateSupportSession(session.id, { status: 'EXPIRED' });
-      return next(AppError.unauthorized('Support session has expired'));
-    }
-
-    if (
-      session.staffId !== supportPayload.staffId ||
-      session.tenantId !== supportPayload.tenantId
-    ) {
-      return next(AppError.unauthorized('Support session claims mismatch'));
-    }
-
-    // Resolve tenant
-    const tenant = await tenantsRepo.findTenantById(session.tenantId);
-    if (!tenant || tenant.deletedAt) {
-      return next(AppError.notFound('Tenant workspace not found'));
-    }
-
-    if (tenant.status !== 'ACTIVE' && tenant.status !== 'TRIALING') {
-      return next(
-        AppError.forbidden(`Tenant workspace is currently ${tenant.status.toLowerCase()}`),
-      );
+    const { session, tenant } = await loadActiveSupportAccess(supportPayload);
+    const requestedTenant = req.params?.tenantId;
+    if (requestedTenant && requestedTenant !== tenant.id && requestedTenant !== tenant.slug) {
+      return next(AppError.forbidden('Support session is scoped to another workspace'));
     }
 
     req.isSupportSession = true;
@@ -298,6 +268,7 @@ export async function requireSupportOrUser(
         status: 'ACTIVE',
         roles: ['SUPPORT_STAFF'],
       };
+      req.user = { id: session.staffId, status: 'ACTIVE' };
     }
 
     return runWithTenantDb(
@@ -308,7 +279,8 @@ export async function requireSupportOrUser(
       },
       () => next(),
     );
-  } catch {
+  } catch (error) {
+    if (error instanceof AppError) return next(error);
     // If not a valid support token, continue to try standard user access token
   }
 

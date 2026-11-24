@@ -6,6 +6,7 @@ import { asyncHandler } from '@/lib/async-handler';
 import { AppError } from '@/lib/errors';
 import { AppResponse } from '@/lib/responses';
 import * as service from '@/modules/files/files.service';
+import { findTenantById, findTenantMember } from '@/modules/tenants/tenants.repository';
 
 export const listFiles = asyncHandler(async (req: Request, res: Response) => {
   const result = await service.listFiles(req.user!.id, req.tenant?.id, req.valid?.query);
@@ -166,6 +167,12 @@ export const streamEvents = (req: Request, res: Response): void => {
     res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Authentication required' } });
     return;
   }
+  if (req.isSupportSession) {
+    res
+      .status(403)
+      .json({ error: { code: 'FORBIDDEN', message: 'File streams require a workspace member' } });
+    return;
+  }
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -178,12 +185,16 @@ export const streamEvents = (req: Request, res: Response): void => {
   const subClient = createRedis(`sse-sub-${userId}`, { url: env.SOCKET_REDIS_URL });
   const channel = 'sse:workspace-user:' + tenantId + ':' + userId;
 
-  void subClient.subscribe(channel);
+  void subClient.subscribe(channel).catch(() => res.end());
 
   subClient.on('message', (chan, msg) => {
     if (chan === channel) {
       try {
         const parsed = JSON.parse(msg);
+        if (parsed?.event === 'workspace:revoked') {
+          res.end();
+          return;
+        }
         res.write(
           `event: ${parsed?.event ?? 'message'}\ndata: ${JSON.stringify(parsed?.payload ?? {})}\n\n`,
         );
@@ -194,12 +205,25 @@ export const streamEvents = (req: Request, res: Response): void => {
   });
 
   const keepAliveInterval = setInterval(() => {
-    res.write(':ping\n\n');
+    void Promise.all([findTenantById(tenantId), findTenantMember(tenantId, userId)])
+      .then(([tenant, member]) => {
+        if (res.writableEnded) return;
+        if (
+          !tenant ||
+          tenant.deletedAt ||
+          !['ACTIVE', 'TRIALING'].includes(tenant.status) ||
+          member?.status !== 'ACTIVE'
+        ) {
+          res.end();
+          return;
+        }
+        res.write(':ping\n\n');
+      })
+      .catch(() => res.end());
   }, 25_000);
 
-  req.on('close', () => {
+  res.on('close', () => {
     clearInterval(keepAliveInterval);
-    void subClient.unsubscribe(channel).catch(() => {});
-    void subClient.quit().catch(() => {});
+    subClient.disconnect();
   });
 };

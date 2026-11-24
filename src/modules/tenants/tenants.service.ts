@@ -42,7 +42,7 @@ import * as filesRepo from '@/modules/files/files.repository';
 import { rbacRepo } from '@/modules/rbac/rbac.repository';
 import * as rbacService from '@/modules/rbac/rbac.service';
 import { emailQueue } from '@/queues/index';
-import { emitToRoom } from '@/sockets/emitter';
+import { disconnectWorkspaceMember, emitToRoom } from '@/sockets/emitter';
 
 import { tenantBrandingRepo } from './tenant-branding.repository';
 import { tenantEmailRepo } from './tenant-email.repository';
@@ -129,8 +129,16 @@ export async function createTenantOrganization(
   };
 }
 
-export async function getUserTenants(userId: string): Promise<PublicTenant[]> {
-  return tenantsRepo.findUserTenants(userId);
+export async function getUserTenants(
+  userId: string,
+): Promise<Array<PublicTenant & { canonicalBase: string }>> {
+  const tenants = await tenantsRepo.findUserTenants(userId);
+  return Promise.all(
+    tenants.map(async (tenant) => ({
+      ...tenant,
+      canonicalBase: (await buildTenantUrl(tenant.id, '')).replace(/\/+$/, ''),
+    })),
+  );
 }
 
 export async function getTenantDetails(tenantId: string): Promise<PublicTenant> {
@@ -630,6 +638,7 @@ export async function removeMemberFromTenant(
   }
 
   await tenantsRepo.softDeleteTenantMember(tenantId, memberId);
+  disconnectWorkspaceMember(tenantId, member.userId);
   await rbacService.invalidateRbacCache(tenantId, member.userId);
   await revokeAllUserTokens(member.userId);
 
@@ -743,6 +752,8 @@ export async function updateTenantMemberStatus(
   }
 
   if (status === 'SUSPENDED') {
+    disconnectWorkspaceMember(tenantId, member.userId);
+    await rbacService.invalidateRbacCache(tenantId, member.userId);
     await revokeAllUserTokens(member.userId);
   }
 
@@ -829,6 +840,7 @@ export async function offboardTenantMember(
   }
 
   // Invalidate sessions and RBAC cache
+  disconnectWorkspaceMember(tenantId, member.userId);
   await rbacService.invalidateRbacCache(tenantId, member.userId);
   await revokeAllUserTokens(member.userId);
 

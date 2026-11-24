@@ -16,7 +16,12 @@ import internalRoutes from '@/modules/internal/internal.routes';
 import leadsRoutes from '@/modules/leads/leads.routes';
 import maintenanceRoutes from '@/modules/maintenance/maintenance.routes';
 import notificationsRoutes from '@/modules/notifications/notifications.routes';
-import { isModuleInstalled, optionalModules } from '@/modules/optional-modules/registry';
+import {
+  isModuleInstalled,
+  optionalModuleKeys,
+  optionalModules,
+  type OptionalModuleKey,
+} from '@/modules/optional-modules/registry';
 import platformRoutes from '@/modules/platform/platform.routes';
 import policiesRoutes from '@/modules/policies/policies.routes';
 import { consentRouter, platformPrivacyRouter } from '@/modules/privacy/privacy.routes';
@@ -29,6 +34,7 @@ import tenantRoutes from '@/modules/tenants/tenants.routes';
 import userRoutes from '@/modules/users/users.routes';
 
 const router: Router = Router();
+const optionalRouters = { leads: leadsRoutes } satisfies Record<OptionalModuleKey, Router>;
 router.use('/auth/sso', ssoAuthRouter);
 router.use('/auth', authRoutes);
 router.use('/scim/v2', scimRouter);
@@ -38,7 +44,9 @@ router.use('/tenants', tenantRoutes);
 router.use('/groups', groupRoutes);
 router.use('/rbac', rbacRoutes);
 router.use('/policies', policiesRoutes);
-if (isModuleInstalled('leads')) router.use(optionalModules.leads.mountPath, leadsRoutes);
+for (const key of optionalModuleKeys.filter(isModuleInstalled)) {
+  router.use(optionalModules[key].mountPath, optionalRouters[key]);
+}
 router.use('/notifications', notificationsRoutes);
 router.use('/search', searchRoutes);
 router.use('/platform', platformRoutes);

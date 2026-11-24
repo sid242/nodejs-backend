@@ -26,7 +26,7 @@ import {
 } from '@/modules/tenants/tenant-url.service';
 import { tenantsRepo } from '@/modules/tenants/tenants.repository';
 import { emailQueue } from '@/queues/index';
-import { emitToUser } from '@/sockets/emitter';
+import { emitToWorkspaceUser } from '@/sockets/emitter';
 
 import type {
   AssignSubscriptionDto,
@@ -1560,7 +1560,7 @@ export async function activatePaidOrder(
     }
 
     if (actorUserId) {
-      emitToUser(actorUserId, 'billing:payment_success', {
+      emitToWorkspaceUser(tenantId, actorUserId, 'billing:payment_success', {
         orderId,
         paymentId,
         planKey: newPlanKey,
@@ -2025,7 +2025,7 @@ export async function verifyTenantSubscriptionPayment(
     await invalidateTenantBillingCache(tenantId);
   }
 
-  emitToUser(actorUserId, 'billing:subscription_activated', {
+  emitToWorkspaceUser(tenantId, actorUserId, 'billing:subscription_activated', {
     subscriptionId: dto.razorpay_subscription_id,
     paymentId: dto.razorpay_payment_id,
   });

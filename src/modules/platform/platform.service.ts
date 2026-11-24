@@ -24,6 +24,7 @@ import * as rbacService from '@/modules/rbac/rbac.service';
 import { buildPlatformUrl, buildTenantUrl } from '@/modules/tenants/tenant-url.service';
 import { tenantsRepo } from '@/modules/tenants/tenants.repository';
 import { dbOpsQueue, emailQueue } from '@/queues/index';
+import { disconnectSupportSession } from '@/sockets/emitter';
 
 import { createPlatformTwoFactorChallenge } from './platform-2fa.service';
 import {
@@ -1027,6 +1028,7 @@ export async function enterSupportSession(
     tenantSlug: tenant?.slug,
     mode: session.mode,
     scope: session.scope,
+    expiresAt: session.expiresAt,
   };
 }
 
@@ -1068,6 +1070,7 @@ export async function endSupportSession(
     requestId,
   });
 
+  disconnectSupportSession(sessionId);
   return terminated;
 }
 

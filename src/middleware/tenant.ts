@@ -317,6 +317,10 @@ export async function requireTenant(
   next: NextFunction,
 ): Promise<void> {
   if (req.isSupportSession && req.tenant) {
+    const requested = req.params?.tenantId;
+    if (requested && requested !== req.tenant.id && requested !== req.tenant.slug) {
+      return next(AppError.forbidden('Support session is scoped to another workspace'));
+    }
     if (!req.db) {
       req.db = await getTenantDb({
         id: req.tenant.id,
