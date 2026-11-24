@@ -30,7 +30,7 @@ export const updateTenantSsoConfigDto = z.object({
         .regex(/^[a-z0-9.-]+\.[a-z]{2,}$/i, 'Invalid domain format'),
     )
     .default([]),
-  defaultRoleId: z.string().uuid().optional().nullable(),
+  defaultRoleId: z.string().guid().optional().nullable(),
   jitProvisioning: z.boolean().default(true),
 });
 
@@ -68,7 +68,7 @@ export const ssoLookupDto = z.object({
 
 export const ssoInitiateQueryDto = z.object({
   email: z.string().email().trim().toLowerCase().optional(),
-  tenantId: z.string().uuid().optional(),
+  tenantId: z.string().guid().optional(),
   tenantSlug: z.string().trim().optional(),
   returnTo: z.string().trim().optional(),
 });
@@ -86,7 +86,7 @@ export const oidcCallbackQueryDto = z.object({
 });
 
 export const ssoTenantParamDto = z.object({
-  tenantId: z.string().uuid('Invalid tenant ID format'),
+  tenantId: z.string().guid('Invalid tenant ID format'),
 });
 
 export type UpdateTenantSsoConfigDto = z.infer<typeof updateTenantSsoConfigDto>;

@@ -34,6 +34,12 @@ test('DEFAULT_PLANS contains FREE, PRO, ENTERPRISE with correct limits', () => {
   assert.equal(ent.limits.maxCustomRoles, null);
 });
 
+test('updating a plan preserves omitted fields and parses supplied values', () => {
+  assert.deepEqual(billingDto.updatePlanDto.parse({ priceMonthlyMinor: '2500' }), {
+    priceMonthlyMinor: 2500,
+  });
+});
+
 test('planLimitsDto validates null (unlimited) and positive integers', () => {
   const valid = billingDto.planLimitsDto.safeParse({
     maxMembers: 10,

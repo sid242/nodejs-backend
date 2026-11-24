@@ -19,6 +19,7 @@ import * as filesRepo from '@/modules/files/files.repository';
 import { rbacRepo } from '@/modules/rbac/rbac.repository';
 import * as rbacService from '@/modules/rbac/rbac.service';
 import { emailQueue } from '@/queues/index';
+import { disconnectWorkspaceMember } from '@/sockets/emitter';
 
 import { buildTenantUrl } from './tenant-url.service';
 import {
@@ -452,6 +453,7 @@ export async function removeMemberFromTenant(
   }
 
   await tenantsRepo.softDeleteTenantMember(tenantId, memberId);
+  disconnectWorkspaceMember(tenantId, member.userId);
   await rbacService.invalidateRbacCache(tenantId, member.userId);
   await revokeAllUserTokens(member.userId);
 
@@ -565,6 +567,8 @@ export async function updateTenantMemberStatus(
   }
 
   if (status === 'SUSPENDED') {
+    disconnectWorkspaceMember(tenantId, member.userId);
+    await rbacService.invalidateRbacCache(tenantId, member.userId);
     await revokeAllUserTokens(member.userId);
   }
 
@@ -651,6 +655,7 @@ export async function offboardTenantMember(
   }
 
   // Invalidate sessions and RBAC cache
+  disconnectWorkspaceMember(tenantId, member.userId);
   await rbacService.invalidateRbacCache(tenantId, member.userId);
   await revokeAllUserTokens(member.userId);
 

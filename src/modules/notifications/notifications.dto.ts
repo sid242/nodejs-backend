@@ -19,7 +19,7 @@ export const NOTIFICATION_DIGESTS = ['NONE', 'DAILY', 'WEEKLY'] as const;
 export type NotificationDigest = (typeof NOTIFICATION_DIGESTS)[number];
 
 export const notificationIdParamDto = z.object({
-  id: z.string().uuid(),
+  id: z.string().guid(),
 });
 export type NotificationIdParamDto = z.infer<typeof notificationIdParamDto>;
 
@@ -40,7 +40,7 @@ export type ListNotificationsQueryDto = z.infer<typeof listNotificationsQueryDto
 
 export const readAllNotificationsDto = z.object({
   category: z.enum(NOTIFICATION_CATEGORIES).optional(),
-  tenantId: z.string().uuid().optional(),
+  tenantId: z.string().guid().optional(),
 });
 export type ReadAllNotificationsDto = z.infer<typeof readAllNotificationsDto>;
 
@@ -92,9 +92,9 @@ export const broadcastNotificationDto = z.object({
   link: z.string().max(500).optional(),
   target: z.object({
     type: z.enum(['ALL', 'TENANT', 'PLAN', 'USERS']),
-    tenantId: z.string().uuid().optional(),
-    planId: z.string().uuid().optional(),
-    userIds: z.array(z.string().uuid()).optional(),
+    tenantId: z.string().guid().optional(),
+    planId: z.string().guid().optional(),
+    userIds: z.array(z.string().guid()).optional(),
   }),
 });
 export type BroadcastNotificationDto = z.infer<typeof broadcastNotificationDto>;

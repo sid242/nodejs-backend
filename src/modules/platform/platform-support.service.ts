@@ -3,6 +3,7 @@ import * as authRepo from '@/modules/auth/auth.repository';
 import { issueSupportToken } from '@/modules/auth/tokens';
 import * as rbacService from '@/modules/rbac/rbac.service';
 import { tenantsRepo } from '@/modules/tenants/tenants.repository';
+import { disconnectSupportSession } from '@/sockets/emitter';
 
 import { resolveActorContext, type StaffActorContext } from './platform-staff.service';
 import {
@@ -241,6 +242,7 @@ export async function enterSupportSession(
     tenantSlug: tenant?.slug,
     mode: session.mode,
     scope: session.scope,
+    expiresAt: session.expiresAt,
   };
 }
 
@@ -282,6 +284,7 @@ export async function endSupportSession(
     requestId,
   });
 
+  disconnectSupportSession(sessionId);
   return terminated;
 }
 

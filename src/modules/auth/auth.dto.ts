@@ -62,7 +62,7 @@ export const verifyEmailDto = z.object({
 export type VerifyEmailDto = z.infer<typeof verifyEmailDto>;
 
 export const impersonateUserDto = z.object({
-  targetUserId: z.string().uuid(),
+  targetUserId: z.string().guid(),
   reason: z.string().min(5).max(500),
   durationMinutes: z.number().int().min(5).max(120).default(30),
 });
@@ -115,7 +115,7 @@ export const verifyTwoFactorChallengeDto = z.object({
 export type VerifyTwoFactorChallengeDto = z.infer<typeof verifyTwoFactorChallengeDto>;
 
 export const revokeSessionParamsDto = z.object({
-  sessionId: z.string().uuid(),
+  sessionId: z.string().guid(),
 });
 
 export type RevokeSessionParamsDto = z.infer<typeof revokeSessionParamsDto>;
@@ -133,7 +133,7 @@ export const regenerateRecoveryCodesDto = z
 export type RegenerateRecoveryCodesDto = z.infer<typeof regenerateRecoveryCodesDto>;
 
 export const revokeOtherSessionsDto = z.object({
-  currentSessionId: z.string().uuid().optional(),
+  currentSessionId: z.string().guid().optional(),
 });
 
 export type RevokeOtherSessionsDto = z.infer<typeof revokeOtherSessionsDto>;
@@ -141,7 +141,7 @@ export type RevokeOtherSessionsDto = z.infer<typeof revokeOtherSessionsDto>;
 // ─── Session Handoff ────────────────────────────────────────────────────────────
 
 export const createHandoffDto = z.object({
-  tenantId: z.string().uuid(),
+  tenantId: z.string().guid(),
   targetHost: z.string().min(1).max(255),
 });
 

@@ -20,7 +20,7 @@ export function registerSearchDocs(registry: OpenAPIRegistry): void {
         .openapi({ example: 'Members' }),
       href: z.string().openapi({ example: '/team?search=sarah%40acme.com' }),
       icon: z.string().optional().openapi({ example: 'user' }),
-      metadata: z.record(z.unknown()).optional(),
+      metadata: z.record(z.string(), z.unknown()).optional(),
     }),
   );
 

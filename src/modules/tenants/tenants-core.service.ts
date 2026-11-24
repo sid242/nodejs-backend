@@ -10,7 +10,7 @@ import { logSecurityEvent } from '@/modules/audit/audit.service';
 import * as billingService from '@/modules/billing/billing.service';
 
 import { tenantBrandingRepo } from './tenant-branding.repository';
-import { buildPlatformUrl, getEffectiveUrlMode } from './tenant-url.service';
+import { buildPlatformUrl, buildTenantUrl, getEffectiveUrlMode } from './tenant-url.service';
 import { isReservedSlug, type CreateTenantDto, type UpdateTenantDto } from './tenants.dto';
 import { tenantsRepo } from './tenants.repository';
 
@@ -72,8 +72,16 @@ export async function createTenantOrganization(
   };
 }
 
-export async function getUserTenants(userId: string): Promise<PublicTenant[]> {
-  return tenantsRepo.findUserTenants(userId);
+export async function getUserTenants(
+  userId: string,
+): Promise<Array<PublicTenant & { canonicalBase: string }>> {
+  const tenants = await tenantsRepo.findUserTenants(userId);
+  return Promise.all(
+    tenants.map(async (tenant) => ({
+      ...tenant,
+      canonicalBase: (await buildTenantUrl(tenant.id, '')).replace(/\/+$/, ''),
+    })),
+  );
 }
 
 export async function getTenantDetails(tenantId: string): Promise<PublicTenant> {

@@ -3,8 +3,8 @@ import { z } from 'zod';
 export const searchAuditLogsQueryDto = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(50),
-  actorUserId: z.string().uuid().optional(),
-  effectiveUserId: z.string().uuid().optional(),
+  actorUserId: z.string().guid().optional(),
+  effectiveUserId: z.string().guid().optional(),
   action: z.string().optional(),
   actions: z.array(z.string()).optional(),
   resourceType: z.string().optional(),
@@ -35,7 +35,7 @@ export const updateTenantAuditPolicyDto = z.object({
 export type UpdateTenantAuditPolicyDto = z.infer<typeof updateTenantAuditPolicyDto>;
 
 export const simulateAccessDto = z.object({
-  userId: z.string().uuid({ message: 'Valid user ID is required' }),
+  userId: z.string().guid({ message: 'Valid user ID is required' }),
   permission: z.string().min(1, { message: 'Permission key is required' }),
   resourceType: z.string().optional(),
   resourceId: z.string().optional(),
@@ -44,7 +44,7 @@ export const simulateAccessDto = z.object({
 export type SimulateAccessDto = z.infer<typeof simulateAccessDto>;
 
 export const getEffectiveAccessQueryDto = z.object({
-  userId: z.string().uuid({ message: 'Valid user ID is required' }),
+  userId: z.string().guid({ message: 'Valid user ID is required' }),
 });
 
 export type GetEffectiveAccessQueryDto = z.infer<typeof getEffectiveAccessQueryDto>;

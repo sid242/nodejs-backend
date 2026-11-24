@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from 'express';
 
 import { ACCESS_TOKEN_COOKIE, AUTH_HEADERS } from '@/constants/index';
 import { AppError } from '@/lib/errors';
-import { isSupportDeniedRoute } from '@/middleware/support';
+import { requireSupportOrUser } from '@/middleware/support';
 import { verifyAccessToken, verifySupportToken } from '@/modules/auth/tokens';
 
 export async function requireAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
@@ -41,28 +41,8 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     } catch (primaryErr) {
       // Fallback: Check if the token is a valid active support token
       try {
-        const supportPayload = verifySupportToken(token);
-
-        if (isSupportDeniedRoute(req)) {
-          return next(
-            AppError.forbidden(
-              'Support tokens are strictly prohibited from accessing authentication credentials, billing mutations, SSO/SCIM, member/role mutations, and database operations.',
-            ),
-          );
-        }
-
-        req.user = { id: (supportPayload.sub || supportPayload.staffId) as string };
-        req.isSupportSession = true;
-        req.supportSession = {
-          id: supportPayload.sess,
-          sessionId: supportPayload.sess,
-          staffId: supportPayload.staffId,
-          tenantId: supportPayload.tenantId,
-          mode: supportPayload.mode,
-          scope: supportPayload.scope,
-          expiresAt: new Date(Number(supportPayload.exp) * 1000),
-        };
-        return next();
+        verifySupportToken(token);
+        return requireSupportOrUser(req, _res, next);
       } catch {
         throw primaryErr;
       }

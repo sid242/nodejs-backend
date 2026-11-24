@@ -20,7 +20,7 @@ export type AddTicketMessageDto = z.infer<typeof addTicketMessageDto>;
 export const updateTicketDto = z.object({
   status: z.enum(['OPEN', 'PENDING', 'RESOLVED', 'CLOSED']).optional(),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
-  assigneeStaffId: z.string().uuid().nullable().optional(),
+  assigneeStaffId: z.string().guid().nullable().optional(),
 });
 
 export type UpdateTicketDto = z.infer<typeof updateTicketDto>;

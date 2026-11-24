@@ -10,7 +10,11 @@ import {
   onboardingModuleDefinition,
   supportModuleDefinition,
 } from '@/modules/onboarding/onboarding.permissions';
-import { isModuleInstalled, optionalModules } from '@/modules/optional-modules/registry';
+import {
+  isModuleInstalled,
+  optionalModuleKeys,
+  optionalModules,
+} from '@/modules/optional-modules/registry';
 import { rbacModuleDefinition } from '@/modules/rbac/rbac.permissions';
 import {
   membersModuleDefinition,
@@ -33,5 +37,5 @@ export const SYSTEM_MODULE_DEFINITIONS: DomainModuleDefinition[] = [
   analyticsModuleDefinition,
   onboardingModuleDefinition,
   supportModuleDefinition,
-  ...(isModuleInstalled('leads') ? [optionalModules.leads.catalog] : []),
+  ...optionalModuleKeys.filter(isModuleInstalled).map((key) => optionalModules[key].catalog),
 ];
