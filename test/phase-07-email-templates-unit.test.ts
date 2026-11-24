@@ -22,10 +22,12 @@ import { closeQueues } from '@/queues/index';
 import { closeSocketEmitter } from '@/sockets/emitter';
 
 describe('Module 06 — Email Templates & Delivery Tests', () => {
+  const previousBounceWebhookSecret = env.EMAIL_BOUNCE_WEBHOOK_SECRET;
   let testTenantId: string;
   let testUserId: string;
 
   before(async () => {
+    env.EMAIL_BOUNCE_WEBHOOK_SECRET = 'test-email-bounce-webhook-secret';
     // Setup test tenant and user in DB
     const [tenant] = await db
       .insert(tenants)
@@ -48,6 +50,7 @@ describe('Module 06 — Email Templates & Delivery Tests', () => {
   });
 
   after(async () => {
+    env.EMAIL_BOUNCE_WEBHOOK_SECRET = previousBounceWebhookSecret;
     // Cleanup
     if (testTenantId) {
       await db

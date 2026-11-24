@@ -75,7 +75,10 @@ test('file scanner requires ClamAV daemon unless ALLOW_UNSCANNED_FILES is explic
   // 2. Without ALLOW_UNSCANNED_FILES, unreachable CLAMD_HOST rejects with ECONNREFUSED
   env.CLAMD_HOST = '127.0.0.1';
   env.CLAMD_PORT = 1; // reserved port, unreachable
-  await assert.rejects(scanFileBytes(bytes), (err: any) => err.code === 'ECONNREFUSED');
+  await assert.rejects(
+    scanFileBytes(bytes),
+    (err: unknown) => (err as { code?: string })?.code === 'ECONNREFUSED',
+  );
 
   // 3. With explicit ALLOW_UNSCANNED_FILES=true, missing CLAMD_HOST auto-marks as CLEAN
   (env as { ALLOW_UNSCANNED_FILES: boolean }).ALLOW_UNSCANNED_FILES = true;
@@ -106,8 +109,9 @@ test('production config rejects ALLOW_UNSCANNED_FILES=true', async () => {
       },
       cwd: process.cwd(),
     }),
-    (err: any) => {
-      const stderr = err.stderr || err.stdout || '';
+    (err: unknown) => {
+      const e = err as { stderr?: string; stdout?: string };
+      const stderr = e?.stderr || e?.stdout || '';
       return stderr.includes('ALLOW_UNSCANNED_FILES is strictly forbidden in production');
     },
   );

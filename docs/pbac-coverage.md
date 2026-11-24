@@ -44,3 +44,29 @@ Policy-Based Access Control (PBAC) operates alongside role-based permission chec
    - Evaluation traces (`traces`) containing policy names, IDs, and match reasons are never leaked in client 403 responses. Traces are logged server-side with `requestId`.
 6. **Support Session Boundaries**:
    - Support staff sessions cannot access confidential records unless granted explicit `FULL_ADMIN` scope.
+
+---
+
+## Scope Boundary & Domain Roadmap
+
+### Current Scope Rationale
+
+Policy-Based Access Control is currently active for **CRM Leads** and **Tenants**:
+
+- **CRM Leads**: Highly granular business requirements dictate that sales agents, regional managers, and department heads view only their assigned leads, region-specific pipelines, or non-confidential records. Static RBAC roles alone cannot represent these dynamic relationships without role explosion.
+- **Tenants**: Resource-level tenancy inspection ensures tenant lifecycle mutations respect organization-level actor contexts.
+
+### RBAC + RLS Domain Boundaries
+
+Other core domains (**Files**, **Email Templates**, **Billing**, **Users**, and **Audit Logs**) intentionally utilize **coarse-grained RBAC** (`requirePermission(...)`) coupled with **Row-Level Security (RLS)** rather than dynamic PBAC:
+
+- **Performance & Latency**: PBAC involves AST policy compilation into SQL expressions or memory evaluation. For uniform tenant assets (like templates or shared folders), RBAC checks have near-zero overhead.
+- **Simplicity**: Most resources within a workspace are collaborative and shared across all authorized team members.
+
+### Domain Onboarding Criteria
+
+A domain should be onboarded to PBAC when:
+
+1. Access depends on dynamic row attributes (e.g., `departmentId`, `confidentialityLevel`, `ownerId`) rather than tenant-wide roles.
+2. The entity supports row-level delegation or multi-regional access boundaries.
+3. The domain query layer implements `compileQueryScope` with index-backed SQL predicates to preserve query performance.

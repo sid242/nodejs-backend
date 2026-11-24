@@ -6,7 +6,20 @@ import * as service from '@/modules/users/users.service';
 
 export const getMe = asyncHandler(async (req: Request, res: Response) => {
   const user = await service.getMe(req.user!.id);
-  AppResponse.ok(user).send(res);
+  const support = req.supportSession;
+  AppResponse.ok(
+    support
+      ? {
+          ...user,
+          support: {
+            id: support.id,
+            tenantSlug: req.tenant?.slug,
+            scope: support.scope,
+            expiresAt: support.expiresAt,
+          },
+        }
+      : user,
+  ).send(res);
 });
 
 export const updateMe = asyncHandler(async (req: Request, res: Response) => {
