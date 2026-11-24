@@ -31,7 +31,10 @@ export const SuccessEnvelope = registry.register(
     success: z.literal(true).openapi({ example: true }),
     message: z.string().optional().openapi({ example: 'Operation successful' }),
     data: z.any().openapi({ description: 'Payload returned by the endpoint' }),
-    meta: z.record(z.any()).optional().openapi({ description: 'Pagination or auxiliary metadata' }),
+    meta: z
+      .record(z.string(), z.any())
+      .optional()
+      .openapi({ description: 'Pagination or auxiliary metadata' }),
     requestId: z.string().openapi({
       example: 'req_01j7v6m7c6e6r5x0e3q0w1x2y3',
       description: 'Unique request trace ID',
@@ -66,7 +69,7 @@ export function successResponse(schema: z.ZodTypeAny, description = 'Successful 
           success: z.literal(true),
           message: z.string().optional(),
           data: schema,
-          meta: z.record(z.any()).optional(),
+          meta: z.record(z.string(), z.any()).optional(),
           requestId: z.string(),
         }),
       },

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { updateEmailTemplateDto } from '@/modules/email-templates/email-templates.dto';
 import {
   renderPasswordResetEmail,
   renderStaffCredentialsEmail,
@@ -8,6 +9,12 @@ import {
   renderVerifyEmail,
   renderWelcomeEmail,
 } from '@/templates/emails/index';
+
+test('updating an email template preserves omitted fields', () => {
+  assert.deepEqual(updateEmailTemplateDto.parse({ subject: 'New subject' }), {
+    subject: 'New subject',
+  });
+});
 
 test('renderWelcomeEmail produces valid subject and includes user name', () => {
   const result = renderWelcomeEmail({ name: 'Alice' });

@@ -83,7 +83,14 @@ export const createEmailTemplateDto = z.object({
 export type CreateEmailTemplateDto = z.infer<typeof createEmailTemplateDto>;
 export type CreateEmailTemplateInput = z.input<typeof createEmailTemplateDto>;
 
-export const updateEmailTemplateDto = createEmailTemplateDto.partial();
+export const updateEmailTemplateDto = createEmailTemplateDto
+  .extend({
+    locale: createEmailTemplateDto.shape.locale.removeDefault(),
+    category: createEmailTemplateDto.shape.category.removeDefault(),
+    status: createEmailTemplateDto.shape.status.removeDefault(),
+    isSystemOverride: createEmailTemplateDto.shape.isSystemOverride.removeDefault(),
+  })
+  .partial();
 export type UpdateEmailTemplateDto = z.infer<typeof updateEmailTemplateDto>;
 
 export const listEmailTemplatesQueryDto = z.object({

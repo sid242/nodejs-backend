@@ -8,7 +8,7 @@ import { revokeAllUserTokens } from '@/modules/auth/tokens';
 import * as billingService from '@/modules/billing/billing.service';
 import { groupsRepo } from '@/modules/groups/groups.repository';
 import { ssoRepo } from '@/modules/sso/sso.repository';
-import { emitToUser } from '@/sockets/emitter';
+import { disconnectWorkspaceMember, emitToUser } from '@/sockets/emitter';
 
 import { ScimCreateUserDto, ScimError, ScimPatchUserDto, ScimQueryDto } from './scim.dto';
 import { scimRepo } from './scim.repository';
@@ -171,6 +171,7 @@ export class ScimService {
   }
 
   private async revokeUserSessions(userId: string, tenantId: string, reason: string) {
+    disconnectWorkspaceMember(tenantId, userId);
     await Promise.allSettled([
       revokeAllUserTokens(userId),
       cache.del(`${REDIS_PREFIXES.USER_CACHE}${userId}`),

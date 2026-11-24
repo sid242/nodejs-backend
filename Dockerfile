@@ -19,7 +19,8 @@ RUN npm run build
 
 FROM base AS prod-deps
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+# Git hooks are development-only. Keep dependency install scripts enabled.
+RUN npm pkg delete scripts.prepare && npm ci --omit=dev
 
 FROM base AS runtime
 ENV NODE_ENV=production

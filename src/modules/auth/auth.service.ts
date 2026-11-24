@@ -44,7 +44,6 @@ import { assertSsoNotEnforced } from '@/modules/sso/sso.enforcement';
 import {
   buildPlatformUrl,
   buildTenantUrl,
-  getEffectiveUrlMode,
   getUserMembershipsWithCanonicalUrls,
   type UserMembershipSummary,
 } from '@/modules/tenants/tenant-url.service';
@@ -561,22 +560,24 @@ export async function createHandoff(
   { tenantId, targetHost }: CreateHandoffDto,
   authMethod = 'SSO',
 ): Promise<{ handoffUrl: string; code: string }> {
-  const member = await tenantsRepo.findTenantMember(tenantId, userId);
-  if (!member || member?.status !== 'ACTIVE') {
+  const [member, tenant] = await Promise.all([
+    tenantsRepo.findTenantMember(tenantId, userId),
+    tenantsRepo.findTenantById(tenantId),
+  ]);
+  if (
+    member?.status !== 'ACTIVE' ||
+    !tenant ||
+    tenant.deletedAt ||
+    !['ACTIVE', 'TRIALING'].includes(tenant.status)
+  ) {
     throw AppError.forbidden('You are not an active member of this workspace');
   }
 
-  const canonicalBase = await buildTenantUrl(tenantId, '');
-  const normalizedTargetHost = targetHost?.trim()?.toLowerCase()?.split(':')?.[0] ?? '';
-  let canonicalHost = '';
-  try {
-    canonicalHost = new URL(canonicalBase)?.host?.toLowerCase()?.split(':')?.[0] ?? '';
-  } catch {
-    canonicalHost = '';
-  }
-  const platformHost = env?.PLATFORM_HOST?.toLowerCase()?.split(':')?.[0] ?? '';
-
-  if (normalizedTargetHost !== canonicalHost && normalizedTargetHost !== platformHost) {
+  const normalizedTargetHost = targetHost.trim().toLowerCase();
+  const target = [new URL(await buildTenantUrl(tenantId, '')), new URL(buildPlatformUrl('/'))].find(
+    (url) => url.host.toLowerCase() === normalizedTargetHost,
+  );
+  if (!target) {
     throw AppError.badRequest('Target host must match the tenant canonical host or platform host');
   }
 
@@ -598,10 +599,9 @@ export async function createHandoff(
     metadata: { targetHost: normalizedTargetHost, authMethod },
   });
 
-  const protocol = normalizedTargetHost?.includes('localhost') ? 'http' : 'https';
-  const handoffUrl = `${protocol}://${targetHost}/api/auth/handoff?code=${code}`;
-
-  return { handoffUrl, code };
+  const handoffUrl = new URL('/api/auth/handoff', target.origin);
+  handoffUrl.searchParams.set('code', code);
+  return { handoffUrl: handoffUrl.toString(), code };
 }
 
 export async function redeemHandoff({
@@ -624,7 +624,7 @@ export async function redeemHandoff({
     targetHost?: string;
     authMethod?: string;
   };
-  const normalizedHost = host?.trim()?.toLowerCase()?.split(':')?.[0] ?? '';
+  const normalizedHost = host.trim().toLowerCase();
 
   if (!payload?.targetHost || payload.targetHost !== normalizedHost) {
     throw AppError.unauthorized('Handoff target host mismatch', { code: 'HANDOFF_HOST_MISMATCH' });
@@ -634,7 +634,19 @@ export async function redeemHandoff({
     throw AppError.unauthorized('Invalid handoff payload');
   }
 
-  const userRecord = await authRepo.findById(payload.userId);
+  const [userRecord, member, tenant] = await Promise.all([
+    authRepo.findById(payload.userId),
+    tenantsRepo.findTenantMember(payload.tenantId, payload.userId),
+    tenantsRepo.findTenantById(payload.tenantId),
+  ]);
+  if (
+    member?.status !== 'ACTIVE' ||
+    !tenant ||
+    tenant.deletedAt ||
+    !['ACTIVE', 'TRIALING'].includes(tenant.status)
+  ) {
+    throw AppError.forbidden('Workspace access is no longer active');
+  }
   if (!userRecord || userRecord?.deletedAt) {
     throw AppError.unauthorized('User not found');
   }

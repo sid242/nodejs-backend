@@ -7,7 +7,7 @@ import {
   markOutboxEventFailed,
   markOutboxEventPublished,
 } from '@/modules/audit/outbox.repository';
-import { emitToRoom, emitToUser } from '@/sockets/emitter';
+import { emitToRoom, emitToUser, emitToWorkspaceUser } from '@/sockets/emitter';
 
 /**
  * Transactional Outbox Worker:
@@ -31,7 +31,9 @@ export async function processOutboxEvents(
         const payload = (event.payload as any) ?? {};
 
         // Dispatch via real-time WebSocket emitter
-        if (payload?.userId) {
+        if (typeof payload?.userId === 'string' && event.tenantId) {
+          emitToWorkspaceUser(event.tenantId, payload.userId, event.eventType, payload);
+        } else if (payload?.userId) {
           emitToUser(payload.userId, event.eventType, payload);
         } else if (event.tenantId) {
           emitToRoom(`tenant:${event.tenantId}`, event.eventType, payload);
