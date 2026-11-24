@@ -62,7 +62,7 @@
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
     "ioredis": "^5.4.2",
-    "jose": "^6.2.17",
+    "jose": "^6.2.18",
     "jsonwebtoken": "^9.0.2",
     "nodemailer": "^10.1.1",
     "otpauth": "^9.6.0",
