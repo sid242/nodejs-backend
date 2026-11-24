@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const createInvitationDto = z
   .object({
     email: z.string().trim().email(),
-    roleId: z.string().guid().optional(),
+    roleId: z.string().uuid().optional(),
     role: z.string().trim().optional(),
     firstName: z.string().trim().max(50).optional(),
     lastName: z.string().trim().max(50).optional(),

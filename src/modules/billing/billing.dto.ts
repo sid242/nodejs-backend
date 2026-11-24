@@ -61,7 +61,7 @@ export const updatePlanDto = createPlanDto
   .partial();
 
 export const planIdParamDto = z.object({
-  id: z.string().guid(),
+  id: z.string().uuid(),
 });
 
 export const listPlansQueryDto = z.object({
@@ -83,7 +83,7 @@ export const listPlansQueryDto = z.object({
 });
 
 export const tenantSubscriptionParamDto = z.object({
-  id: z.string().guid(),
+  id: z.string().uuid(),
 });
 
 export const updateSubscriptionDto = z.object({
@@ -100,7 +100,7 @@ export const updateSubscriptionDto = z.object({
 });
 
 export const assignSubscriptionDto = z.object({
-  tenantId: z.string().guid(),
+  tenantId: z.string().uuid(),
   planKey: z.string().trim().min(1).max(50).toUpperCase(),
   startDate: z.coerce.date().optional(),
   isTrial: z.boolean().default(false),
@@ -113,7 +113,7 @@ export const assignSubscriptionDto = z.object({
 });
 
 export const listPlatformSubscriptionsQueryDto = z.object({
-  tenantId: z.string().guid().optional(),
+  tenantId: z.string().uuid().optional(),
   planKey: z.string().trim().optional(),
   status: z
     .enum(['TRIALING', 'ACTIVE', 'PAST_DUE', 'PAUSED', 'CANCELED', 'EXPIRED', 'ALL'])
@@ -164,18 +164,18 @@ export const listInvoicesQueryDto = z.object({
 export const listPlatformInvoicesQueryDto = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  tenantId: z.string().guid().optional(),
+  tenantId: z.string().uuid().optional(),
   status: z.enum(['DRAFT', 'OPEN', 'PAID', 'VOID', 'UNCOLLECTABLE']).optional(),
 });
 
 export const invoiceIdParamDto = z.object({
-  id: z.string().guid(),
+  id: z.string().uuid(),
 });
 
 export const createInvoiceDto = z.object({
-  tenantId: z.string().guid(),
-  planId: z.string().guid().optional(),
-  subscriptionId: z.string().guid().optional(),
+  tenantId: z.string().uuid(),
+  planId: z.string().uuid().optional(),
+  subscriptionId: z.string().uuid().optional(),
   amountCents: z.coerce.number().int().min(0),
   taxCents: z.coerce.number().int().min(0).default(0),
   currency: z.string().trim().length(3).default('INR'),
@@ -230,13 +230,13 @@ export const listPaymentsQueryDto = z.object({
 });
 
 export const listPlatformPaymentsQueryDto = listPaymentsQueryDto.extend({
-  tenantId: z.string().guid().optional(),
+  tenantId: z.string().uuid().optional(),
   providerOrderId: z.string().trim().optional(),
   providerPaymentId: z.string().trim().optional(),
 });
 
 export const paymentIdParamDto = z.object({
-  id: z.string().guid(),
+  id: z.string().uuid(),
 });
 
 export const issueRefundDto = z.object({

@@ -48,8 +48,8 @@ export const updateFeatureFlagRuleDto = z.object({
 export type UpdateFeatureFlagRuleDto = z.infer<typeof updateFeatureFlagRuleDto>;
 
 export const evaluationContextDto = z.object({
-  tenantId: z.string().guid().optional(),
-  userId: z.string().guid().optional(),
+  tenantId: z.string().uuid().optional(),
+  userId: z.string().uuid().optional(),
   plan: z.string().trim().optional(),
 });
 
