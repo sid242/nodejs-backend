@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
+import { publicTenantMember } from '@/db/schema/tenancy/tenant-members';
+import { acceptInvitationDto, createInvitationDto } from '@/modules/invitations/invitations.dto';
 import {
   addMemberDto,
   bulkInviteMembersDto,
@@ -12,8 +14,6 @@ import {
   updateMemberDto,
   updateMemberStatusDto,
 } from '@/modules/tenants/tenants.dto';
-import { createInvitationDto, acceptInvitationDto } from '@/modules/invitations/invitations.dto';
-import { publicTenantMember } from '@/db/schema/tenancy/tenant-members';
 
 describe('Phase 04: Tenant Members & Invitations Unit Tests', () => {
   describe('1. listMembersQueryDto validation', () => {

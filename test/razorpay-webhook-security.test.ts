@@ -68,7 +68,9 @@ test('Step 01 - parseAndVerifyRazorpayWebhook rejects missing rawBody Buffer wit
 test('Step 01 - parseAndVerifyRazorpayWebhook rejects invalid signature with 401', () => {
   const rawBody = Buffer.from(JSON.stringify({ event: 'order.paid' }), 'utf8');
   const mockReq: any = {
-    headers: { 'x-razorpay-signature': 'invalid_signature_hex_length_64_characters_xxxxxxxxxxxxxxxxxxxx' },
+    headers: {
+      'x-razorpay-signature': 'invalid_signature_hex_length_64_characters_xxxxxxxxxxxxxxxxxxxx',
+    },
     rawBody,
     body: { event: 'order.paid' },
   };
@@ -164,7 +166,10 @@ test('Step 01 - handleBillingWebhook rejects request without x-razorpay-event-id
 
 test('Step 01 - handleBillingWebhook rejects payload exceeding 256kb with 400 Bad Request', async () => {
   const oversizedBuffer = Buffer.alloc(257 * 1024, 'a');
-  const signature = crypto.createHmac('sha256', TEST_WEBHOOK_SECRET).update(oversizedBuffer).digest('hex');
+  const signature = crypto
+    .createHmac('sha256', TEST_WEBHOOK_SECRET)
+    .update(oversizedBuffer)
+    .digest('hex');
 
   const mockReq: any = {
     headers: {

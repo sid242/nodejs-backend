@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import { after, before, describe, it } from 'node:test';
 import { sql } from 'drizzle-orm';
 
-import { db, closeDb } from '@/config/db';
+import { closeDb, db } from '@/config/db';
 import { closeRedisClients } from '@/config/redis';
 import {
   computeAuditRowHash,

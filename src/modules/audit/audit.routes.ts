@@ -32,11 +32,7 @@ tenantAuditRouter.get(
 );
 
 // Retention Policies
-tenantAuditRouter.get(
-  '/policy',
-  requirePermission('audit:read'),
-  controller.getTenantAuditPolicy,
-);
+tenantAuditRouter.get('/policy', requirePermission('audit:read'), controller.getTenantAuditPolicy);
 
 tenantAuditRouter.put(
   '/policy',
@@ -61,4 +57,3 @@ tenantAccessRouter.post(
   validate({ body: dto.simulateAccessDto }),
   controller.simulateAccess,
 );
-

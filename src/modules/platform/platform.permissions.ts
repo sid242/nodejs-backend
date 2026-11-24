@@ -317,7 +317,8 @@ export const PLATFORM_PERMISSION_CATALOGUE: PlatformPermissionDefinition[] = [
   {
     key: PLATFORM_PERMISSIONS.NOTIFICATIONS_BROADCAST,
     name: 'Broadcast System Notifications',
-    description: 'Dispatch platform-wide and targeted broadcast notifications to users and workspaces',
+    description:
+      'Dispatch platform-wide and targeted broadcast notifications to users and workspaces',
     resource: 'notifications',
     action: 'broadcast',
   },

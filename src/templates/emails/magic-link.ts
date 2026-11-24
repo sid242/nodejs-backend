@@ -16,7 +16,9 @@ export function renderMagicLinkEmail({
 }: RenderMagicLinkEmailOptions): EmailTemplateResult {
   const primaryColor = branding?.primaryColor ?? '#4f46e5';
   const companyName = branding?.companyName;
-  const subject = companyName ? `Your Magic Sign-In Link for ${companyName}` : 'Your Magic Sign-In Link';
+  const subject = companyName
+    ? `Your Magic Sign-In Link for ${companyName}`
+    : 'Your Magic Sign-In Link';
   const previewText = 'Click the link to sign in to your account without a password.';
 
   const bodyContent = `

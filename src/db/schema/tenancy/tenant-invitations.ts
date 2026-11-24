@@ -1,10 +1,10 @@
 import { sql } from 'drizzle-orm';
 import { index, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
-import { invitationStatusEnum } from '../enums';
-import { platformStaff } from '../platform/platform-staff';
 import { roles } from '../access/rbac';
+import { invitationStatusEnum } from '../enums';
 import { users } from '../identity/users';
+import { platformStaff } from '../platform/platform-staff';
 import { tenants } from './tenants';
 
 // scope: tenant

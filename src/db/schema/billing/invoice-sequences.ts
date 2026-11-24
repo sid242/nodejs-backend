@@ -11,9 +11,7 @@ export const invoiceSequences = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  (table) => [
-    primaryKey({ columns: [table.year], name: 'InvoiceSequence_pkey' }),
-  ],
+  (table) => [primaryKey({ columns: [table.year], name: 'InvoiceSequence_pkey' })],
 );
 
 export type InvoiceSequence = typeof invoiceSequences.$inferSelect;

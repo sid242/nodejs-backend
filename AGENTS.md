@@ -38,15 +38,24 @@ node-scalable-foundation/
 │   │   └── logger.ts             # Structured JSON Pino logger with redactions
 │   ├── db/                       # Database schema & migration runner
 │   │   ├── migrate.ts            # Drizzle migration executor
-│   │   └── schema/               # Domain-specific Drizzle schema definitions
+│   │   ├── tenancy/              # Tenant tables registry (39 tables) & RLS context
+│   │   └── schema/               # Domain-specific Drizzle schema definitions (15 domain folders)
+│   │       ├── access/           # Roles, permissions, user groups & bindings
+│   │       ├── analytics/        # Usage events, daily metrics, report definitions
+│   │       ├── audit/            # Tenant and operator audit logs & retention policies
+│   │       ├── billing/          # Plans, subscriptions, invoices, payments, refunds
+│   │       ├── content/          # Files, file folders, versions, and shares
+│   │       ├── crm/              # Leads, pipeline stages, status tracking
+│   │       ├── developers/       # API keys, webhooks, delivery logs, outbox events
+│   │       ├── identity/         # Users, sessions, verification tokens
+│   │       ├── location/         # Addresses and geographical entities
+│   │       ├── notifications/    # Email templates, versions, message logs, suppressions
+│   │       ├── onboarding/       # Onboarding progress and checklists
+│   │       ├── platform/         # Platform staff, roles, and support sessions
+│   │       ├── privacy/          # Consent records, data export jobs and artifacts
+│   │       ├── system/           # Announcements, changelog, feature flags, maintenance
+│   │       ├── tenancy/          # Tenants, branding, members, invitations, settings
 │   │       ├── enums.ts          # Shared PostgreSQL enums
-│   │       ├── users.ts          # Users table & public projections
-│   │       ├── files.ts          # Files table & status enums
-│   │       ├── tenants.ts        # Tenants, memberships, and roles
-│   │       ├── plans.ts          # Membership plans, features & pricing tiers
-│   │       ├── subscriptions.ts  # Tenant subscriptions & entitlements
-│   │       ├── invoices.ts       # Billing invoices, line items, and payment states
-│   │       ├── audit.ts          # Operator and tenant audit logs
 │   │       └── index.ts          # Unified schema exports (extensionless)
 │   ├── docs/                     # OpenAPI 3.0 specs & Swagger UI (/docs)
 │   │   ├── index.ts              # Swagger UI router & /openapi.json endpoint
@@ -68,19 +77,42 @@ node-scalable-foundation/
 │   ├── middleware/               # Express middleware
 │   │   ├── auth.ts               # JWT authentication & RBAC guards
 │   │   ├── platform.ts           # Platform staff authentication & canonical RBAC guards
-│   │   ├── tenant.ts             # Tenant resolution & membership guards
+│   │   ├── tenant.ts             # Tenant resolution, RLS pilot enforcement & membership guards
 │   │   ├── error.ts              # Centralized error handler & 404 handler
 │   │   ├── http-logger.ts        # Pino HTTP logger with request ID propagation
-│   │   ├── rate-limit.ts         # Redis-backed rate limiters (global, auth, user)
+│   │   ├── rate-limit.ts         # Redis-backed rate limiters (fail-closed for auth)
 │   │   └── validate.ts           # Zod request validation middleware
-│   ├── modules/                  # Domain-driven feature modules
+│   ├── modules/                  # Domain-driven feature modules (31 active modules)
+│   │   ├── addresses/            # Address management
+│   │   ├── analytics/            # Usage metrics and reporting
+│   │   ├── announcements/        # System announcements & dismissals
+│   │   ├── audit/                # Tenant audit logging & policies
 │   │   ├── auth/                 # Authentication, JWT, refresh tokens
-│   │   ├── billing/              # Invoices, billing status, line items, revenue summaries
-│   │   ├── files/                # S3 uploads, confirmation, downloads
+│   │   ├── billing/              # Invoices, subscriptions, payments
+│   │   ├── developers/           # API keys, webhooks, outbox events
+│   │   ├── email-templates/      # Email templates, preview, bounce webhook
+│   │   ├── feature-flags/        # Dynamic feature flags & rules
+│   │   ├── files/                # S3 uploads, downloads, ClamAV scanning
+│   │   ├── geo/                  # Geolocation and boundaries
+│   │   ├── groups/               # User groups and team assignments
 │   │   ├── health/               # /health/live, /health/ready probes
-│   │   ├── plans/                # Membership tiers, features, seat limits
-│   │   ├── platform/             # Platform staff, roles matrix, overview, operator audit
-│   │   ├── tenants/              # Workspaces, member management, bulk invites, status toggle
+│   │   ├── internal/             # Internal platform utilities
+│   │   ├── invitations/          # Tenant member invitations
+│   │   ├── leads/                # CRM leads management
+│   │   ├── maintenance/          # Maintenance schedules & status
+│   │   ├── notifications/        # User notifications & alerts
+│   │   ├── onboarding/           # Tenant onboarding flow
+│   │   ├── optional-modules/     # Tenant optional module toggles
+│   │   ├── pbac/                 # Policy-based access control engine
+│   │   ├── platform/             # Platform staff, operations & backoffice
+│   │   ├── policies/             # Tenant security & compliance policies
+│   │   ├── privacy/              # GDPR data exports & consent records
+│   │   ├── rbac/                 # Roles and permissions registry
+│   │   ├── scim/                 # SCIM 2.0 provisioning & tokens
+│   │   ├── search/               # Cross-entity search queries
+│   │   ├── sso/                  # SAML / OIDC enterprise single sign-on
+│   │   ├── support/              # Support tickets & support sessions
+│   │   ├── tenants/              # Workspaces, branding, membership
 │   │   └── users/                # User profile & administration
 │   ├── observability/            # Prometheus metrics (/metrics)
 │   ├── queues/                   # BullMQ queue definitions & workers
@@ -185,19 +217,19 @@ Every new business domain should be placed in `src/modules/<domain>/`:
 
 ## 4. Useful Commands
 
-| Command                | Description                                                         |
-| :--------------------- | :------------------------------------------------------------------ |
-| `npm run dev`          | Run API server with file watch (`tsx watch --env-file=.env`)        |
-| `npm run dev:worker`   | Run Background Worker with file watch (`tsx watch --env-file=.env`) |
-| `npm run typecheck`    | Run TypeScript compiler type checking (`tsc --noEmit`)              |
-| `npm test`             | Run test suites with tsx test runner (`tsx --test`)                 |
-| `npm run lint`         | Check linting with ESLint                                           |
-| `npm run lint:fix`     | Fix lint issues automatically                                       |
-| `npm run format`       | Format files with Prettier                                          |
-| `npm run db:generate`  | Generate Drizzle migrations from schema changes                     |
-| `npm run db:migrate`   | Execute pending Drizzle migrations                                  |
+| Command                  | Description                                                                |
+| :----------------------- | :------------------------------------------------------------------------- |
+| `npm run dev`            | Run API server with file watch (`tsx watch --env-file=.env`)               |
+| `npm run dev:worker`     | Run Background Worker with file watch (`tsx watch --env-file=.env`)        |
+| `npm run typecheck`      | Run TypeScript compiler type checking (`tsc --noEmit`)                     |
+| `npm test`               | Run test suites with tsx test runner (`tsx --test`)                        |
+| `npm run lint`           | Check linting with ESLint                                                  |
+| `npm run lint:fix`       | Fix lint issues automatically                                              |
+| `npm run format`         | Format files with Prettier                                                 |
+| `npm run db:generate`    | Generate Drizzle migrations from schema changes                            |
+| `npm run db:migrate`     | Execute pending Drizzle migrations                                         |
 | `npm run db:migrate:all` | Execute pending Drizzle migrations across primary and dedicated tenant DBs |
-| `docker compose up -d` | Start local Postgres, Redis, and MinIO containers                   |
+| `docker compose up -d`   | Start local Postgres, Redis, and MinIO containers                          |
 
 ---
 
@@ -236,6 +268,7 @@ Before submitting or rolling out any backend or frontend modification:
 ## 6. Code Quality & Engineering Standards Compliance
 
 All backend development must adhere to the engineering standards codified in:
+
 - `.agents/rules/code-quality-and-engineering-standards.md`
 - `docs/standards/BACKEND_STANDARDS.md`
 - `docs/standards/ENGINEERING_STANDARDS.md`
@@ -243,8 +276,8 @@ All backend development must adhere to the engineering standards codified in:
 - `docs/standards/REFACTOR_ROADMAP.md`
 
 Key rules:
+
 - **Zero `any`**: Never introduce `any` or `as any`. Use `unknown` and narrow with Zod.
 - **No silent error swallowing**: No empty catch blocks.
 - **Control flow clarity**: Use guard clauses, typed lookup maps (`Record`), and exhaustive `switch` over nested conditionals.
 - **Defensive null handling**: Use `??` to preserve legitimate `0` and empty strings.
-

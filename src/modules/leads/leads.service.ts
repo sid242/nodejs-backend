@@ -98,11 +98,9 @@ export class LeadsService {
     if (!isOwnerOrSupport && actorContext && roleIds) {
       // 1. Separate sensitive action checks
       const isReassigning =
-        data.assignedMemberId !== undefined &&
-        data.assignedMemberId !== existing.assignedMemberId;
+        data.assignedMemberId !== undefined && data.assignedMemberId !== existing.assignedMemberId;
       const isChangingConfidential =
-        data.isConfidential !== undefined &&
-        data.isConfidential !== existing.isConfidential;
+        data.isConfidential !== undefined && data.isConfidential !== existing.isConfidential;
 
       if (isReassigning) {
         const reassignEval = await pbacService.evaluateAccess(
@@ -151,17 +149,11 @@ export class LeadsService {
         ...data,
       };
 
-      const proposedEval = await pbacService.evaluateAccess(
-        tenantId,
-        roleIds,
-        'leads',
-        'update',
-        {
-          actor: actorContext,
-          resource: mergedProposed as unknown as Record<string, unknown>,
-          env: { currentTime: new Date() },
-        },
-      );
+      const proposedEval = await pbacService.evaluateAccess(tenantId, roleIds, 'leads', 'update', {
+        actor: actorContext,
+        resource: mergedProposed as unknown as Record<string, unknown>,
+        env: { currentTime: new Date() },
+      });
 
       if (!proposedEval.allowed) {
         throw AppError.forbidden('Access denied: proposed update violates workspace policy', {

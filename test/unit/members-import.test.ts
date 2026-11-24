@@ -1,10 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import {
-  executeMemberImportDto,
-  validateMemberImportDto,
-} from '@/modules/tenants/tenants.dto';
+import { executeMemberImportDto, validateMemberImportDto } from '@/modules/tenants/tenants.dto';
 
 test('Member Import DTO: validateMemberImportDto', () => {
   const valid = validateMemberImportDto.safeParse({

@@ -77,12 +77,7 @@ export const attachPolicyToRole = asyncHandler(async (req: Request, res: Respons
     policyId: string;
     roleId: string;
   };
-  const result = await policiesService.attachPolicyToRole(
-    tenantId,
-    policyId,
-    roleId,
-    req.user?.id,
-  );
+  const result = await policiesService.attachPolicyToRole(tenantId, policyId, roleId, req.user?.id);
 
   res.json(AppResponse.ok(null, result.message));
 });

@@ -1,4 +1,5 @@
 import postgres from 'postgres';
+
 import { env } from '@/config/env';
 import { logger } from '@/config/logger';
 import { cacheRedis, closeRedisClients, redis } from '@/config/redis';

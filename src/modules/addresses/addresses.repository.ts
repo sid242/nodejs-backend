@@ -1,8 +1,8 @@
 import { and, desc, eq, isNull } from 'drizzle-orm';
 
 import type { DbExecutor } from '@/config/db';
-import { assertTenantScope, primaryDbHandle, tenantDb } from '@/db/tenancy/context';
 import { addresses, type Address, type NewAddress } from '@/db/schema/index';
+import { assertTenantScope, primaryDbHandle, tenantDb } from '@/db/tenancy/context';
 
 export interface OwnerScope {
   ownerType: 'USER' | 'TENANT' | 'MEMBER';
@@ -79,10 +79,7 @@ export async function findById(
   return record ?? null;
 }
 
-export async function createAddress(
-  data: NewAddress,
-  executor?: DbExecutor,
-): Promise<Address> {
+export async function createAddress(data: NewAddress, executor?: DbExecutor): Promise<Address> {
   const exec = resolveAddressExecutor(undefined, data.tenantId, executor);
   const [created] = await exec.insert(addresses).values(data).returning();
   if (!created) {
@@ -157,4 +154,3 @@ export const addressRepo = {
   clearDefaultForOwnerAndType,
   softDeleteAddress,
 };
-

@@ -315,7 +315,8 @@ export function registerRbacDocs(registry: OpenAPIRegistry): void {
     method: 'post',
     path: '/api/v1/rbac/tenants/{tenantId}/roles/{roleId}/clone',
     summary: 'Clone an existing role into a new custom role',
-    description: 'Copies all permissions from an existing role (system or tenant) into a new custom tenant role.',
+    description:
+      'Copies all permissions from an existing role (system or tenant) into a new custom tenant role.',
     tags: ['RBAC - Tenant Roles'],
     security: [{ [bearerAuth.name]: [] }],
     request: {
@@ -333,7 +334,8 @@ export function registerRbacDocs(registry: OpenAPIRegistry): void {
     method: 'get',
     path: '/api/v1/rbac/tenants/{tenantId}/access/explain',
     summary: 'Explain permission access provenance for a tenant member',
-    description: 'Returns detailed reasoning showing whether a member has access to a permission, including owner privileges, direct roles, group roles, and module enablement state.',
+    description:
+      'Returns detailed reasoning showing whether a member has access to a permission, including owner privileges, direct roles, group roles, and module enablement state.',
     tags: ['RBAC - Access Explainer'],
     security: [{ [bearerAuth.name]: [] }],
     request: {

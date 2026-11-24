@@ -14,12 +14,6 @@ import {
 
 import type { DbExecutor } from '@/config/db';
 import {
-  assertTenantScope,
-  currentTenantCtx,
-  primaryDbHandle,
-  tenantDb,
-} from '@/db/tenancy/context';
-import {
   appModules,
   permissions,
   rolePermissions,
@@ -37,6 +31,12 @@ import {
   type Permission,
   type RoleRecord,
 } from '@/db/schema/index';
+import {
+  assertTenantScope,
+  currentTenantCtx,
+  primaryDbHandle,
+  tenantDb,
+} from '@/db/tenancy/context';
 
 import type { DomainModuleDefinition } from './modules.types';
 
@@ -65,12 +65,20 @@ export async function findAllModulesWithPermissions(): Promise<ModuleWithPermiss
 }
 
 export async function findModuleById(id: string): Promise<AppModule | null> {
-  const [record] = await primaryDbHandle().select().from(appModules).where(eq(appModules.id, id)).limit(1);
+  const [record] = await primaryDbHandle()
+    .select()
+    .from(appModules)
+    .where(eq(appModules.id, id))
+    .limit(1);
   return record ?? null;
 }
 
 export async function findModuleByKey(key: string): Promise<AppModule | null> {
-  const [record] = await primaryDbHandle().select().from(appModules).where(eq(appModules.key, key)).limit(1);
+  const [record] = await primaryDbHandle()
+    .select()
+    .from(appModules)
+    .where(eq(appModules.key, key))
+    .limit(1);
   return record ?? null;
 }
 
@@ -92,7 +100,10 @@ export async function updateModule(
 }
 
 export async function deleteModule(id: string): Promise<boolean> {
-  const [deleted] = await primaryDbHandle().delete(appModules).where(eq(appModules.id, id)).returning();
+  const [deleted] = await primaryDbHandle()
+    .delete(appModules)
+    .where(eq(appModules.id, id))
+    .returning();
   return !!deleted;
 }
 
@@ -173,12 +184,20 @@ export async function findAllPermissions(): Promise<Permission[]> {
 }
 
 export async function findPermissionByKey(key: string): Promise<Permission | null> {
-  const [record] = await primaryDbHandle().select().from(permissions).where(eq(permissions.key, key)).limit(1);
+  const [record] = await primaryDbHandle()
+    .select()
+    .from(permissions)
+    .where(eq(permissions.key, key))
+    .limit(1);
   return record ?? null;
 }
 
 export async function findPermissionById(id: string): Promise<Permission | null> {
-  const [record] = await primaryDbHandle().select().from(permissions).where(eq(permissions.id, id)).limit(1);
+  const [record] = await primaryDbHandle()
+    .select()
+    .from(permissions)
+    .where(eq(permissions.id, id))
+    .limit(1);
   return record ?? null;
 }
 
@@ -204,27 +223,28 @@ export async function updatePermission(
   id: string,
   data: Partial<NewPermission>,
 ): Promise<Permission | null> {
-  const [record] = await primaryDbHandle().update(permissions).set(data).where(eq(permissions.id, id)).returning();
+  const [record] = await primaryDbHandle()
+    .update(permissions)
+    .set(data)
+    .where(eq(permissions.id, id))
+    .returning();
   return record ?? null;
 }
 
 export async function deletePermission(id: string): Promise<boolean> {
-  const [deleted] = await primaryDbHandle().delete(permissions).where(eq(permissions.id, id)).returning();
+  const [deleted] = await primaryDbHandle()
+    .delete(permissions)
+    .where(eq(permissions.id, id))
+    .returning();
   return !!deleted;
 }
 
 export async function findRolesByTenant(tenantId?: string | null): Promise<RoleRecord[]> {
   if (tenantId) {
     assertTenantScope(tenantId);
-    const globalRoles = await primaryDbHandle()
-      .select()
-      .from(roles)
-      .where(isNull(roles.tenantId));
+    const globalRoles = await primaryDbHandle().select().from(roles).where(isNull(roles.tenantId));
 
-    const customRoles = await tenantDb()
-      .select()
-      .from(roles)
-      .where(eq(roles.tenantId, tenantId));
+    const customRoles = await tenantDb().select().from(roles).where(eq(roles.tenantId, tenantId));
 
     return [...globalRoles, ...customRoles];
   }
@@ -748,7 +768,10 @@ export async function getTenantModules(tenantId: string): Promise<
   }>
 > {
   assertTenantScope(tenantId);
-  const allModules = await primaryDbHandle().select().from(appModules).orderBy(asc(appModules.sortOrder));
+  const allModules = await primaryDbHandle()
+    .select()
+    .from(appModules)
+    .orderBy(asc(appModules.sortOrder));
   const overrides = await tenantDb()
     .select()
     .from(tenantModules)

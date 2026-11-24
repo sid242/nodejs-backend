@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
-
 import { inArray } from 'drizzle-orm';
 
 import { closeDb, db } from '@/config/db';
@@ -75,7 +74,10 @@ describe('Phase 09: Enterprise Audit Logging, Retention & Effective Access Simul
     });
 
     // Ensure users have ACTIVE status in DB
-    await db.update(users).set({ status: 'ACTIVE' }).where(inArray(users.id, [adminUser.id, targetUser.id]));
+    await db
+      .update(users)
+      .set({ status: 'ACTIVE' })
+      .where(inArray(users.id, [adminUser.id, targetUser.id]));
 
     // 3. Create Workspaces
     enterpriseTenant = await tenantsRepo.createTenant({
@@ -218,10 +220,14 @@ describe('Phase 09: Enterprise Audit Logging, Retention & Effective Access Simul
     });
 
     it('allows updating retention policy within plan limits', async () => {
-      const updated = await auditService.updateTenantAuditPolicy(enterpriseTenant.id, adminUser.id, {
-        retentionDays: 180,
-        complianceFramework: 'HIPAA',
-      });
+      const updated = await auditService.updateTenantAuditPolicy(
+        enterpriseTenant.id,
+        adminUser.id,
+        {
+          retentionDays: 180,
+          complianceFramework: 'HIPAA',
+        },
+      );
 
       assert.strictEqual(updated.retentionDays, 180);
       assert.strictEqual(updated.complianceFramework, 'HIPAA');
@@ -247,7 +253,12 @@ describe('Phase 09: Enterprise Audit Logging, Retention & Effective Access Simul
       assert.ok(csv.content.includes('member.role_assigned'));
 
       // JSON export
-      const json = await auditService.exportAuditLogs(enterpriseTenant.id, adminUser.id, {}, 'json');
+      const json = await auditService.exportAuditLogs(
+        enterpriseTenant.id,
+        adminUser.id,
+        {},
+        'json',
+      );
       assert.strictEqual(json.mimeType, 'application/json');
       const parsed = JSON.parse(json.content);
       assert.ok(Array.isArray(parsed));

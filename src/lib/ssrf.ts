@@ -72,8 +72,7 @@ export async function assertSafeWebhookUrl(
     throw AppError.badRequest('Invalid webhook destination URL format');
   }
 
-  const isLocalDev =
-    process.env.NODE_ENV !== 'production' && Boolean(options.allowLocalhostInDev);
+  const isLocalDev = process.env.NODE_ENV !== 'production' && Boolean(options.allowLocalhostInDev);
 
   if (parsed.protocol !== 'https:') {
     if (!isLocalDev || parsed.protocol !== 'http:') {

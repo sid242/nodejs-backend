@@ -297,6 +297,11 @@ router.get(
 // 7. Public Pricing & Plans Catalog
 // ==========================================
 router.get('/', billingPublicLimiter, controller.listPublicPlans);
-router.get('/:id', billingPublicLimiter, validate({ params: dto.planIdParamDto }), controller.getPlanById);
+router.get(
+  '/:id',
+  billingPublicLimiter,
+  validate({ params: dto.planIdParamDto }),
+  controller.getPlanById,
+);
 
 export default router;

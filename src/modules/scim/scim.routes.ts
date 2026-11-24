@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { scimLimiter } from '@/middleware/rate-limit';
 import { validate } from '@/middleware/validate';
+
 import {
   createUser,
   deleteUser,

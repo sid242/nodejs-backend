@@ -4,6 +4,7 @@ import { asyncHandler } from '@/lib/async-handler';
 import { AppError } from '@/lib/errors';
 import { AppResponse } from '@/lib/responses';
 import * as tenantRepo from '@/modules/tenants/tenants.repository';
+
 import type { AddressBody, AddressPatch } from './addresses.dto';
 import type { OwnerScope } from './addresses.repository';
 import * as addressService from './addresses.service';
@@ -215,4 +216,3 @@ export const setDefaultMemberAddress = asyncHandler(async (req: Request, res: Re
   );
   return AppResponse.ok(updated, 'Default member address set successfully').send(res);
 });
-

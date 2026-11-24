@@ -12,7 +12,7 @@ These standards apply to both repositories unless a framework-specific document 
 - Use types to communicate domain meaning.
 - Do not abstract code until there is a real reuse or complexity benefit.
 - Avoid both giant files and excessive one-line wrapper files.
-- Comments explain *why*, not restate *what* the code does.
+- Comments explain _why_, not restate _what_ the code does.
 
 ## 2. Control flow: choose the right construct
 
@@ -31,9 +31,7 @@ function getDisplayName(user: User | null): string {
 
 ```ts
 type PaymentState =
-  | { status: 'pending' }
-  | { status: 'paid'; paidAt: Date }
-  | { status: 'failed'; reason: string };
+  { status: 'pending' } | { status: 'paid'; paidAt: Date } | { status: 'failed'; reason: string };
 
 function getPaymentLabel(payment: PaymentState): string {
   switch (payment.status) {
@@ -108,11 +106,13 @@ Do not write `response?.data?.items ?? []` if a missing `data` means an API cont
 ### Avoid unsafe defaulting
 
 Bad:
+
 ```ts
 const isEnabled = config.isEnabled || true;
 ```
 
 Correct:
+
 ```ts
 const isEnabled = config.isEnabled ?? true;
 ```

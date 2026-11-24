@@ -38,7 +38,10 @@ export async function recordUsage(
 
   // If already recorded via duplicate idempotencyKey, return early
   if (!event && data.idempotencyKey) {
-    logger.debug({ tenantId, idempotencyKey: data.idempotencyKey }, 'Duplicate usage event skipped');
+    logger.debug(
+      { tenantId, idempotencyKey: data.idempotencyKey },
+      'Duplicate usage event skipped',
+    );
     return null;
   }
 
@@ -94,23 +97,16 @@ export async function getAnalyticsOverview(tenantId: string, range: '7d' | '30d'
   return cache.wrap(cacheKey, 300, async () => {
     logger.debug({ tenantId, range }, 'Computing analytics overview');
 
-    const [
-      activeMembers,
-      logins,
-      roles,
-      storage,
-      invites,
-      security,
-      recentActivity,
-    ] = await Promise.all([
-      analyticsRepo.getActiveMemberCounts(tenantId),
-      analyticsRepo.getLoginsByDay(tenantId, days),
-      analyticsRepo.getRoleDistribution(tenantId),
-      analyticsRepo.getStorageStats(tenantId),
-      analyticsRepo.getInviteStats(tenantId),
-      analyticsRepo.getSecurityPosture(tenantId),
-      analyticsRepo.getActivityFeed(tenantId, { limit: 5 }),
-    ]);
+    const [activeMembers, logins, roles, storage, invites, security, recentActivity] =
+      await Promise.all([
+        analyticsRepo.getActiveMemberCounts(tenantId),
+        analyticsRepo.getLoginsByDay(tenantId, days),
+        analyticsRepo.getRoleDistribution(tenantId),
+        analyticsRepo.getStorageStats(tenantId),
+        analyticsRepo.getInviteStats(tenantId),
+        analyticsRepo.getSecurityPosture(tenantId),
+        analyticsRepo.getActivityFeed(tenantId, { limit: 5 }),
+      ]);
 
     return {
       range,
@@ -206,11 +202,7 @@ export async function listReportDefinitions(tenantId: string) {
   return analyticsRepo.listReportDefinitions(tenantId);
 }
 
-export async function triggerReportRun(
-  tenantId: string,
-  definitionId: string,
-  userId: string,
-) {
+export async function triggerReportRun(tenantId: string, definitionId: string, userId: string) {
   const definition = await analyticsRepo.getReportDefinitionById(definitionId, tenantId);
   if (!definition) {
     throw AppError.notFound('Report definition not found');

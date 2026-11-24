@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
+import { cache } from '@/lib/cache';
+import { AppError } from '@/lib/errors';
 import {
   cloneRoleDto,
   createPermissionDto,
@@ -9,10 +11,8 @@ import {
   listRolesFilterDto,
   updateRoleDto,
 } from '@/modules/rbac/rbac.dto';
-import * as rbacService from '@/modules/rbac/rbac.service';
 import { rbacRepo } from '@/modules/rbac/rbac.repository';
-import { AppError } from '@/lib/errors';
-import { cache } from '@/lib/cache';
+import * as rbacService from '@/modules/rbac/rbac.service';
 
 describe('Phase 05: Roles & Permissions (RBAC Matrix) Unit Tests', () => {
   describe('1. listRolesFilterDto validation', () => {
@@ -180,14 +180,11 @@ describe('Phase 05: Roles & Permissions (RBAC Matrix) Unit Tests', () => {
 
         await assert.rejects(
           async () => {
-            await rbacService.createCustomTenantRole(
-              'tenant-123',
-              {
-                name: 'Cross Scope Role',
-                scope: 'TENANT',
-                permissions: ['files:read', 'platform_staff:read'],
-              },
-            );
+            await rbacService.createCustomTenantRole('tenant-123', {
+              name: 'Cross Scope Role',
+              scope: 'TENANT',
+              permissions: ['files:read', 'platform_staff:read'],
+            });
           },
           (err: any) => {
             assert.ok(err instanceof AppError);

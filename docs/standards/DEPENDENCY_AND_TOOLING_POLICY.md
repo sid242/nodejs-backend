@@ -5,6 +5,7 @@
 "Latest" means latest stable, supported and compatible version for the actual application—not blindly the highest version number.
 
 For every package:
+
 1. Read the exact installed version from the lockfile.
 2. Check the latest stable release and release date.
 3. Check Node engine requirements.
@@ -21,6 +22,7 @@ Do not use `*`, floating tags, canary, nightly or prerelease packages for produc
 ## 2. Dependency inventory
 
 Produce a table containing:
+
 - Package.
 - Direct/transitive.
 - Lockfile-resolved version.
@@ -37,6 +39,7 @@ Review `npm audit`/equivalent output carefully; do not blindly apply `npm audit 
 ## 3. Frontend compatibility groups
 
 Audit as groups:
+
 - Next.js + React + React DOM + eslint-config-next.
 - TypeScript + ESLint + typescript-eslint.
 - Tailwind CSS v4 + `@tailwindcss/postcss` + Prettier Tailwind plugin.
@@ -51,6 +54,7 @@ Do not upgrade a framework package independently when its peer dependencies cons
 ## 4. Backend compatibility groups
 
 Audit as groups:
+
 - Node runtime + TypeScript + tsx + tsup + module resolution.
 - Express runtime + Express type definitions + middleware ecosystem.
 - Drizzle ORM + drizzle-kit + postgres driver.
@@ -64,6 +68,7 @@ Audit as groups:
 ### Known manifest review candidates
 
 At the reviewed public manifest snapshot:
+
 - Express is declared `^4.21.2`, while `@types/express` is declared `^5.0.6`. Verify actual resolved versions and align types/runtime intentionally.
 - Both `jose` and `jsonwebtoken` are declared. Inspect actual use and standardize where possible.
 - ESLint explicitly disables `@typescript-eslint/no-explicit-any`.
@@ -72,6 +77,7 @@ At the reviewed public manifest snapshot:
 ## 5. TypeScript configuration baseline
 
 Start with:
+
 ```json
 {
   "compilerOptions": {
@@ -84,6 +90,7 @@ Start with:
 ```
 
 Evaluate separately before enabling:
+
 - `noUncheckedIndexedAccess`
 - `exactOptionalPropertyTypes`
 - `noPropertyAccessFromIndexSignature`
@@ -110,6 +117,7 @@ Do not copy this fragment over an existing tsconfig. Merge options based on the 
 ## 7. CI gates
 
 Required checks should include:
+
 - Frozen lockfile install.
 - Format check.
 - ESLint.

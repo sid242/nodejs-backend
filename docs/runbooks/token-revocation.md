@@ -3,6 +3,7 @@
 ## Severity: CRITICAL (P0 / P1)
 
 ### Trigger
+
 A security breach, lost device, unauthorized credential leak, or sudden dismissal of a high-privilege tenant administrator or platform operator.
 
 ---
@@ -24,6 +25,7 @@ A security breach, lost device, unauthorized credential leak, or sudden dismissa
    - Force WebSocket disconnect via Redis emitter:
      ```typescript
      import { emitToUser } from '@/sockets/emitter';
+
      emitToUser('<USER_ID>', 'session:revoked', { reason: 'SECURITY_REVOCATION' });
      ```
 

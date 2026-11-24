@@ -10,8 +10,8 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
-import { addresses } from '../location/addresses';
 import { roles } from '../access/rbac';
+import { addresses } from '../location/addresses';
 import { tenants } from './tenants';
 
 // scope: tenant

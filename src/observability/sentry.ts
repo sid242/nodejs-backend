@@ -84,7 +84,10 @@ export function initSentry(): void {
   });
 
   initialized = true;
-  logger.info({ service: env.APP_NAME, env: env.NODE_ENV }, 'Sentry initialized for error monitoring');
+  logger.info(
+    { service: env.APP_NAME, env: env.NODE_ENV },
+    'Sentry initialized for error monitoring',
+  );
 }
 
 export function isSentryEnabled(): boolean {

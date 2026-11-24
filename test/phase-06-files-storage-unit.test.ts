@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { describe, it } from 'node:test';
 import bcrypt from 'bcryptjs';
 
+import { safeFilename } from '@/lib/utils';
 import {
   ALLOWED_TYPES,
   createFolderDto,
@@ -13,7 +14,6 @@ import {
   updateFileDto,
   updateFolderDto,
 } from '@/modules/files/files.dto';
-import { safeFilename } from '@/lib/utils';
 
 describe('Phase 06: Files & Storage Architecture Unit Tests', () => {
   describe('1. File DTO & Validation Invariants', () => {

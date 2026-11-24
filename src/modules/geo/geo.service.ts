@@ -1,6 +1,7 @@
+import { GEO_LEVEL } from '@/db/geo';
 import { cache } from '@/lib/cache';
 import { AppError } from '@/lib/errors';
-import { GEO_LEVEL } from '@/db/geo';
+
 import * as geoRepo from './geo.repository';
 
 const GEO_TTL_SECONDS = 86400; // 24 hours
@@ -40,7 +41,9 @@ export async function getPinDetails(pin: string) {
       },
       state: state ? { id: state.id, name: state.name, code: state.code } : null,
       district: district ? { id: district.id, name: district.name, code: district.code } : null,
-      subdistrict: subdistrict ? { id: subdistrict.id, name: subdistrict.name, code: subdistrict.code } : null,
+      subdistrict: subdistrict
+        ? { id: subdistrict.id, name: subdistrict.name, code: subdistrict.code }
+        : null,
       chain: chain ?? [],
     };
   });
@@ -53,4 +56,3 @@ export async function lookupCoordinates(lat: number, lng: number) {
     return geoRepo.lookupPoint(lat, lng);
   });
 }
-

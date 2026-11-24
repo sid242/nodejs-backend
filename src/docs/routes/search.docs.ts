@@ -10,8 +10,14 @@ export function registerSearchDocs(registry: OpenAPIRegistry): void {
     z.object({
       id: z.string().openapi({ example: 'member-11111111-1111-4111-8111-111111111111' }),
       title: z.string().openapi({ example: 'Sarah Connor' }),
-      subtitle: z.string().nullable().optional().openapi({ example: 'Admin · Engineering · sarah@acme.com' }),
-      category: z.enum(['Pages', 'Actions', 'Members', 'Files', 'Roles', 'Groups', 'Templates']).openapi({ example: 'Members' }),
+      subtitle: z
+        .string()
+        .nullable()
+        .optional()
+        .openapi({ example: 'Admin · Engineering · sarah@acme.com' }),
+      category: z
+        .enum(['Pages', 'Actions', 'Members', 'Files', 'Roles', 'Groups', 'Templates'])
+        .openapi({ example: 'Members' }),
       href: z.string().openapi({ example: '/team?search=sarah%40acme.com' }),
       icon: z.string().optional().openapi({ example: 'user' }),
       metadata: z.record(z.unknown()).optional(),
@@ -31,7 +37,8 @@ export function registerSearchDocs(registry: OpenAPIRegistry): void {
     method: 'get',
     path: '/api/v1/search',
     summary: 'Global workspace search',
-    description: 'Fast unified command-palette search across members, files, roles, groups, templates, and actions.',
+    description:
+      'Fast unified command-palette search across members, files, roles, groups, templates, and actions.',
     tags: ['Search'],
     security: [{ [bearerAuth.name]: [] }],
     request: {

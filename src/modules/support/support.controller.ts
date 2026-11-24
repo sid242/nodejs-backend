@@ -71,7 +71,8 @@ export const updateTicket = asyncHandler(async (req: Request, res: Response) => 
 
 export const submitFeedback = asyncHandler(async (req: Request, res: Response) => {
   const body = req.body as CreateFeedbackDto;
-  const tenantId = (req as any).tenantId ?? (req.params.tenantId ? String(req.params.tenantId) : undefined);
+  const tenantId =
+    (req as any).tenantId ?? (req.params.tenantId ? String(req.params.tenantId) : undefined);
   const userId = req.user?.id;
 
   const feedback = await supportService.submitFeedback(body, { tenantId, userId });

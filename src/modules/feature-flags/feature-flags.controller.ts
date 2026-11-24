@@ -46,7 +46,11 @@ export const createFlag = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const updateFlag = asyncHandler(async (req: Request, res: Response) => {
-  const updated = await service.updateFlag(String(req.params.id), req.valid?.body ?? req.body, req.staff?.id);
+  const updated = await service.updateFlag(
+    String(req.params.id),
+    req.valid?.body ?? req.body,
+    req.staff?.id,
+  );
   return AppResponse.ok(updated, 'Feature flag updated').send(res);
 });
 

@@ -4,10 +4,10 @@ import { sql } from 'drizzle-orm';
 
 import { closeDb, db } from '../src/config/db';
 import { closeRedisClients } from '../src/config/redis';
+import { AppError } from '../src/lib/errors';
 import { handleScimErrors } from '../src/modules/scim/scim.controller';
 import { ScimError } from '../src/modules/scim/scim.dto';
 import { scimService } from '../src/modules/scim/scim.service';
-import { AppError } from '../src/lib/errors';
 
 let dbConnected = false;
 

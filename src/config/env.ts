@@ -73,6 +73,8 @@ const schema = z.object({
   SMTP_PASS: z.string().optional(),
   SMTP_FROM_EMAIL: z.string().optional(),
   SMTP_FROM_NAME: z.string().optional(),
+  EMAIL_BOUNCE_WEBHOOK_SECRET: z.string().optional(),
+  SES_NOTIFICATION_TOPIC_ARN: z.string().optional(),
 
   // Encryption key for tenant credential storage
   ENCRYPTION_KEY: z
@@ -91,6 +93,7 @@ const schema = z.object({
   EMAIL_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(100).optional(),
   CLAMD_HOST: z.string().min(1).optional(),
   CLAMD_PORT: z.coerce.number().int().min(1).max(65535).default(3310),
+  ALLOW_UNSCANNED_FILES: bool.default('false'),
   FILE_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(100).optional(),
   MAINTENANCE_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(10).optional(),
   MAINTENANCE_BATCH_SIZE: z.coerce.number().int().min(1).max(10000).default(500),
@@ -111,6 +114,12 @@ const schema = z.object({
   // Observability & Sentry
   SENTRY_DSN: z.string().optional(),
   SENTRY_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(1.0),
+
+  // Row-Level Security (RLS) Pilot Enforcement
+  RLS_ENFORCEMENT_PILOT: z.preprocess(
+    (val) => val === 'true' || val === true,
+    z.boolean().default(false),
+  ),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -168,6 +177,13 @@ if (parsed.data.NODE_ENV === 'production') {
   ) {
     console.error(
       'Invalid environment variables: Dedicated non-default INTERNAL_API_SECRET (min 32 chars) is required in production.',
+    );
+    process.exit(1);
+  }
+
+  if (parsed.data.ALLOW_UNSCANNED_FILES) {
+    console.error(
+      'Invalid environment variables: ALLOW_UNSCANNED_FILES is strictly forbidden in production.',
     );
     process.exit(1);
   }

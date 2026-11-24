@@ -5,6 +5,7 @@ Do not attempt a giant rewrite. Use these phases independently for frontend and 
 ## Phase A — Baseline and inventory
 
 Deliver:
+
 - Exact commit SHA.
 - Lockfile and runtime versions.
 - Current command results.
@@ -18,6 +19,7 @@ Exit criteria: findings are evidence-based and prioritized.
 ## Phase B — P0 safety and correctness
 
 Backend:
+
 - Tenant context and tenant DB routing.
 - RLS and connection-pool context isolation.
 - Authentication/session/token lifecycle.
@@ -28,6 +30,7 @@ Backend:
 - Sensitive log redaction.
 
 Frontend:
+
 - Server/client boundary and secret exposure.
 - Auth refresh behavior and redirect safety.
 - Tenant/user query cache isolation.
@@ -63,11 +66,13 @@ Exit criteria: behavior tests pass; no purely stylistic changes mixed with behav
 ## Phase E — Framework and dependency modernization
 
 Frontend:
+
 - Next 16 and React 19 API audit.
 - Tailwind v4 and shadcn/ui compatibility.
 - TanStack Query, RHF/Zod and testing stack compatibility.
 
 Backend:
+
 - Node 24+ API/runtime audit.
 - Express and type package alignment.
 - Drizzle API/migration audit.
@@ -90,12 +95,14 @@ Exit criteria: CI reproducibly enforces required checks.
 ## Phase G — Performance and operations
 
 Frontend:
+
 - Reduce unnecessary client JS.
 - Review bundle and route performance.
 - Optimize data fetching and cache behavior.
 - Improve accessibility and loading/error/empty UX.
 
 Backend:
+
 - Review query plans and indexes.
 - Review DB pool budgets and timeouts.
 - Review queue concurrency and retries.

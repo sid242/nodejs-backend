@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
-import { AppError } from '@/lib/errors';
 import { encrypt } from '@/lib/crypto';
+import { AppError } from '@/lib/errors';
 import { assertSafeWebhookUrl } from '@/lib/ssrf';
 import * as auditService from '@/modules/audit/audit.service';
 import { webhookQueue } from '@/queues/index';
@@ -55,7 +55,8 @@ export async function createApiKey(
   return {
     apiKey: created,
     rawKey, // Only shown once at creation!
-    message: 'API key generated successfully. Save this secret key now as you will not be able to view it again.',
+    message:
+      'API key generated successfully. Save this secret key now as you will not be able to view it again.',
   };
 }
 
@@ -124,7 +125,8 @@ export async function rotateApiKey(tenantId: string, keyId: string, actorMemberI
   return {
     apiKey: created,
     rawKey,
-    message: 'API key rotated successfully. Save this secret key now as you will not be able to view it again.',
+    message:
+      'API key rotated successfully. Save this secret key now as you will not be able to view it again.',
   };
 }
 
@@ -163,7 +165,8 @@ export async function createWebhookEndpoint(
   return {
     endpoint: created,
     signingSecret: rawSecret, // Only shown once at creation!
-    message: 'Webhook endpoint registered successfully. Save your signing secret to verify signatures.',
+    message:
+      'Webhook endpoint registered successfully. Save your signing secret to verify signatures.',
   };
 }
 
@@ -263,11 +266,7 @@ export async function listWebhookDeliveries(
   });
 }
 
-export async function redeliverWebhook(
-  tenantId: string,
-  endpointId: string,
-  deliveryId: string,
-) {
+export async function redeliverWebhook(tenantId: string, endpointId: string, deliveryId: string) {
   const ep = await getWebhookEndpoint(tenantId, endpointId);
   const delivery = await repo.findWebhookDeliveryById(tenantId, endpointId, deliveryId);
   if (!delivery) throw AppError.notFound('Webhook delivery record not found');

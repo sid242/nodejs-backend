@@ -24,9 +24,7 @@ export const tenantAuditPolicies = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  (table) => [
-    index('TenantAuditPolicy_tenantId_idx').on(table.tenantId),
-  ],
+  (table) => [index('TenantAuditPolicy_tenantId_idx').on(table.tenantId)],
 );
 
 export const tenantAuditPoliciesRelations = relations(tenantAuditPolicies, ({ one }) => ({
@@ -42,4 +40,3 @@ export const tenantAuditPoliciesRelations = relations(tenantAuditPolicies, ({ on
 
 export type TenantAuditPolicy = typeof tenantAuditPolicies.$inferSelect;
 export type NewTenantAuditPolicy = typeof tenantAuditPolicies.$inferInsert;
-

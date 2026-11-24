@@ -5,8 +5,8 @@ import { eq, inArray, sql } from 'drizzle-orm';
 import { closeDb, db } from '../src/config/db';
 import { env } from '../src/config/env';
 import { closeRedisClients } from '../src/config/redis';
-import { files, tenantMembers, tenants, users } from '../src/db/schema/index';
 import { withTenantTransaction } from '../src/db/rls';
+import { files, tenantMembers, tenants, users } from '../src/db/schema/index';
 import { AppError } from '../src/lib/errors';
 import { requireTenant, resolveTenantContext } from '../src/middleware/tenant';
 import { tenantsRepo } from '../src/modules/tenants/tenants.repository';
@@ -468,7 +468,11 @@ test('Multi-Tenant Edge Case 7: PostgreSQL Row-Level Security (RLS) enforces ker
     await withTenantTransaction(tenantB.id, async (tx) => {
       const rows = await tx.select().from(files);
       const matching = rows.find((r: any) => r.id === fileA.id);
-      assert.equal(matching, undefined, 'RLS must hide Tenant A files from Tenant B queries even without WHERE tenantId');
+      assert.equal(
+        matching,
+        undefined,
+        'RLS must hide Tenant A files from Tenant B queries even without WHERE tenantId',
+      );
     });
 
     // 4. Attempt to insert a row with tenantA.id inside tenantB transaction -> RLS WITH CHECK policy violation
@@ -533,7 +537,9 @@ test('Multi-Tenant Edge Case 8: RLS Inventory & Strict DDL Invariants', async ()
     'AppRole read policy must permit reading system roles where tenantId is NULL',
   );
   assert.ok(
-    appRoleDdl.includes('WITH CHECK (("tenantId" = NULLIF(current_setting(\'app.tenant_id\', true), \'\')::uuid))'),
+    appRoleDdl.includes(
+      "WITH CHECK ((\"tenantId\" = NULLIF(current_setting('app.tenant_id', true), '')::uuid))",
+    ),
     'AppRole write policy (WITH CHECK) must NEVER permit writing rows where tenantId is NULL',
   );
 
@@ -572,4 +578,159 @@ test('Multi-Tenant Edge Case 9: Context Propagation in withTenantTransaction', a
   );
 
   assert.equal(observedContextId, mockTenantId);
+});
+
+test('Multi-Tenant Edge Case 10: RLS Pilot Enforcement in Tenant Request Pipeline', async (t) => {
+  if (!dbConnected) {
+    t.skip('Database offline');
+    return;
+  }
+
+  const { isRlsPilotEnabled, resolveTenantContext } = await import('../src/middleware/tenant');
+  const { tenantDb, currentTenantCtx } = await import('../src/db/tenancy/context');
+  const { EventEmitter } = await import('node:events');
+
+  // 1. In-memory flag evaluations
+  assert.equal(isRlsPilotEnabled({ databaseMode: 'shared' }), false);
+  assert.equal(isRlsPilotEnabled({ databaseMode: 'shared', metadata: { rlsPilot: true } }), true);
+  assert.equal(isRlsPilotEnabled({ databaseMode: 'shared', metadata: { enforceRls: true } }), true);
+  assert.equal(
+    isRlsPilotEnabled({ databaseMode: 'shared' }, { headers: { 'x-rls-pilot': 'true' } } as any),
+    true,
+  );
+  // Dedicated mode must always return false
+  assert.equal(
+    isRlsPilotEnabled({ databaseMode: 'dedicated', metadata: { rlsPilot: true } }),
+    false,
+  );
+
+  // 2. Database RLS Kernel Enforcement
+  const [testUser] = await db
+    .insert(users)
+    .values({
+      email: `rls-pilot-user-${Date.now()}@example.com`,
+      firstName: 'RLS',
+      lastName: 'Pilot',
+      passwordHash: '$2a$12$dummyhashforrlstest0000000000000000000000000000000',
+      status: 'ACTIVE',
+    })
+    .returning();
+  assert.ok(testUser);
+
+  const tenantA = await tenantsRepo.createTenant({
+    name: 'RLS Pilot Org A',
+    slug: `rls-pilot-a-${Date.now()}`,
+    plan: 'PRO',
+  });
+  const tenantB = await tenantsRepo.createTenant({
+    name: 'RLS Pilot Org B',
+    slug: `rls-pilot-b-${Date.now()}`,
+    plan: 'PRO',
+    metadata: { rlsPilot: true }, // Canary pilot tenant
+  });
+
+  await tenantsRepo.addTenantMember({
+    tenantId: tenantB.id,
+    userId: testUser.id,
+    status: 'ACTIVE',
+  });
+
+  try {
+    // Insert file for Tenant A (using withTenantTransaction)
+    const fileA = await withTenantTransaction(tenantA.id, async (tx) => {
+      const [inserted] = await tx
+        .insert(files)
+        .values({
+          key: `rls-pilot-key-a-${Date.now()}`,
+          filename: 'alpha-confidential.pdf',
+          contentType: 'application/pdf',
+          size: 1024,
+          ownerId: testUser.id,
+          tenantId: tenantA.id,
+        })
+        .returning();
+      return inserted;
+    });
+    assert.ok(fileA);
+
+    // 3. Simulate HTTP request for Tenant B through resolveTenantContext
+    const req: any = {
+      headers: {
+        'x-tenant-id': tenantB.id,
+        'x-bff-secret': env.BFF_SHARED_SECRET,
+      },
+      user: { id: testUser.id, email: testUser.email, role: 'USER', status: 'ACTIVE' },
+      params: {},
+      query: {},
+    };
+
+    const res: any = new EventEmitter();
+    res.headersSent = false;
+
+    let queryRanInsideTransaction = false;
+    let crossTenantDataVisible = true;
+    let writeViolationBlocked = false;
+
+    await new Promise<void>((resolve, reject) => {
+      resolveTenantContext(req, res, async (err?: any) => {
+        if (err) return reject(err);
+        try {
+          // Verify request is executing inside the RLS-enforced transaction
+          const ctx = currentTenantCtx();
+          assert.equal(ctx?.tenantId, tenantB.id);
+          assert.ok(ctx?.tx, 'Active database transaction tx must be present in pilot context');
+          queryRanInsideTransaction = true;
+
+          // Execute query WITHOUT ANY WHERE filter on tenantDb()
+          const rows = await tenantDb().select().from(files);
+          const foundA = rows.find((r: any) => r.id === fileA.id);
+          crossTenantDataVisible = foundA !== undefined;
+
+          // Attempt cross-tenant write within this request context
+          try {
+            await tenantDb()
+              .insert(files)
+              .values({
+                key: `rls-pilot-cross-${Date.now()}`,
+                filename: 'malicious-leak.pdf',
+                contentType: 'application/pdf',
+                size: 512,
+                ownerId: testUser.id,
+                tenantId: tenantA.id, // Attempting to write into Tenant A from Tenant B request
+              });
+          } catch (writeErr: any) {
+            const fullMsg = `${writeErr.message} ${writeErr.cause?.message ?? ''}`;
+            if (/violates row-level security policy/i.test(fullMsg)) {
+              writeViolationBlocked = true;
+            }
+          }
+
+          // Complete simulated response
+          res.emit('finish');
+          resolve();
+        } catch (innerErr) {
+          reject(innerErr);
+        }
+      });
+    });
+
+    assert.ok(queryRanInsideTransaction, 'Middleware must wrap pilot request in transaction');
+    assert.equal(
+      crossTenantDataVisible,
+      false,
+      'Postgres kernel RLS must block Tenant A rows from Tenant B request even without WHERE filter',
+    );
+    assert.ok(
+      writeViolationBlocked,
+      'Postgres kernel RLS must block cross-tenant insert during pilot request',
+    );
+  } finally {
+    try {
+      await db.delete(files).where(eq(files.ownerId, testUser.id));
+      await db.delete(tenants).where(inArray(tenants.id, [tenantA.id, tenantB.id]));
+      await db.delete(users).where(eq(users.id, testUser.id));
+    } catch {
+      /* ignore cleanup */
+    }
+  }
 });

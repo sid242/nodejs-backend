@@ -90,7 +90,12 @@ test('errorHandler returns standardized error envelope without leaking internal 
   };
 
   // 1. Handled AppError (400 Bad Request)
-  errorHandler(AppError.badRequest('Invalid parameter', { field: 'name' }), mockReq, mockRes, () => {});
+  errorHandler(
+    AppError.badRequest('Invalid parameter', { field: 'name' }),
+    mockReq,
+    mockRes,
+    () => {},
+  );
   assert.equal(statusCode, 400);
   assert.equal(responseBody.error.code, 'BAD_REQUEST');
   assert.equal(responseBody.error.message, 'Invalid parameter');

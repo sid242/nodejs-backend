@@ -44,7 +44,8 @@ export function registerGeoDocs(registry: OpenAPIRegistry): void {
     method: 'get',
     path: '/api/v1/geo/children',
     summary: 'List child locations',
-    description: 'Returns child entities (districts, sub-districts, cities, villages) under a parent geo ID.',
+    description:
+      'Returns child entities (districts, sub-districts, cities, villages) under a parent geo ID.',
     tags: ['Geo'],
     security: [{ [bearerAuth.name]: [] }],
     request: {
@@ -90,4 +91,3 @@ export function registerGeoDocs(registry: OpenAPIRegistry): void {
     },
   });
 }
-

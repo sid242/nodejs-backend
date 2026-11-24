@@ -212,15 +212,12 @@ test('Phase 1: S4 - Platform Staff privilege escalation guards & last-super-admi
   // 1. Non-super-admin attempting to create a staff with SUPER_ADMIN role must be rejected
   await assert.rejects(
     async () => {
-      await platformService.createStaff(
-        supportActor,
-        {
-          email: `escalate-${Date.now()}@platform.local`,
-          displayName: 'Escalation Attempt',
-          password: 'Password@123456',
-          roleId: superAdminRole.id,
-        },
-      );
+      await platformService.createStaff(supportActor, {
+        email: `escalate-${Date.now()}@platform.local`,
+        displayName: 'Escalation Attempt',
+        password: 'Password@123456',
+        roleId: superAdminRole.id,
+      });
     },
     (err: any) => {
       assert.equal(err?.status, 403);
@@ -232,11 +229,9 @@ test('Phase 1: S4 - Platform Staff privilege escalation guards & last-super-admi
   // 2. Staff attempting to modify their own role/status must be rejected
   await assert.rejects(
     async () => {
-      await platformService.updateStaff(
-        supportActor,
-        supportStaff.id,
-        { roleId: superAdminRole.id },
-      );
+      await platformService.updateStaff(supportActor, supportStaff.id, {
+        roleId: superAdminRole.id,
+      });
     },
     (err: any) => {
       assert.ok([400, 403].includes(err?.status));
@@ -298,7 +293,10 @@ test('Phase 1: S5 - Support session header is rejected if caller is not the sess
   await resolveTenantContext(reqCustomer, {} as any, (err?: any) => {
     customerErr = err;
   });
-  assert.ok(customerErr, 'resolveTenantContext must reject customer user attempting support session');
+  assert.ok(
+    customerErr,
+    'resolveTenantContext must reject customer user attempting support session',
+  );
   assert.equal(customerErr?.status, 403);
 
   // Request by Staff B (not the session initiator) -> passes 403 forbidden to next()

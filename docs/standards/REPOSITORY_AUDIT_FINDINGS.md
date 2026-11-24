@@ -13,6 +13,7 @@ Antigravity must verify all observations against the current checked-out commit 
 ## 2. Frontend — verified strengths
 
 The repository describes and configures:
+
 - Next.js 16 App Router, React 19, TypeScript strict, Tailwind CSS v4 and shadcn/ui.
 - Feature-oriented modules with atomic shared UI layers.
 - TanStack Query, Zustand, React Hook Form and Zod.
@@ -40,6 +41,7 @@ The repository describes and configures:
 ## 3. Backend — verified strengths
 
 The repository describes and configures:
+
 - Node.js `>=24`, TypeScript ESM, Express, PostgreSQL and Drizzle ORM.
 - Redis, BullMQ, Socket.IO, S3-compatible storage and SES/email integrations.
 - Zod environment validation, Pino structured logging and rate limiting.
@@ -74,18 +76,21 @@ The repository describes and configures:
 ## 5. Priority classification
 
 ### P0 — correctness/security
+
 - Backend `no-explicit-any` disabled.
 - Confirm Express runtime/type compatibility.
 - Audit tenant isolation, RLS, auth and permission enforcement.
 - Audit secret handling, raw webhook verification, input validation and unsafe casts.
 
 ### P1 — engineering consistency
+
 - Establish common TypeScript rules and typed error/result conventions.
 - Audit dependency graph and remove duplicate/unused packages.
 - Improve test coverage around critical flows.
 - Enforce architecture boundaries and CI gates.
 
 ### P2 — maintainability/performance
+
 - Simplify complex branching and duplicated logic.
 - Improve React rendering/data fetching patterns.
 - Improve query performance, logging/metrics and bundle performance.
@@ -94,6 +99,7 @@ The repository describes and configures:
 ## 6. Required output from Antigravity
 
 For each repository, produce:
+
 1. Exact commit SHA and Node/package-manager versions.
 2. Installed dependency inventory from lockfile.
 3. `npm outdated`/equivalent report and security audit results.

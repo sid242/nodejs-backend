@@ -8,14 +8,14 @@ This document outlines the security, compliance, and tamper-evident guarantees o
 
 Every sensitive state mutation, access change, authentication attempt, and delegation action produces an immutable audit record:
 
-| Category | Typical Actions | Captured Metadata & Actors |
-| :--- | :--- | :--- |
-| **Authentication & SSO** | `AUTH.LOGIN`, `AUTH.LOGOUT`, `SSO.CONFIG_UPDATED`, `SSO.BREAK_GLASS_BYPASS`, `SCIM.USER_PROVISIONED`, `SCIM.USER_DEACTIVATED` | User ID, denormalized actor snapshot (`actorEmail`, `actorName`), IP address, user agent, requestId |
-| **Role & Permission RBAC** | `ROLES.ASSIGNED`, `ROLES.REVOKED`, `ROLES.CREATED`, `TENANT.OWNERSHIP_TRANSFERRED` | Operator ID, target member ID, affected permission list, previous vs updated roles |
-| **Workspace & Settings** | `TENANTS.UPDATE`, `BRANDING.UPDATE`, `DOMAINS.VERIFIED`, `AUDIT.POLICY_UPDATED` | Workspace slug, domain name, modified settings before/after |
-| **Billing & Subscriptions** | `SUBSCRIPTION.CREATED`, `SUBSCRIPTION.CANCELLED`, `PLAN.CHANGED`, `INVOICE.PAID` | Plan tier, seat changes, stripe customer/subscription references |
-| **Platform Delegation** | `SUPPORT.START`, `SUPPORT.MUTATION`, `IMPERSONATION.START`, `IMPERSONATION.END` | Staff member ID, target workspace, support session ID, approved scope (`READ_ONLY`, `ASSIST`, `FULL_ADMIN`) |
-| **Database Operations** | `DB_OPS.SWITCHOVER`, `DB_OPS.ROLLBACK`, `DB_OPS.BACKUP_CREATED`, `DB_OPS.RESTORE` | Source host, target host, migration tag, duration, operator staff ID |
+| Category                    | Typical Actions                                                                                                               | Captured Metadata & Actors                                                                                  |
+| :-------------------------- | :---------------------------------------------------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------- |
+| **Authentication & SSO**    | `AUTH.LOGIN`, `AUTH.LOGOUT`, `SSO.CONFIG_UPDATED`, `SSO.BREAK_GLASS_BYPASS`, `SCIM.USER_PROVISIONED`, `SCIM.USER_DEACTIVATED` | User ID, denormalized actor snapshot (`actorEmail`, `actorName`), IP address, user agent, requestId         |
+| **Role & Permission RBAC**  | `ROLES.ASSIGNED`, `ROLES.REVOKED`, `ROLES.CREATED`, `TENANT.OWNERSHIP_TRANSFERRED`                                            | Operator ID, target member ID, affected permission list, previous vs updated roles                          |
+| **Workspace & Settings**    | `TENANTS.UPDATE`, `BRANDING.UPDATE`, `DOMAINS.VERIFIED`, `AUDIT.POLICY_UPDATED`                                               | Workspace slug, domain name, modified settings before/after                                                 |
+| **Billing & Subscriptions** | `SUBSCRIPTION.CREATED`, `SUBSCRIPTION.CANCELLED`, `PLAN.CHANGED`, `INVOICE.PAID`                                              | Plan tier, seat changes, stripe customer/subscription references                                            |
+| **Platform Delegation**     | `SUPPORT.START`, `SUPPORT.MUTATION`, `IMPERSONATION.START`, `IMPERSONATION.END`                                               | Staff member ID, target workspace, support session ID, approved scope (`READ_ONLY`, `ASSIST`, `FULL_ADMIN`) |
+| **Database Operations**     | `DB_OPS.SWITCHOVER`, `DB_OPS.ROLLBACK`, `DB_OPS.BACKUP_CREATED`, `DB_OPS.RESTORE`                                             | Source host, target host, migration tag, duration, operator staff ID                                        |
 
 ---
 
@@ -69,5 +69,6 @@ In addition to API application controls, PostgreSQL database triggers enforce im
 ## 5. Denormalized Actor Snapshots
 
 To maintain attribution when user identities are deactivated or deleted:
+
 - Every audit record captures frozen copies of `actorEmail` and `actorName`.
 - If an account is deleted under "Right to be Forgotten" (GDPR / DPDP), the user's primary identity record is removed while the audit log retains the immutable historical attribution necessary for regulatory compliance.

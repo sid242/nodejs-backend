@@ -23,11 +23,7 @@ export const getPlatformGroup = asyncHandler(async (req: Request, res: Response)
 
 export const updatePlatformGroup = asyncHandler(async (req: Request, res: Response) => {
   const groupId = (req.params.groupId ?? req.valid?.params?.groupId) as string;
-  const result = await groupsService.updatePlatformGroup(
-    groupId,
-    req.staff!.id,
-    req.valid!.body,
-  );
+  const result = await groupsService.updatePlatformGroup(groupId, req.staff!.id, req.valid!.body);
   AppResponse.ok(result, 'Platform group updated successfully').send(res);
 });
 
@@ -59,10 +55,8 @@ export const addPlatformGroupMembers = asyncHandler(async (req: Request, res: Re
 export const removePlatformGroupMember = asyncHandler(async (req: Request, res: Response) => {
   const groupId = (req.params.groupId ?? req.valid?.params?.groupId) as string;
   const staffId = (req.params.staffId ?? req.valid?.params?.staffId) as string;
-  await groupsService.removePlatformGroupMember(
-    groupId,
-    req.staff!.id,
-    staffId,
+  await groupsService.removePlatformGroupMember(groupId, req.staff!.id, staffId);
+  AppResponse.ok({ success: true }, 'Staff member removed from platform group successfully').send(
+    res,
   );
-  AppResponse.ok({ success: true }, 'Staff member removed from platform group successfully').send(res);
 });

@@ -106,7 +106,11 @@ export async function isOriginAllowed(origin: string | undefined): Promise<boole
       const parts = hostname.split('.');
       if (parts.length === 2 && parts[1] === 'localhost') {
         const label = parts[0];
-        if (label && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label) && !isReservedSlug(label)) {
+        if (
+          label &&
+          /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label) &&
+          !isReservedSlug(label)
+        ) {
           return true;
         }
       }
@@ -130,4 +134,3 @@ export function dynamicCorsOrigin(
     .then((allowed) => callback(null, allowed))
     .catch((err) => callback(err, false));
 }
-

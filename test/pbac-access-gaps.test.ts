@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, describe, it } from 'node:test';
-import type { Request, Response } from 'express';
 import { PgDialect } from 'drizzle-orm/pg-core';
+import type { Request, Response } from 'express';
 
 import { closeDb } from '../src/config/db';
 import { closeRedisClients } from '../src/config/redis';
@@ -13,7 +13,11 @@ import { compileConditionTreeToSql } from '../src/modules/pbac/pbac.compiler';
 import { evaluateConditionTree } from '../src/modules/pbac/pbac.evaluator';
 import { requirePolicy } from '../src/modules/pbac/pbac.middleware';
 import { pbacService } from '../src/modules/pbac/pbac.service';
-import type { ActorContext, PolicyConditionTree, PolicyEvaluationContext } from '../src/modules/pbac/pbac.types';
+import type {
+  ActorContext,
+  PolicyConditionTree,
+  PolicyEvaluationContext,
+} from '../src/modules/pbac/pbac.types';
 
 after(async () => {
   await Promise.allSettled([closeRedisClients(), closeDb()]);
@@ -31,7 +35,13 @@ describe('Step 04: PBAC Access Gaps Hardening', () => {
         }) as unknown as typeof leadsRepo.listLeads;
 
         // No roles, no actorContext
-        const result = await leadsService.listLeads('tenant-1', { page: 1, limit: 20 }, undefined, [], false);
+        const result = await leadsService.listLeads(
+          'tenant-1',
+          { page: 1, limit: 20 },
+          undefined,
+          [],
+          false,
+        );
 
         assert.equal(repoCalled, false, 'Repository should not be called when actor has no roles');
         assert.equal(result.items.length, 0);
@@ -167,7 +177,9 @@ describe('Step 04: PBAC Access Gaps Hardening', () => {
             assignedMemberId: 'member-original',
             departmentId: 'SALES',
             isConfidential: false,
-          }) as unknown as ReturnType<typeof leadsService.getLeadById> extends Promise<infer U> ? U : never;
+          }) as unknown as ReturnType<typeof leadsService.getLeadById> extends Promise<infer U>
+            ? U
+            : never;
 
         pbacService.evaluateAccess = async (_t, _r, _resource, action) => {
           if (action === 'reassign') {
@@ -197,7 +209,9 @@ describe('Step 04: PBAC Access Gaps Hardening', () => {
             );
           },
           (err: unknown) => {
-            return err instanceof AppError && err.status === 403 && err.message.includes('reassign lead');
+            return (
+              err instanceof AppError && err.status === 403 && err.message.includes('reassign lead')
+            );
           },
         );
       } finally {
@@ -219,7 +233,9 @@ describe('Step 04: PBAC Access Gaps Hardening', () => {
             assignedMemberId: 'm1',
             departmentId: 'SALES',
             isConfidential: false,
-          }) as unknown as ReturnType<typeof leadsService.getLeadById> extends Promise<infer U> ? U : never;
+          }) as unknown as ReturnType<typeof leadsService.getLeadById> extends Promise<infer U>
+            ? U
+            : never;
 
         pbacService.evaluateAccess = async (_t, _r, _resource, action, context) => {
           if (action === 'update') {
@@ -346,7 +362,11 @@ describe('Step 04: PBAC Access Gaps Hardening', () => {
 
       assert.ok(caughtError instanceof AppError);
       assert.equal(caughtError.status, 403);
-      assert.ok(caughtError.message.includes('Confidential records cannot be accessed via standard support sessions'));
+      assert.ok(
+        caughtError.message.includes(
+          'Confidential records cannot be accessed via standard support sessions',
+        ),
+      );
     });
   });
 });

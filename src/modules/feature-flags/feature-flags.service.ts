@@ -2,12 +2,11 @@ import crypto from 'node:crypto';
 
 import { env } from '@/config/env';
 import { redis } from '@/config/redis';
-import { AppError } from '@/lib/errors';
-import { cache } from '@/lib/cache';
-import { logSecurityEvent } from '@/modules/audit/audit.service';
 import type { NewFeatureFlag, NewFeatureFlagRule } from '@/db/schema';
+import { cache } from '@/lib/cache';
+import { AppError } from '@/lib/errors';
+import { logSecurityEvent } from '@/modules/audit/audit.service';
 
-import * as repo from './feature-flags.repository';
 import type {
   CreateFeatureFlagDto,
   CreateFeatureFlagRuleDto,
@@ -15,6 +14,7 @@ import type {
   UpdateFeatureFlagDto,
   UpdateFeatureFlagRuleDto,
 } from './feature-flags.dto';
+import * as repo from './feature-flags.repository';
 
 const CACHE_TTL_SECONDS = 30;
 const CACHE_PREFIX = 'ff:eval:';
@@ -24,10 +24,7 @@ function getStickyPercentage(key: string, seed: string): number {
   return hash.readUInt32BE(0) % 100;
 }
 
-export async function evaluate(
-  flagKey: string,
-  context: EvaluationContextDto = {},
-): Promise<any> {
+export async function evaluate(flagKey: string, context: EvaluationContextDto = {}): Promise<any> {
   const cacheKey = `${CACHE_PREFIX}${flagKey}:${context.tenantId ?? '_'}:${context.userId ?? '_'}:${context.plan ?? '_'}`;
 
   try {
@@ -64,7 +61,10 @@ export async function evaluate(
         break;
       }
     } else if (target === 'PLAN' && context.plan && Array.isArray(criteria)) {
-      if (criteria.includes(context.plan.toLowerCase()) || criteria.includes(context.plan.toUpperCase())) {
+      if (
+        criteria.includes(context.plan.toLowerCase()) ||
+        criteria.includes(context.plan.toUpperCase())
+      ) {
         resolvedValue = rule.value;
         break;
       }
@@ -79,7 +79,8 @@ export async function evaluate(
         break;
       }
     } else if (target === 'PERCENT') {
-      const percentage = typeof criteria === 'number' ? criteria : (criteria as any)?.percentage ?? 0;
+      const percentage =
+        typeof criteria === 'number' ? criteria : ((criteria as any)?.percentage ?? 0);
       const seed = context.tenantId || context.userId || '';
       if (seed && getStickyPercentage(flagKey, seed) < percentage) {
         resolvedValue = rule.value;
@@ -100,7 +101,9 @@ export async function evaluate(
   return resolvedValue;
 }
 
-export async function evaluateAll(context: EvaluationContextDto = {}): Promise<Record<string, any>> {
+export async function evaluateAll(
+  context: EvaluationContextDto = {},
+): Promise<Record<string, any>> {
   const flags = await repo.listFeatureFlags();
   const results: Record<string, any> = {};
 

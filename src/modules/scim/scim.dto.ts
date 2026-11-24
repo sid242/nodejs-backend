@@ -67,4 +67,3 @@ export class ScimError extends Error {
 export type ScimCreateUserDto = z.infer<typeof scimCreateUserDto>;
 export type ScimPatchUserDto = z.infer<typeof scimPatchUserDto>;
 export type ScimQueryDto = z.infer<typeof scimQueryDto>;
-

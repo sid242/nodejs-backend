@@ -40,9 +40,18 @@ export const attributeConditionSchema = z
 export const conditionRuleSchema: z.ZodType<unknown> = z.lazy(() =>
   z
     .object({
-      all: z.array(z.lazy(() => policyConditionItemSchema)).min(1).optional(),
-      any: z.array(z.lazy(() => policyConditionItemSchema)).min(1).optional(),
-      none: z.array(z.lazy(() => policyConditionItemSchema)).min(1).optional(),
+      all: z
+        .array(z.lazy(() => policyConditionItemSchema))
+        .min(1)
+        .optional(),
+      any: z
+        .array(z.lazy(() => policyConditionItemSchema))
+        .min(1)
+        .optional(),
+      none: z
+        .array(z.lazy(() => policyConditionItemSchema))
+        .min(1)
+        .optional(),
     })
     .strict()
     .refine((val) => val.all !== undefined || val.any !== undefined || val.none !== undefined, {

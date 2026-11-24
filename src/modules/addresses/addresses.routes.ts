@@ -1,11 +1,12 @@
 import { Router } from 'express';
 
 import { requireAuth } from '@/middleware/auth';
-import { requirePermission } from '@/middleware/rbac';
 import { addressLimiter } from '@/middleware/rate-limit';
+import { requirePermission } from '@/middleware/rbac';
 import { blockInSupportSession } from '@/middleware/support';
 import { resolveTenantContext } from '@/middleware/tenant';
 import { validate } from '@/middleware/validate';
+
 import * as controller from './addresses.controller';
 import {
   addressBodyDto,
@@ -155,4 +156,3 @@ router.post(
 );
 
 export default router;
-

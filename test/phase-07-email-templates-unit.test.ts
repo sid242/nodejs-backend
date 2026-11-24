@@ -1,23 +1,33 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import { after, before, describe, test } from 'node:test';
-
 import { eq } from 'drizzle-orm';
 
 import { closeDb, db } from '@/config/db';
+import { env } from '@/config/env';
 import { closeRedisClients } from '@/config/redis';
-import { emailMessages, emailSuppressions, emailTemplates, emailTemplateVersions, tenants, users } from '@/db/schema/index';
+import {
+  emailMessages,
+  emailSuppressions,
+  emailTemplates,
+  emailTemplateVersions,
+  tenants,
+  users,
+} from '@/db/schema/index';
+import { AppError } from '@/lib/errors';
 import { isPrivateOrReservedHost, sendEmail, verifySmtpConnection } from '@/lib/mailer';
 import * as repo from '@/modules/email-templates/email-templates.repository';
 import * as service from '@/modules/email-templates/email-templates.service';
-
 import { closeQueues } from '@/queues/index';
 import { closeSocketEmitter } from '@/sockets/emitter';
 
 describe('Module 06 — Email Templates & Delivery Tests', () => {
+  const previousBounceWebhookSecret = env.EMAIL_BOUNCE_WEBHOOK_SECRET;
   let testTenantId: string;
   let testUserId: string;
 
   before(async () => {
+    env.EMAIL_BOUNCE_WEBHOOK_SECRET = 'test-email-bounce-webhook-secret';
     // Setup test tenant and user in DB
     const [tenant] = await db
       .insert(tenants)
@@ -40,9 +50,12 @@ describe('Module 06 — Email Templates & Delivery Tests', () => {
   });
 
   after(async () => {
+    env.EMAIL_BOUNCE_WEBHOOK_SECRET = previousBounceWebhookSecret;
     // Cleanup
     if (testTenantId) {
-      await db.delete(emailTemplateVersions).where(eq(emailTemplateVersions.tenantId, testTenantId));
+      await db
+        .delete(emailTemplateVersions)
+        .where(eq(emailTemplateVersions.tenantId, testTenantId));
       await db.delete(emailMessages).where(eq(emailMessages.tenantId, testTenantId));
       await db.delete(emailSuppressions).where(eq(emailSuppressions.tenantId, testTenantId));
       await db.delete(emailTemplates).where(eq(emailTemplates.tenantId, testTenantId));
@@ -51,12 +64,7 @@ describe('Module 06 — Email Templates & Delivery Tests', () => {
     if (testUserId) {
       await db.delete(users).where(eq(users.id, testUserId));
     }
-    await Promise.allSettled([
-      closeQueues(),
-      closeSocketEmitter(),
-      closeRedisClients(),
-      closeDb(),
-    ]);
+    await Promise.allSettled([closeQueues(), closeSocketEmitter(), closeRedisClients(), closeDb()]);
   });
 
   test('renderVariables escapes HTML in double braces {{var}} and preserves raw HTML in triple braces {{{var}}}', () => {
@@ -73,7 +81,8 @@ describe('Module 06 — Email Templates & Delivery Tests', () => {
   });
 
   test('renderVariables correctly resolves nested properties and maintains unprovided variables', () => {
-    const template = 'Hi {{user.firstName}}, your organization is {{tenant.name}} (ref: {{unknownCode}})';
+    const template =
+      'Hi {{user.firstName}}, your organization is {{tenant.name}} (ref: {{unknownCode}})';
     const rendered = service.renderVariables(template, {
       user: { firstName: 'Alice' },
       tenant: { name: 'Acme Corp' },
@@ -219,9 +228,54 @@ describe('Module 06 — Email Templates & Delivery Tests', () => {
     assert.match(logs.messages[0]?.lastError ?? '', /suppressed/i);
   });
 
-  test('handleBounceWebhook processes AWS SES bounce notification payload into suppressions', async () => {
-    const bounceEmail = `webhook-bounce-${Date.now()}@example.com`;
+  test('handleBounceWebhook rejects unauthenticated or wrongly signed webhook requests', async () => {
+    const bounceEmail = `unauth-bounce-${Date.now()}@example.com`;
+    const payload = {
+      email: bounceEmail,
+      reason: 'BOUNCE',
+    };
 
+    // 1. Unsigned / unauthenticated -> returns 401 Unauthorized
+    await assert.rejects(
+      async () => service.handleBounceWebhook(payload),
+      (err: any) => err instanceof AppError && err.status === 401,
+    );
+
+    // 2. Wrong secret -> returns 403 Forbidden
+    await assert.rejects(
+      async () => service.handleBounceWebhook(payload, { 'x-webhook-secret': 'wrong-secret' }),
+      (err: any) => err instanceof AppError && err.status === 403,
+    );
+
+    // 3. Unknown SNS message type -> returns 400 Bad Request
+    await assert.rejects(
+      async () =>
+        service.handleBounceWebhook(
+          { Type: 'UnknownMessageType', Message: '{}' },
+          { 'x-webhook-secret': env.EMAIL_BOUNCE_WEBHOOK_SECRET },
+        ),
+      (err: any) => err instanceof AppError && err.status === 400,
+    );
+
+    // Verify no suppression was created
+    const suppression = await repo.findSuppression(testTenantId, bounceEmail);
+    assert.equal(suppression, undefined);
+  });
+
+  test('handleBounceWebhook resolves tenant ONLY from stored emailMessages, never trusting body tenantId', async () => {
+    const bounceEmail = `webhook-bounce-${Date.now()}@example.com`;
+    const spoofedTenantId = crypto.randomUUID();
+
+    // 1. Insert genuine emailMessage belonging to testTenantId
+    await db.insert(emailMessages).values({
+      id: crypto.randomUUID(),
+      tenantId: testTenantId,
+      to: bounceEmail,
+      subject: 'Test message for bounce resolution',
+      status: 'SENT',
+    });
+
+    // 2. Attacker provides a spoofed tenantId in the payload
     const sesNotification = {
       Type: 'Notification',
       Message: JSON.stringify({
@@ -237,15 +291,40 @@ describe('Module 06 — Email Templates & Delivery Tests', () => {
           ],
         },
       }),
-      tenantId: testTenantId,
+      tenantId: spoofedTenantId, // Attacker trying to suppress in spoofedTenantId
     };
 
-    const webhookResult = await service.handleBounceWebhook(sesNotification);
+    // Authenticate with valid secret
+    const webhookResult = await service.handleBounceWebhook(sesNotification, {
+      'x-webhook-secret': env.EMAIL_BOUNCE_WEBHOOK_SECRET,
+    });
     assert.equal(webhookResult.processed, 1);
 
-    const suppression = await repo.findSuppression(testTenantId, bounceEmail);
-    assert.ok(suppression);
-    assert.equal(suppression.email, bounceEmail);
-    assert.equal(suppression.reason, 'BOUNCE');
+    // Suppression MUST be created in testTenantId (resolved from emailMessages), NOT spoofedTenantId
+    const suppressionGenuine = await repo.findSuppression(testTenantId, bounceEmail);
+    assert.ok(suppressionGenuine);
+    assert.equal(suppressionGenuine.email, bounceEmail);
+    assert.equal(suppressionGenuine.reason, 'BOUNCE');
+
+    // Confirm no suppression exists for the spoofed tenantId
+    const suppressionSpoofed = await repo.findSuppression(spoofedTenantId, bounceEmail);
+    assert.equal(suppressionSpoofed, undefined);
+  });
+
+  test('handleBounceWebhook creates no suppression when recipient is not found in emailMessages', async () => {
+    const unknownEmail = `unknown-recipient-${Date.now()}@example.com`;
+    const payload = {
+      email: unknownEmail,
+      reason: 'BOUNCE',
+      tenantId: testTenantId, // body tenantId must be ignored
+    };
+
+    const result = await service.handleBounceWebhook(payload, {
+      'x-webhook-secret': env.EMAIL_BOUNCE_WEBHOOK_SECRET,
+    });
+    assert.equal(result.processed, 0);
+
+    const suppression = await repo.findSuppression(testTenantId, unknownEmail);
+    assert.equal(suppression, undefined);
   });
 });

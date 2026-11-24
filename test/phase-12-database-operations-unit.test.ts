@@ -106,13 +106,18 @@ describe('Phase 12: Tenant Database Operations Control Plane — Unit & Invarian
         }
       };
 
-      const raw = 'postgresql://db_user_prod:superSecretPassword123@aurora-cluster.us-east-1.rds.amazonaws.com:5432/tenant_db?sslmode=require';
+      const raw =
+        'postgresql://db_user_prod:superSecretPassword123@aurora-cluster.us-east-1.rds.amazonaws.com:5432/tenant_db?sslmode=require';
       const masked = maskUrl(raw);
 
       assert.ok(masked);
       assert.ok(!masked.includes('db_user_prod'));
       assert.ok(!masked.includes('superSecretPassword123'));
-      assert.ok(masked.includes('aurora-cluster.us-east-1.rds.amazonaws.com:5432/tenant_db?sslmode=require'));
+      assert.ok(
+        masked.includes(
+          'aurora-cluster.us-east-1.rds.amazonaws.com:5432/tenant_db?sslmode=require',
+        ),
+      );
     });
 
     it('Generates deterministic and safe Secrets Manager references without credentials', () => {
@@ -121,7 +126,10 @@ describe('Phase 12: Tenant Database Operations Control Plane — Unit & Invarian
       };
 
       const ref = getSecretManagerRef('enterprise-corp', 'tenant_enterprise_corp');
-      assert.equal(ref, 'secretsmanager://tenants/enterprise-corp/tenant_enterprise_corp/credentials');
+      assert.equal(
+        ref,
+        'secretsmanager://tenants/enterprise-corp/tenant_enterprise_corp/credentials',
+      );
       assert.ok(!ref.includes('password'));
     });
   });

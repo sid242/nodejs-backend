@@ -1,12 +1,13 @@
 # Refactor Log — Backend Repository
 
-**Repository:** `sid242/nodejs-backend` (`node-scalable-foundation`)  
+**Repository:** `sid242/nodejs-backend` (`node-scalable-foundation`)
 
 ---
 
 ## Log Entries
 
 ### [2026-11-21] Initial Engineering Standards & Quality Baseline Established
+
 - **Scope**: Code quality engineering standards package integrated into `node-scalable-foundation`.
 - **Changes**:
   - Added engineering standards documentation in `docs/standards/`:
@@ -30,6 +31,7 @@
   - `npm run lint`: Passed with 0 errors.
 
 ### [2026-11-21] Step 01: Razorpay Webhook Security Hardening (CRITICAL)
+
 - **Scope**: Implemented Step 01 of `antigravity-razorpay-pbac-pack` in `node-scalable-foundation`.
 - **Changes**:
   - `billing.controller.ts`:

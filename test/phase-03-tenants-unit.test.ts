@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
+import { publicTenant } from '@/db/schema/tenancy/tenants';
 import {
   closeTenantDto,
   listPlatformTenantsQueryDto,
@@ -8,7 +9,6 @@ import {
   retryProvisioningDto,
   updatePlatformTenantDto,
 } from '@/modules/platform/platform.dto';
-import { publicTenant } from '@/db/schema/tenancy/tenants';
 
 describe('Phase 03: Tenant Management & Provisioning Unit Tests', () => {
   describe('1. listPlatformTenantsQueryDto validation', () => {
@@ -200,8 +200,14 @@ describe('Phase 03: Tenant Management & Provisioning Unit Tests', () => {
   describe('5. publicTenant projection security', () => {
     it('ensures sensitive infrastructure and secret fields are omitted from public projections', () => {
       const publicFields = Object.keys(publicTenant);
-      assert.ok(!publicFields.includes('databaseSecretRef'), 'databaseSecretRef must not be exposed');
-      assert.ok(!publicFields.includes('internalNote'), 'internalNote must not be exposed in publicTenant');
+      assert.ok(
+        !publicFields.includes('databaseSecretRef'),
+        'databaseSecretRef must not be exposed',
+      );
+      assert.ok(
+        !publicFields.includes('internalNote'),
+        'internalNote must not be exposed in publicTenant',
+      );
       assert.ok(publicFields.includes('legalName'));
       assert.ok(publicFields.includes('tenantCode'));
       assert.ok(publicFields.includes('provisioningStatus'));
@@ -210,4 +216,3 @@ describe('Phase 03: Tenant Management & Provisioning Unit Tests', () => {
     });
   });
 });
-

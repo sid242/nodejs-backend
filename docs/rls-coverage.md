@@ -69,10 +69,10 @@ All 39 tenant-scoped tables registered in `TENANT_TABLES` have RLS enabled, forc
 | `ApiKey`               | `apiKeys`                | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
 | `WebhookEndpoint`      | `webhookEndpoints`       | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
 | `WebhookDelivery`      | `webhookDeliveries`      | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
-| `ConsentRecord`        | `consentRecords`         | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
-| `ExportJob`            | `exportJobs`             | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
-| `ExportArtifact`       | `exportArtifacts`        | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
 | `ReportRun`            | `reportRuns`             | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `OnboardingProgress`   | `onboardingProgress`     | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `SupportTicket`        | `supportTickets`         | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
+| `SupportTicketMessage` | `supportTicketMessages`  | `tenantId`    | `tenantId = app.tenant_id`                     | `tenantId = app.tenant_id`  |
 
 ---
 
@@ -92,3 +92,16 @@ The following operations execute **before** or **outside** a resolved tenant con
    - SCIM HTTP Authorization header resolves tenant mapping from the primary SCIM token registry.
 6. **Support Delegation Session Handshake (`findSupportSessionById`)**:
    - Audited support sessions resolve through `PlatformSupportSession` (primary cluster).
+
+---
+
+## 5. Runtime Request-Path RLS Enforcement Pilot
+
+For shared database tenants (`databaseMode = 'shared'`), RLS is enforced at the PostgreSQL transaction layer during request dispatch:
+
+1. **Pilot Activation**: Controlled via `RLS_ENFORCEMENT_PILOT_TENANTS` (comma-separated tenant UUIDs or `*` to enforce across all shared tenants).
+2. **Execution Hook**: In `src/middleware/tenant.ts`, tenant requests matching the pilot list are wrapped in `withTenantTransaction(tenantId, ...)` which:
+   - Sets session parameters: `SET LOCAL app.tenant_id = '<tenant_id>'`
+   - Switches transaction role: `SET LOCAL ROLE tenant_app_role`
+3. **Defense-in-Depth**: If any repository query omits `WHERE tenantId = ...`, PostgreSQL kernel-level RLS policies reject foreign rows and prevent cross-tenant leaks.
+4. **Dedicated Tenants**: Isolated database tenants run on their own physical/logical databases and are unaffected by shared-cluster RLS policies.

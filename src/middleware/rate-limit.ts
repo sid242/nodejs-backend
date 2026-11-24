@@ -14,11 +14,14 @@ export interface RateLimiterOptions {
   byUser?: boolean;
   byTenant?: boolean;
   compositeAuth?: boolean;
+  failClosed?: boolean;
 }
 
 /**
  * Redis-backed so limits are shared across ALL API replicas.
- * passOnStoreError: if Redis is down we fail open rather than take the API down.
+ * passOnStoreError:
+ *   - failClosed: true (auth, SSO, handoff) -> passOnStoreError is false (fails closed if Redis is down).
+ *   - failClosed: false (general APIs) -> passOnStoreError is true (fails open rather than taking read API down).
  */
 const make = ({
   name,
@@ -27,13 +30,14 @@ const make = ({
   byUser = false,
   byTenant = false,
   compositeAuth = false,
+  failClosed = false,
 }: RateLimiterOptions): RequestHandler =>
   rateLimit({
     windowMs,
     limit,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    passOnStoreError: true,
+    passOnStoreError: !failClosed,
     keyGenerator: (req: Request) => {
       // 1. Composite Auth: IP + normalized email to prevent office NAT lockout and targeted account attacks
       if (compositeAuth) {
@@ -122,6 +126,7 @@ export const authLimiter = make({
   limit: env.AUTH_RATE_LIMIT_MAX,
   windowMs: 15 * 60_000,
   compositeAuth: true,
+  failClosed: true,
 });
 
 // Per-user limit for expensive endpoints (must run after requireAuth).
@@ -142,6 +147,7 @@ export const ssoLimiter = make({
   limit: 20,
   windowMs: 60_000,
   compositeAuth: true,
+  failClosed: true,
 });
 
 // Single-use authentication handoff token redemption
@@ -149,6 +155,7 @@ export const handoffRedeemLimiter = make({
   name: 'handoff',
   limit: 10,
   windowMs: 60_000,
+  failClosed: true,
 });
 
 // Public tenant resolution (slug / custom domain checks)
@@ -212,7 +219,8 @@ export const scimLimiter = rateLimit({
     res.status(429).json({
       schemas: ['urn:ietf:params:scim:api:messages:2.0:Error'],
       status: '429',
-      detail: 'Too many requests. SCIM rate limit exceeded (100 req/min). Please retry after cooldown.',
+      detail:
+        'Too many requests. SCIM rate limit exceeded (100 req/min). Please retry after cooldown.',
     });
   },
 });

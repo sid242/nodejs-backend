@@ -3,6 +3,7 @@
 ## Severity: MEDIUM (P2)
 
 ### Trigger
+
 Alerts indicating `DOMAIN_VERIFICATION_FAILED` or Caddy On-Demand TLS handshake rejection on custom domain `portal.customer.com`.
 
 ---

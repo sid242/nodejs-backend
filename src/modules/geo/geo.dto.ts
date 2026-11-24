@@ -9,7 +9,10 @@ export const getChildrenQueryDto = z.object({
 export type GetChildrenQuery = z.infer<typeof getChildrenQueryDto>;
 
 export const pinParamDto = z.object({
-  pin: z.string().trim().regex(/^[1-9]\d{5}$/, 'Must be a valid 6-digit Indian PIN code'),
+  pin: z
+    .string()
+    .trim()
+    .regex(/^[1-9]\d{5}$/, 'Must be a valid 6-digit Indian PIN code'),
 });
 
 export type PinParam = z.infer<typeof pinParamDto>;
@@ -20,4 +23,3 @@ export const lookupQueryDto = z.object({
 });
 
 export type LookupQuery = z.infer<typeof lookupQueryDto>;
-

@@ -1,7 +1,9 @@
 # PBAC Coverage and Architecture Documentation
 
 ## Overview
+
 Policy-Based Access Control (PBAC) operates alongside role-based permission checks (RBAC) to enforce fine-grained, attribute-level authorization rules. While RBAC verifies whether a user holds high-level privileges (e.g. `leads:read`), PBAC dynamically inspects context:
+
 - **Actor attributes**: `actor.userId`, `actor.memberId`, `actor.departmentId`, `actor.regionId`, `actor.roleKeys`
 - **Resource attributes**: `resource.id`, `resource.departmentId`, `resource.regionId`, `resource.assignedMemberId`, `resource.isConfidential`, etc.
 - **Environment attributes**: `env.currentTime`, `env.ip`
@@ -10,17 +12,17 @@ Policy-Based Access Control (PBAC) operates alongside role-based permission chec
 
 ## Covered Modules
 
-| Module | Route / Operation | PBAC Middleware / Service Enforcement | Scope Compilation (SQL) |
-| :--- | :--- | :--- | :--- |
-| **Leads (CRM)** | `GET /leads` | Default-deny enforcement via `compileQueryScope` in `leadsService.listLeads` | Yes (`leads` table columns filtered by policy tree) |
-| **Leads (CRM)** | `POST /leads` | `requirePolicy({ resource: 'leads', action: 'create', getTargetResource: req => req.body })` | N/A (Evaluates proposed resource) |
-| **Leads (CRM)** | `GET /leads/:id` | `requirePolicy({ resource: 'leads', action: 'read', getTargetResource: ... })` | N/A (Row-level evaluation) |
-| **Leads (CRM)** | `PATCH /leads/:id` | `requirePolicy({ resource: 'leads', action: 'update' })` + Service-layer escalation protection checking both existing & merged state, plus `leads:reassign` and `leads:set_confidential` actions | N/A (Evaluates both pre- and post-mutation state) |
-| **Leads (CRM)** | `DELETE /leads/:id` | `requirePolicy({ resource: 'leads', action: 'delete' })` | N/A (Row-level evaluation) |
-| **Tenants** | `GET /tenants/:id` | `requirePolicy({ resource: 'tenants', action: 'read' })` | N/A |
-| **Billing** | `GET /billing/*` | Guarded via RBAC `billing:read` and `billing:manage` + tenant membership boundary | Tenant scoped |
-| **Policies** | `GET /policies/registry` | `requirePermission('roles:read')` exposes metadata registry for UI builders | N/A |
-| **Policies** | `POST /policies/evaluate` | `requirePermission('roles:read')` dry-run evaluation endpoint | N/A |
+| Module          | Route / Operation         | PBAC Middleware / Service Enforcement                                                                                                                                                            | Scope Compilation (SQL)                             |
+| :-------------- | :------------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------- |
+| **Leads (CRM)** | `GET /leads`              | Default-deny enforcement via `compileQueryScope` in `leadsService.listLeads`                                                                                                                     | Yes (`leads` table columns filtered by policy tree) |
+| **Leads (CRM)** | `POST /leads`             | `requirePolicy({ resource: 'leads', action: 'create', getTargetResource: req => req.body })`                                                                                                     | N/A (Evaluates proposed resource)                   |
+| **Leads (CRM)** | `GET /leads/:id`          | `requirePolicy({ resource: 'leads', action: 'read', getTargetResource: ... })`                                                                                                                   | N/A (Row-level evaluation)                          |
+| **Leads (CRM)** | `PATCH /leads/:id`        | `requirePolicy({ resource: 'leads', action: 'update' })` + Service-layer escalation protection checking both existing & merged state, plus `leads:reassign` and `leads:set_confidential` actions | N/A (Evaluates both pre- and post-mutation state)   |
+| **Leads (CRM)** | `DELETE /leads/:id`       | `requirePolicy({ resource: 'leads', action: 'delete' })`                                                                                                                                         | N/A (Row-level evaluation)                          |
+| **Tenants**     | `GET /tenants/:id`        | `requirePolicy({ resource: 'tenants', action: 'read' })`                                                                                                                                         | N/A                                                 |
+| **Billing**     | `GET /billing/*`          | Guarded via RBAC `billing:read` and `billing:manage` + tenant membership boundary                                                                                                                | Tenant scoped                                       |
+| **Policies**    | `GET /policies/registry`  | `requirePermission('roles:read')` exposes metadata registry for UI builders                                                                                                                      | N/A                                                 |
+| **Policies**    | `POST /policies/evaluate` | `requirePermission('roles:read')` dry-run evaluation endpoint                                                                                                                                    | N/A                                                 |
 
 ---
 

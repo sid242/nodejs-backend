@@ -296,10 +296,7 @@ export async function getActiveMemberCounts(tenantId: string) {
     .select({ count: sql<number>`count(distinct ${schema.tenantMembers.id})::int` })
     .from(schema.tenantMembers)
     .where(
-      and(
-        eq(schema.tenantMembers.tenantId, tenantId),
-        eq(schema.tenantMembers.status, 'ACTIVE'),
-      ),
+      and(eq(schema.tenantMembers.tenantId, tenantId), eq(schema.tenantMembers.status, 'ACTIVE')),
     );
 
   return {
@@ -339,10 +336,7 @@ export async function getRoleDistribution(tenantId: string) {
       count: sql<number>`count(distinct ${schema.tenantMemberRoles.memberId})::int`,
     })
     .from(schema.roles)
-    .leftJoin(
-      schema.tenantMemberRoles,
-      eq(schema.roles.id, schema.tenantMemberRoles.roleId),
-    )
+    .leftJoin(schema.tenantMemberRoles, eq(schema.roles.id, schema.tenantMemberRoles.roleId))
     .where(eq(schema.roles.tenantId, tenantId))
     .groupBy(schema.roles.name);
 
@@ -402,7 +396,11 @@ export async function getInviteStats(tenantId: string) {
   const accepted = Number(acceptedRes?.count ?? 0);
   const acceptanceRate = total > 0 ? Math.round((accepted / total) * 100) : 0;
 
-  return { totalInvitesSent: total, acceptedInvites: accepted, acceptanceRatePercent: acceptanceRate };
+  return {
+    totalInvitesSent: total,
+    acceptedInvites: accepted,
+    acceptanceRatePercent: acceptanceRate,
+  };
 }
 
 export async function getSecurityPosture(tenantId: string) {
@@ -417,10 +415,7 @@ export async function getSecurityPosture(tenantId: string) {
     .from(schema.tenantMembers)
     .innerJoin(users, eq(schema.tenantMembers.userId, users.id))
     .where(
-      and(
-        eq(schema.tenantMembers.tenantId, tenantId),
-        eq(schema.tenantMembers.status, 'ACTIVE'),
-      ),
+      and(eq(schema.tenantMembers.tenantId, tenantId), eq(schema.tenantMembers.status, 'ACTIVE')),
     );
 
   const total = memberRows.length;

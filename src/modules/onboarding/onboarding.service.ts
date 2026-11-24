@@ -1,6 +1,10 @@
 import { logger } from '@/config/logger';
 
-import { ONBOARDING_STEP_KEYS, type OnboardingStepKey, type UpdateOnboardingStepDto } from './onboarding.dto';
+import {
+  ONBOARDING_STEP_KEYS,
+  type OnboardingStepKey,
+  type UpdateOnboardingStepDto,
+} from './onboarding.dto';
 import * as onboardingRepo from './onboarding.repository';
 
 export interface OnboardingStepItem {
@@ -132,13 +136,7 @@ export async function updateStepProgress(
   userId?: string,
 ) {
   logger.info({ tenantId, stepKey, status: data.status }, 'Updating onboarding step progress');
-  return onboardingRepo.upsertStepProgress(
-    tenantId,
-    stepKey,
-    data.status,
-    data.data,
-    userId,
-  );
+  return onboardingRepo.upsertStepProgress(tenantId, stepKey, data.status, data.data, userId);
 }
 
 export async function skipStep(tenantId: string, stepKey: string, userId?: string) {

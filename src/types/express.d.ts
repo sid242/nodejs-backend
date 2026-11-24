@@ -26,6 +26,7 @@ export interface AuthenticatedTenant {
   status: 'ACTIVE' | 'SUSPENDED' | 'TRIALING' | 'DEACTIVATED';
   plan: string;
   databaseMode?: 'shared' | 'dedicated';
+  metadata?: any;
 }
 
 export interface TenantMembershipContext {

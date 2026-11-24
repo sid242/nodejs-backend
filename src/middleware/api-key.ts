@@ -15,7 +15,9 @@ export async function requireApiKey(
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return next(
-      AppError.unauthorized('Missing API key in Authorization header (expected Bearer sk_live_...)'),
+      AppError.unauthorized(
+        'Missing API key in Authorization header (expected Bearer sk_live_...)',
+      ),
     );
   }
 
@@ -40,7 +42,8 @@ export async function requireApiKey(
   }
 
   // IP Allowlist Enforcement
-  const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '';
+  const clientIp =
+    (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '';
   if (apiKey.allowedIps && apiKey.allowedIps.length > 0) {
     const isAllowed = apiKey.allowedIps.some((allowed) => allowed === clientIp || allowed === '*');
     if (!isAllowed) {

@@ -67,11 +67,7 @@ export async function findSessionByRefreshTokenHash(
 }
 
 export async function findSessionById(sessionId: string): Promise<SessionRecord | null> {
-  const [record] = await db
-    .select()
-    .from(sessions)
-    .where(eq(sessions.id, sessionId))
-    .limit(1);
+  const [record] = await db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);
 
   return record ?? null;
 }
@@ -103,7 +99,11 @@ export async function revokeOtherUserSessions(
   keepSessionId?: string,
 ): Promise<number> {
   const condition = keepSessionId
-    ? and(eq(sessions.userId, userId), eq(sessions.isRevoked, false), ne(sessions.id, keepSessionId))
+    ? and(
+        eq(sessions.userId, userId),
+        eq(sessions.isRevoked, false),
+        ne(sessions.id, keepSessionId),
+      )
     : and(eq(sessions.userId, userId), eq(sessions.isRevoked, false));
 
   const updated = await db.update(sessions).set({ isRevoked: true }).where(condition).returning();
@@ -130,8 +130,5 @@ export async function markSessionRotated(
 }
 
 export async function touchSessionActive(sessionId: string): Promise<void> {
-  await db
-    .update(sessions)
-    .set({ lastActiveAt: new Date() })
-    .where(eq(sessions.id, sessionId));
+  await db.update(sessions).set({ lastActiveAt: new Date() }).where(eq(sessions.id, sessionId));
 }

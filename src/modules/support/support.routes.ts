@@ -59,11 +59,7 @@ tenantSupportRouter.patch(
 
 export const feedbackRouter = Router();
 
-feedbackRouter.post(
-  '/',
-  validate({ body: createFeedbackDto }),
-  supportController.submitFeedback,
-);
+feedbackRouter.post('/', validate({ body: createFeedbackDto }), supportController.submitFeedback);
 
 // ─── Platform Support Router ─────────────────────────────────────────────────
 

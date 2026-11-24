@@ -73,7 +73,8 @@ test('Notifications: pushSubscribeDto requires valid HTTPS/HTTP URL endpoint and
   const valid = pushSubscribeDto.safeParse({
     endpoint: 'https://fcm.googleapis.com/fcm/send/abc123xyz',
     keys: {
-      p256dh: 'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QT9Ac0vE1Vdx0C00Nny7wVu8uTsqLddhx-JA5U2TXRt33784=',
+      p256dh:
+        'BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QT9Ac0vE1Vdx0C00Nny7wVu8uTsqLddhx-JA5U2TXRt33784=',
       auth: 'tBHItJI5svbpez7KI4CCXg==',
     },
     userAgent: 'Mozilla/5.0 Chrome/120.0',
@@ -141,16 +142,13 @@ test('Notifications: isWithinQuietHours accurately evaluates both intra-day and 
 test('Notifications: updateUserPreferences forbids disabling email for SECURITY category', async () => {
   await assert.rejects(
     async () => {
-      await updateUserPreferences(
-        '11111111-1111-4111-8111-111111111111',
-        [
-          {
-            category: 'SECURITY',
-            channelEmail: false, // Security violation!
-            channelInApp: true,
-          },
-        ],
-      );
+      await updateUserPreferences('11111111-1111-4111-8111-111111111111', [
+        {
+          category: 'SECURITY',
+          channelEmail: false, // Security violation!
+          channelInApp: true,
+        },
+      ]);
     },
     {
       name: 'AppError',

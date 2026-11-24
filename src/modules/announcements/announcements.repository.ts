@@ -1,15 +1,15 @@
 import { and, desc, eq, gte, isNull, lte, or, sql } from 'drizzle-orm';
 
-import { primaryDbHandle } from '@/db/tenancy/context';
 import {
-  announcements,
   announcementDismissals,
+  announcements,
   changelogEntries,
   type Announcement,
   type ChangelogEntry,
   type NewAnnouncement,
   type NewChangelogEntry,
 } from '@/db/schema';
+import { primaryDbHandle } from '@/db/tenancy/context';
 
 export async function findActiveAnnouncements(): Promise<Announcement[]> {
   const db = primaryDbHandle();
@@ -39,27 +39,17 @@ export async function getUserDismissals(userId: string): Promise<string[]> {
 
 export async function dismissAnnouncement(announcementId: string, userId: string): Promise<void> {
   const db = primaryDbHandle();
-  await db
-    .insert(announcementDismissals)
-    .values({ announcementId, userId })
-    .onConflictDoNothing();
+  await db.insert(announcementDismissals).values({ announcementId, userId }).onConflictDoNothing();
 }
 
 export async function listAllAnnouncements(): Promise<Announcement[]> {
   const db = primaryDbHandle();
-  return db
-    .select()
-    .from(announcements)
-    .orderBy(desc(announcements.createdAt));
+  return db.select().from(announcements).orderBy(desc(announcements.createdAt));
 }
 
 export async function findAnnouncementById(id: string): Promise<Announcement | null> {
   const db = primaryDbHandle();
-  const [row] = await db
-    .select()
-    .from(announcements)
-    .where(eq(announcements.id, id))
-    .limit(1);
+  const [row] = await db.select().from(announcements).where(eq(announcements.id, id)).limit(1);
   return row ?? null;
 }
 
@@ -85,13 +75,19 @@ export async function updateAnnouncement(
 
 export async function deleteAnnouncement(id: string): Promise<boolean> {
   const db = primaryDbHandle();
-  const result = await db.delete(announcements).where(eq(announcements.id, id)).returning({ id: announcements.id });
+  const result = await db
+    .delete(announcements)
+    .where(eq(announcements.id, id))
+    .returning({ id: announcements.id });
   return result.length > 0;
 }
 
 // ─── Changelog Repository ────────────────────────────────────────────────────
 
-export async function listChangelog(limit = 20, offset = 0): Promise<{ items: ChangelogEntry[]; total: number }> {
+export async function listChangelog(
+  limit = 20,
+  offset = 0,
+): Promise<{ items: ChangelogEntry[]; total: number }> {
   const db = primaryDbHandle();
   const items = await db
     .select()
@@ -100,7 +96,9 @@ export async function listChangelog(limit = 20, offset = 0): Promise<{ items: Ch
     .limit(limit)
     .offset(offset);
 
-  const [countResult] = await db.select({ count: sql<number>`count(*)::int` }).from(changelogEntries);
+  const [countResult] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(changelogEntries);
   return { items, total: countResult?.count ?? 0 };
 }
 
@@ -126,6 +124,9 @@ export async function updateChangelog(
 
 export async function deleteChangelog(id: string): Promise<boolean> {
   const db = primaryDbHandle();
-  const result = await db.delete(changelogEntries).where(eq(changelogEntries.id, id)).returning({ id: changelogEntries.id });
+  const result = await db
+    .delete(changelogEntries)
+    .where(eq(changelogEntries.id, id))
+    .returning({ id: changelogEntries.id });
   return result.length > 0;
 }

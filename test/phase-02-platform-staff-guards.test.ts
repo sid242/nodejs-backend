@@ -19,15 +19,12 @@ test('Phase 02 Unit: Non-super-admin attempting to assign SUPER_ADMIN role is re
   await assert.rejects(
     async () => {
       // Mock platformRepo.findStaffByEmail and findRoleById via error expectation
-      await platformService.createStaff(
-        nonAdminActor,
-        {
-          email: 'attempt-escalation@platform.local',
-          displayName: 'Escalation Attempt',
-          password: 'Password123!',
-          roleId: '00000000-0000-0000-0000-000000000001',
-        },
-      );
+      await platformService.createStaff(nonAdminActor, {
+        email: 'attempt-escalation@platform.local',
+        displayName: 'Escalation Attempt',
+        password: 'Password123!',
+        roleId: '00000000-0000-0000-0000-000000000001',
+      });
     },
     (err: any) => {
       // The role look-up or escalation check will fail closed
@@ -47,11 +44,9 @@ test('Phase 02 Unit: Staff attempting to update their own role or status is reje
 
   await assert.rejects(
     async () => {
-      await platformService.updateStaff(
-        selfActor,
-        staffId,
-        { roleId: '00000000-0000-0000-0000-000000000002' },
-      );
+      await platformService.updateStaff(selfActor, staffId, {
+        roleId: '00000000-0000-0000-0000-000000000002',
+      });
     },
     (err: any) => {
       assert.equal(err.status, 400);
@@ -71,11 +66,7 @@ test('Phase 02 Unit: Staff attempting to suspend their own account is rejected w
 
   await assert.rejects(
     async () => {
-      await platformService.suspendStaff(
-        selfActor,
-        staffId,
-        'Accidental self suspend',
-      );
+      await platformService.suspendStaff(selfActor, staffId, 'Accidental self suspend');
     },
     (err: any) => {
       assert.equal(err.status, 400);
@@ -84,4 +75,3 @@ test('Phase 02 Unit: Staff attempting to suspend their own account is rejected w
     },
   );
 });
-

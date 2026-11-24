@@ -3,7 +3,8 @@ import type { DomainModuleDefinition } from '@/modules/rbac/modules.types';
 export const analyticsModuleDefinition: DomainModuleDefinition = {
   key: 'analytics',
   name: 'Analytics, Usage & Reports',
-  description: 'Inspect workspace telemetry, metered entitlement consumption, and scheduled data reports',
+  description:
+    'Inspect workspace telemetry, metered entitlement consumption, and scheduled data reports',
   icon: 'bar-chart-2',
   sortOrder: 45,
   permissions: [

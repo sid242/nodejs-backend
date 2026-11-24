@@ -18,10 +18,7 @@ export async function findByEmail(email: string): Promise<PublicUser | null> {
   return (user as PublicUser) ?? null;
 }
 
-export async function updateById(
-  id: string,
-  data: Partial<NewUser>,
-): Promise<PublicUser | null> {
+export async function updateById(id: string, data: Partial<NewUser>): Promise<PublicUser | null> {
   const [user] = await db.update(users).set(data).where(eq(users.id, id)).returning(publicUser);
   return (user as PublicUser) ?? null;
 }

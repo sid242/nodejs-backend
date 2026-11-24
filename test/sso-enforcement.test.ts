@@ -2,20 +2,18 @@ import assert from 'node:assert';
 import { after, before, describe, it } from 'node:test';
 import { sql } from 'drizzle-orm';
 
-import { db, closeDb } from '@/config/db';
+import { closeDb, db } from '@/config/db';
 import { closeRedisClients } from '@/config/redis';
 import { safeEqual } from '@/lib/crypto';
 import {
-  isSupportDeniedRoute,
-  SUPPORT_SCOPE_PRESETS,
-} from '@/middleware/support';
-import {
-  ssoLimiter,
-  handoffRedeemLimiter,
-  resolveLimiter,
-  internalLimiter,
   billingPublicLimiter,
+  handoffRedeemLimiter,
+  internalLimiter,
+  resolveLimiter,
+  ssoLimiter,
 } from '@/middleware/rate-limit';
+import { isSupportDeniedRoute, SUPPORT_SCOPE_PRESETS } from '@/middleware/support';
+import { SYSTEM_MODULE_DEFINITIONS } from '@/modules/rbac/modules.registry';
 import { assertSsoNotEnforced } from '@/modules/sso/sso.enforcement';
 
 let dbConnected = false;
@@ -67,14 +65,30 @@ describe('File 07 — SSO Enforcement, Rate Limiting & Hardening', () => {
       // READ_ONLY must only have read/list permissions
       assert.ok(SUPPORT_SCOPE_PRESETS.READ_ONLY.every((p) => p.endsWith(':read')));
 
-      // ASSIST adds branding:update and email_templates:manage and files:upload
-      assert.ok(SUPPORT_SCOPE_PRESETS.ASSIST.includes('branding:update' as any));
-      assert.ok(SUPPORT_SCOPE_PRESETS.ASSIST.includes('email_templates:manage' as any));
-      assert.ok(SUPPORT_SCOPE_PRESETS.ASSIST.includes('files:upload' as any));
+      // ASSIST adds tenants:update, email-templates:write, and files:write
+      assert.ok(SUPPORT_SCOPE_PRESETS.ASSIST.includes('tenants:update'));
+      assert.ok(SUPPORT_SCOPE_PRESETS.ASSIST.includes('email-templates:write'));
+      assert.ok(SUPPORT_SCOPE_PRESETS.ASSIST.includes('files:write'));
       assert.ok(!SUPPORT_SCOPE_PRESETS.ASSIST.includes('files:delete' as any));
 
-      // FULL_ADMIN adds files:delete
-      assert.ok(SUPPORT_SCOPE_PRESETS.FULL_ADMIN.includes('files:delete' as any));
+      // FULL_ADMIN adds files:delete and email-templates:delete
+      assert.ok(SUPPORT_SCOPE_PRESETS.FULL_ADMIN.includes('files:delete'));
+      assert.ok(SUPPORT_SCOPE_PRESETS.FULL_ADMIN.includes('email-templates:delete'));
+    });
+
+    it('ensures all support scope preset keys exist in the RBAC permission registry', () => {
+      const registeredKeys = new Set(
+        SYSTEM_MODULE_DEFINITIONS.flatMap((m) => m.permissions.map((p) => p.key)),
+      );
+
+      for (const [presetName, permissions] of Object.entries(SUPPORT_SCOPE_PRESETS)) {
+        for (const perm of permissions) {
+          assert.ok(
+            registeredKeys.has(perm),
+            `Permission "${perm}" in SUPPORT_SCOPE_PRESETS.${presetName} is not registered in SYSTEM_MODULE_DEFINITIONS`,
+          );
+        }
+      }
     });
 
     it('identifies and denies restricted routes for support tokens', () => {

@@ -273,10 +273,7 @@ test('tenant migration lifecycle: migrate to dedicated and rollback to shared', 
   assert.ok(migrationResult.recordsMigrated.branding >= 1);
 
   // Verify tenant registry in primaryDb is updated
-  const [updatedTenant] = await primaryDb
-    .select()
-    .from(tenants)
-    .where(eq(tenants.id, tenant.id));
+  const [updatedTenant] = await primaryDb.select().from(tenants).where(eq(tenants.id, tenant.id));
   assert.ok(updatedTenant);
   assert.equal(updatedTenant.databaseMode, 'dedicated');
   assert.equal(updatedTenant.databaseKey, `dedicated-${tenant.id}`);
@@ -353,7 +350,8 @@ test('schema topology check: every pgTable has a scope tag comment (// scope: pr
 
   for (const file of schemaFiles) {
     const content = fs.readFileSync(file, 'utf-8');
-    const tableRegex = /(?:\/\/ scope:\s*(primary|tenant)\s*\r?\n)?(?:export\s+const\s+(\w+)\s*=\s*pgTable\()/g;
+    const tableRegex =
+      /(?:\/\/ scope:\s*(primary|tenant)\s*\r?\n)?(?:export\s+const\s+(\w+)\s*=\s*pgTable\()/g;
     let match;
     while ((match = tableRegex.exec(content)) !== null) {
       const scope = match[1];
@@ -393,7 +391,11 @@ test('code isolation check: tenant-scoped repositories do not import primary db 
     if (!fs.existsSync(fullPath)) continue;
     const content = fs.readFileSync(fullPath, 'utf-8');
     // Forbid direct import of `{ db }` from `@/config/db` or `../config/db`
-    if (/import\s*\{[^}]*\bdb\b[^}]*\}\s*from\s*['"](@\/config\/db|\.\.?\/.*\/config\/db)['"]/.test(content)) {
+    if (
+      /import\s*\{[^}]*\bdb\b[^}]*\}\s*from\s*['"](@\/config\/db|\.\.?\/.*\/config\/db)['"]/.test(
+        content,
+      )
+    ) {
       violations.push(relPath);
     }
   }
@@ -415,10 +417,7 @@ test('assertTenantScope: blocks cross-tenant scope access within single context'
     assert.doesNotThrow(() => assertTenantScope(tenantA));
 
     // Mismatched scope throws
-    assert.throws(
-      () => assertTenantScope(tenantB),
-      /Cross-tenant access violation/,
-    );
+    assert.throws(() => assertTenantScope(tenantB), /Cross-tenant access violation/);
   });
 });
 
@@ -437,6 +436,11 @@ test('attachUsers: enriches tenant records with central user profiles without SQ
   const enriched = await attachUsers(records, 'userId', 'user');
   assert.equal(enriched.length, 2);
   assert.equal(enriched[0]?.user?.id, testUserId);
-  assert.equal(enriched[0]?.user?.email, `db-user-${testUserId.slice(0, 8)}@example.com`.toLowerCase().slice(0, 7) ? enriched[0]?.user?.email : '');
+  assert.equal(
+    enriched[0]?.user?.email,
+    `db-user-${testUserId.slice(0, 8)}@example.com`.toLowerCase().slice(0, 7)
+      ? enriched[0]?.user?.email
+      : '',
+  );
   assert.equal(enriched[1]?.user, null);
 });

@@ -1,7 +1,7 @@
 import { inArray } from 'drizzle-orm';
 
-import { primaryDbHandle } from '@/db/tenancy/context';
 import { users } from '@/db/schema/index';
+import { primaryDbHandle } from '@/db/tenancy/context';
 
 export interface UserSummary {
   id: string;
@@ -24,9 +24,7 @@ export async function attachUsers<T extends Record<string, any>>(
 
   const rawIds: unknown[] = records.map((r) => r[userIdKey]);
   const userIds = [
-    ...new Set(
-      rawIds.filter((id): id is string => typeof id === 'string' && id.length > 0),
-    ),
+    ...new Set(rawIds.filter((id): id is string => typeof id === 'string' && id.length > 0)),
   ];
 
   if (userIds.length === 0) {
@@ -50,7 +48,7 @@ export async function attachUsers<T extends Record<string, any>>(
 
   return records.map((r) => {
     const id = r[userIdKey];
-    const u = id ? userMap.get(id as string) ?? null : null;
+    const u = id ? (userMap.get(id as string) ?? null) : null;
     return {
       ...r,
       [outputKey]: u,
