@@ -73,6 +73,8 @@ const schema = z.object({
   SMTP_PASS: z.string().optional(),
   SMTP_FROM_EMAIL: z.string().optional(),
   SMTP_FROM_NAME: z.string().optional(),
+  EMAIL_BOUNCE_WEBHOOK_SECRET: z.string().optional(),
+  SES_NOTIFICATION_TOPIC_ARN: z.string().optional(),
 
   // Encryption key for tenant credential storage
   ENCRYPTION_KEY: z

@@ -40,7 +40,12 @@ export const updateTemplate = asyncHandler(async (req: Request, res: Response) =
     throw AppError.badRequest('Tenant context is required');
   }
   const templateId = String(req.valid?.params?.id ?? req.params.id);
-  const template = await service.updateTemplate(templateId, tenantId, req.user!.id, req.valid?.body);
+  const template = await service.updateTemplate(
+    templateId,
+    tenantId,
+    req.user!.id,
+    req.valid?.body,
+  );
   AppResponse.ok(template, 'Email template updated successfully').send(res);
 });
 
@@ -141,6 +146,6 @@ export const deleteSuppression = asyncHandler(async (req: Request, res: Response
 
 // Bounce webhook
 export const bounceWebhook = asyncHandler(async (req: Request, res: Response) => {
-  const result = await service.handleBounceWebhook(req.body);
+  const result = await service.handleBounceWebhook(req.body, req.headers);
   AppResponse.ok(result, `Processed ${result.processed} bounce/complaint events`).send(res);
 });

@@ -1,5 +1,8 @@
-import { and, eq, ilike } from 'drizzle-orm';
+import type { IncomingHttpHeaders } from 'node:http';
+import { and, desc, eq, ilike } from 'drizzle-orm';
 
+import { env } from '@/config/env';
+import { logger } from '@/config/logger';
 import { redis } from '@/config/redis';
 import {
   emailMessages,
@@ -12,6 +15,7 @@ import {
   type EmailTemplateVersion,
 } from '@/db/schema/index';
 import { primaryDbHandle, tenantDb } from '@/db/tenancy/context';
+import { safeEqual } from '@/lib/crypto';
 import { AppError } from '@/lib/errors';
 import { sendEmail } from '@/lib/mailer';
 import { generateSlug } from '@/lib/utils';
@@ -84,9 +88,9 @@ export function sanitizeHtmlContent(html: string): string {
 export function extractVariables(html: string, subject = ''): string[] {
   const combined = `${html} ${subject}`;
   const matches = combined.match(/\{\{\{?([a-zA-Z0-9_.]+)\}?\}\}/g) || [];
-  return Array.from(
-    new Set(matches.map((m) => m.replace(/^\{\{\{?|\}?\}\}$/g, '').trim())),
-  ).filter(Boolean);
+  return Array.from(new Set(matches.map((m) => m.replace(/^\{\{\{?|\}?\}\}$/g, '').trim()))).filter(
+    Boolean,
+  );
 }
 
 function resolveNestedValue(obj: Record<string, any>, path: string): any {
@@ -131,7 +135,10 @@ function validateSystemTemplateVariables(slug: string, html: string, subject = '
 // Template CRUD
 // ---------------------------------------------------------------------------
 
-export async function listTemplates(tenantId: string, options: Partial<ListEmailTemplatesQueryDto> = {}) {
+export async function listTemplates(
+  tenantId: string,
+  options: Partial<ListEmailTemplatesQueryDto> = {},
+) {
   return repo.findTemplatesByTenant(tenantId, options);
 }
 
@@ -410,7 +417,10 @@ export async function testSendTemplate(
 // Delivery Logs & Messages
 // ---------------------------------------------------------------------------
 
-export async function listDeliveryLogs(tenantId: string, options: Partial<ListDeliveryLogsQueryDto> = {}) {
+export async function listDeliveryLogs(
+  tenantId: string,
+  options: Partial<ListDeliveryLogsQueryDto> = {},
+) {
   return repo.findEmailMessagesByTenant(tenantId, options);
 }
 
@@ -426,7 +436,10 @@ export async function getDeliveryLogById(id: string, tenantId: string): Promise<
 // Email Suppressions
 // ---------------------------------------------------------------------------
 
-export async function listSuppressions(tenantId: string, options: Partial<ListSuppressionsQueryDto> = {}) {
+export async function listSuppressions(
+  tenantId: string,
+  options: Partial<ListSuppressionsQueryDto> = {},
+) {
   return repo.findSuppressionsByTenant(tenantId, options);
 }
 
@@ -457,8 +470,83 @@ export async function deleteSuppression(
 // Bounce & Complaint Webhooks (AWS SES / SMTP Provider)
 // ---------------------------------------------------------------------------
 
-export async function handleBounceWebhook(payload: BounceWebhookDto): Promise<{ processed: number }> {
-  let processed = 0;
+export function verifyBounceWebhookAuth(
+  payload: BounceWebhookDto,
+  headers?: IncomingHttpHeaders,
+): void {
+  // Validate SNS message type if specified
+  if (
+    payload.Type &&
+    payload.Type !== 'Notification' &&
+    payload.Type !== 'SubscriptionConfirmation'
+  ) {
+    throw AppError.badRequest(`Unsupported SNS message type: ${payload.Type}`);
+  }
+
+  const secretHeader =
+    (headers?.['x-webhook-secret'] as string | undefined) ||
+    (headers?.['x-bounce-secret'] as string | undefined) ||
+    (headers?.['authorization']?.startsWith('Bearer ')
+      ? headers['authorization'].slice(7).trim()
+      : undefined);
+
+  const configuredSecret = env.EMAIL_BOUNCE_WEBHOOK_SECRET;
+
+  // 1. Shared Secret Authentication (constant-time comparison)
+  if (secretHeader && configuredSecret) {
+    if (safeEqual(secretHeader, configuredSecret)) {
+      return; // Authorized via valid shared secret
+    }
+    throw AppError.forbidden('Invalid webhook secret');
+  }
+
+  // 2. AWS SNS Message Verification
+  if (payload.Type) {
+    // Verify TopicArn if configured
+    if (env.SES_NOTIFICATION_TOPIC_ARN && payload.TopicArn) {
+      if (!safeEqual(payload.TopicArn, env.SES_NOTIFICATION_TOPIC_ARN)) {
+        throw AppError.forbidden('Invalid SNS TopicArn');
+      }
+    }
+
+    // Verify SigningCertURL if signature is present
+    if (payload.Signature && payload.SigningCertURL) {
+      const isValidCertUrl = /^https:\/\/sns\.[a-z0-9-]+\.amazonaws\.com(\.cn)?\//i.test(
+        payload.SigningCertURL,
+      );
+      if (!isValidCertUrl) {
+        throw AppError.forbidden('Invalid SNS SigningCertURL');
+      }
+      return; // Authorized via SNS signature envelope
+    }
+
+    if (configuredSecret) {
+      throw AppError.unauthorized('Webhook shared secret header is required');
+    }
+
+    if (payload.TopicArn) {
+      return;
+    }
+  }
+
+  throw AppError.unauthorized(
+    'Unauthenticated webhook request: valid signature or shared secret required',
+  );
+}
+
+export async function handleBounceWebhook(
+  payload: BounceWebhookDto,
+  headers?: IncomingHttpHeaders,
+): Promise<{ processed: number }> {
+  verifyBounceWebhookAuth(payload, headers);
+
+  if (payload.Type === 'SubscriptionConfirmation') {
+    logger.info(
+      { topicArn: payload.TopicArn, subscribeUrl: payload.SubscribeURL },
+      'SNS Subscription confirmation received',
+    );
+    return { processed: 0 };
+  }
 
   // 1. AWS SNS Notification format parsing
   let body: any = payload;
@@ -472,32 +560,46 @@ export async function handleBounceWebhook(payload: BounceWebhookDto): Promise<{ 
 
   const notificationType = body.notificationType || body.eventType || payload.notificationType;
 
+  // Reject unknown notification types if Type is Notification
+  if (
+    payload.Type === 'Notification' &&
+    notificationType !== 'Bounce' &&
+    notificationType !== 'Complaint'
+  ) {
+    logger.warn({ notificationType }, 'Unsupported SNS notificationType; ignoring');
+    return { processed: 0 };
+  }
+
+  let processed = 0;
+
   // Handle AWS SES Bounces
   if (notificationType === 'Bounce' && body.bounce?.bouncedRecipients) {
-    const recipients = body.bounce.bouncedRecipients as Array<{ emailAddress: string; diagnosticCode?: string }>;
+    const recipients = body.bounce.bouncedRecipients as Array<{
+      emailAddress: string;
+      diagnosticCode?: string;
+    }>;
     for (const r of recipients) {
       if (r?.emailAddress) {
-        // Find recent email message to identify tenantId if missing
-        let targetTenantId = payload.tenantId;
-        if (!targetTenantId) {
-          const [recent] = await tenantDb()
-            .select({ tenantId: emailMessages.tenantId, id: emailMessages.id })
-            .from(emailMessages)
-            .where(eq(emailMessages.to, r.emailAddress.toLowerCase().trim()))
-            .orderBy(emailMessages.createdAt)
-            .limit(1);
-          targetTenantId = recent?.tenantId;
-          if (recent?.id) {
-            await repo.updateEmailMessageStatus(recent.id, 'BOUNCED', {
-              lastError: r.diagnosticCode ?? 'SES Bounce reported',
-            });
-          }
+        const cleanEmail = r.emailAddress.toLowerCase().trim();
+        // NEVER trust payload.tenantId; ALWAYS resolve from stored emailMessages
+        const [recent] = await tenantDb()
+          .select({ tenantId: emailMessages.tenantId, id: emailMessages.id })
+          .from(emailMessages)
+          .where(eq(emailMessages.to, cleanEmail))
+          .orderBy(desc(emailMessages.createdAt))
+          .limit(1);
+
+        const targetTenantId = recent?.tenantId;
+        if (recent?.id) {
+          await repo.updateEmailMessageStatus(recent.id, 'BOUNCED', {
+            lastError: r.diagnosticCode ?? 'SES Bounce reported',
+          });
         }
 
         if (targetTenantId) {
           await repo.createSuppression({
             tenantId: targetTenantId,
-            email: r.emailAddress,
+            email: cleanEmail,
             reason: 'BOUNCE',
             details: r.diagnosticCode || 'SES Hard Bounce',
           });
@@ -512,26 +614,26 @@ export async function handleBounceWebhook(payload: BounceWebhookDto): Promise<{ 
     const recipients = body.complaint.complainedRecipients as Array<{ emailAddress: string }>;
     for (const r of recipients) {
       if (r?.emailAddress) {
-        let targetTenantId = payload.tenantId;
-        if (!targetTenantId) {
-          const [recent] = await tenantDb()
-            .select({ tenantId: emailMessages.tenantId, id: emailMessages.id })
-            .from(emailMessages)
-            .where(eq(emailMessages.to, r.emailAddress.toLowerCase().trim()))
-            .orderBy(emailMessages.createdAt)
-            .limit(1);
-          targetTenantId = recent?.tenantId;
-          if (recent?.id) {
-            await repo.updateEmailMessageStatus(recent.id, 'COMPLAINED', {
-              lastError: 'SES Recipient Complaint',
-            });
-          }
+        const cleanEmail = r.emailAddress.toLowerCase().trim();
+        // NEVER trust payload.tenantId; ALWAYS resolve from stored emailMessages
+        const [recent] = await tenantDb()
+          .select({ tenantId: emailMessages.tenantId, id: emailMessages.id })
+          .from(emailMessages)
+          .where(eq(emailMessages.to, cleanEmail))
+          .orderBy(desc(emailMessages.createdAt))
+          .limit(1);
+
+        const targetTenantId = recent?.tenantId;
+        if (recent?.id) {
+          await repo.updateEmailMessageStatus(recent.id, 'COMPLAINED', {
+            lastError: 'SES Recipient Complaint',
+          });
         }
 
         if (targetTenantId) {
           await repo.createSuppression({
             tenantId: targetTenantId,
-            email: r.emailAddress,
+            email: cleanEmail,
             reason: 'COMPLAINT',
             details: 'Recipient spam complaint received',
           });
@@ -543,25 +645,35 @@ export async function handleBounceWebhook(payload: BounceWebhookDto): Promise<{ 
 
   // Handle Direct Webhook Payload (e.g. from Custom SMTP or Manual testing)
   if (payload.email) {
+    const cleanEmail = payload.email.toLowerCase().trim();
     const reason =
       payload.reason === 'COMPLAINT' || payload.reason === 'UNSUBSCRIBE'
         ? (payload.reason as any)
         : 'BOUNCE';
 
-    let targetTenantId = payload.tenantId;
-    if (!targetTenantId) {
-      const [recent] = await tenantDb()
-        .select({ tenantId: emailMessages.tenantId })
-        .from(emailMessages)
-        .where(eq(emailMessages.to, payload.email.toLowerCase().trim()))
-        .limit(1);
-      targetTenantId = recent?.tenantId;
+    // NEVER trust payload.tenantId; ALWAYS resolve from stored emailMessages
+    const [recent] = await tenantDb()
+      .select({ tenantId: emailMessages.tenantId, id: emailMessages.id })
+      .from(emailMessages)
+      .where(eq(emailMessages.to, cleanEmail))
+      .orderBy(desc(emailMessages.createdAt))
+      .limit(1);
+
+    const targetTenantId = recent?.tenantId;
+    if (recent?.id) {
+      await repo.updateEmailMessageStatus(
+        recent.id,
+        reason === 'COMPLAINT' ? 'COMPLAINED' : 'BOUNCED',
+        {
+          lastError: payload.details ?? 'Webhook bounce notification',
+        },
+      );
     }
 
     if (targetTenantId) {
       await repo.createSuppression({
         tenantId: targetTenantId,
-        email: payload.email,
+        email: cleanEmail,
         reason,
         details: payload.details ?? 'Webhook bounce notification',
       });
