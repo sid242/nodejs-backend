@@ -263,7 +263,7 @@ export const provisionTenantDto = z.object({
   databaseConfig: z
     .object({
       databaseName: z.string().trim().max(63).optional(),
-      poolLimit: z.coerce.number().int().min(1).max(50).default(5).optional(),
+      poolLimit: z.coerce.number().int().min(1).max(50).optional(),
       databaseKey: z.string().trim().max(100).optional(),
       connectionUrl: z.string().trim().url().or(z.literal('')).optional(),
     })
@@ -333,7 +333,7 @@ export type UpdatePlatformTenantSubscriptionDto = z.infer<
 
 export const migrateTenantDatabaseDto = z.object({
   customDatabaseName: z.string().trim().max(63).optional(),
-  poolLimit: z.coerce.number().int().min(1).max(50).default(5).optional(),
+  poolLimit: z.coerce.number().int().min(1).max(50).optional(),
   connectionUrl: z.string().trim().url().optional(),
 });
 export type MigrateTenantDatabaseDto = z.infer<typeof migrateTenantDatabaseDto>;
@@ -368,8 +368,8 @@ export const executeTenantDatabaseOperationDto = z.object({
   targetVersion: z.string().trim().max(50).optional(),
   maintenanceWindow: z.string().trim().max(100).optional(),
   reason: z.string().trim().min(5, 'Reason must be at least 5 characters').max(500),
-  backupConfirmed: z.boolean().default(false).optional(),
-  discardDedicatedData: z.boolean().default(false).optional(),
+  backupConfirmed: z.boolean().optional(),
+  discardDedicatedData: z.boolean().optional(),
   approvedByStaffId: z.string().uuid().optional(),
   poolLimit: z.coerce.number().int().min(1).max(50).optional(),
   customDatabaseName: z.string().trim().max(63).optional(),

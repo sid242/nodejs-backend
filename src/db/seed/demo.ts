@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url';
 import bcrypt from 'bcryptjs';
 import { eq, sql } from 'drizzle-orm';
 
@@ -387,16 +388,17 @@ export const DEMO_CREDENTIALS = {
   ],
 };
 
-export async function seedDemo(): Promise<void> {
+export async function seedDemo({ reset = true } = {}): Promise<void> {
   logger.info('====================================================');
   logger.info('       Starting Clean SaaS Foundation Demo Seeder   ');
   logger.info('====================================================');
 
   // ----------------------------------------------------
-  // 0. Clean and Wipe Old Data (Cascade Truncate All Non-System Data)
-  // ----------------------------------------------------
-  logger.info('0. Wiping all existing demo data, residue tenants, and staff accounts...');
-  await db.execute(sql`
+  if (reset) {
+    // 0. Clean and Wipe Old Data (Cascade Truncate All Non-System Data)
+    // ----------------------------------------------------
+    logger.info('0. Wiping all existing demo data, residue tenants, and staff accounts...');
+    await db.execute(sql`
     TRUNCATE TABLE 
       "PlatformSupportSession",
       "PlatformAuditLog",
@@ -436,14 +438,15 @@ export async function seedDemo(): Promise<void> {
     CASCADE;
   `);
 
-  try {
-    await redis.flushdb();
-    await cacheRedis.flushdb();
-    logger.info('   ✔ Flushed state & cache Redis databases.');
-  } catch {
-    logger.warn('   ⚠ Could not flush Redis during seed (proceeding).');
+    try {
+      await redis.flushdb();
+      await cacheRedis.flushdb();
+      logger.info('   ✔ Flushed state & cache Redis databases.');
+    } catch {
+      logger.warn('   ⚠ Could not flush Redis during seed (proceeding).');
+    }
+    logger.info('   ✔ Clean slate established.');
   }
-  logger.info('   ✔ Clean slate established.');
 
   // ----------------------------------------------------
   // 1. Seed Dynamic RBAC Permissions & System Roles
@@ -746,7 +749,7 @@ export async function seedDemo(): Promise<void> {
 }
 
 // Auto-execute if invoked as a CLI script
-if (process.argv[1]?.includes('demo') || process.argv[1]?.includes('seed')) {
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   seedDemo()
     .then(async () => {
       await closeRedisClients();

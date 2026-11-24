@@ -43,7 +43,7 @@ export type ListActivityQueryDto = z.infer<typeof listActivityQueryDto>;
 export const createReportDefinitionDto = z.object({
   name: z.string().min(1, 'Report name is required').max(100),
   type: z.enum(['MEMBERS', 'AUDIT', 'USAGE', 'FILES', 'BILLING', 'SECURITY']),
-  filters: z.record(z.any()).optional().default({}),
+  filters: z.record(z.string(), z.any()).optional().default({}),
   columns: z.array(z.string()).optional().default([]),
   format: z.enum(['CSV', 'JSON']).optional().default('CSV'),
   schedule: z.string().optional(),

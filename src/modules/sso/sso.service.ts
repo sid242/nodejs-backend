@@ -860,9 +860,10 @@ export class SsoService {
       metadata: { authMethod, email },
     });
 
-    const protocol = state.host?.includes('localhost') ? 'http' : 'https';
     const returnTo = validateReturnTo(state.returnTo);
-    const redirectUrl = `${protocol}://${state.host}/api/auth/handoff?code=${handoff.code}&next=${encodeURIComponent(returnTo)}`;
+    const redirect = new URL(handoff.handoffUrl);
+    redirect.searchParams.set('next', returnTo);
+    const redirectUrl = redirect.toString();
 
     return {
       redirectUrl,

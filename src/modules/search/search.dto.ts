@@ -17,7 +17,7 @@ export const searchQueryDto = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
   types: z
     .string()
-    .optional()
+
     .transform((val) =>
       val
         ? val
@@ -25,7 +25,8 @@ export const searchQueryDto = z.object({
             .map((s) => s.trim().toLowerCase())
             .filter((s): s is SearchCategory => SEARCH_CATEGORIES.includes(s as SearchCategory))
         : undefined,
-    ),
+    )
+    .optional(),
 });
 
 export type SearchQueryDto = z.infer<typeof searchQueryDto>;
@@ -37,7 +38,7 @@ export const searchItemSchema = z.object({
   category: z.enum(['Pages', 'Actions', 'Members', 'Files', 'Roles', 'Groups', 'Templates']),
   href: z.string(),
   icon: z.string().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type SearchItem = z.infer<typeof searchItemSchema>;

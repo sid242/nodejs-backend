@@ -34,7 +34,7 @@ export function registerNotificationsDocs(registry: OpenAPIRegistry): void {
       title: z.string().openapi({ example: 'You have been invited to Acme Corp' }),
       body: z.string().openapi({ example: 'John has invited you to join Acme Corp as a member.' }),
       link: z.string().nullable().openapi({ example: '/w/acme-corp/settings/members' }),
-      data: z.record(z.unknown()).openapi({ example: {} }),
+      data: z.record(z.string(), z.unknown()).openapi({ example: {} }),
       readAt: z.string().datetime().nullable().openapi({ example: null }),
       archivedAt: z.string().datetime().nullable().openapi({ example: null }),
       createdAt: z.string().datetime().openapi({ example: '2026-11-18T10:00:00.000Z' }),

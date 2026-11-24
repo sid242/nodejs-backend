@@ -14,7 +14,7 @@ import {
 import { AppError } from '@/lib/errors';
 import * as platformRepo from '@/modules/platform/platform.repository';
 import { tenantsRepo } from '@/modules/tenants/tenants.repository';
-import { emitToUser } from '@/sockets/emitter';
+import { emitToWorkspaceUser } from '@/sockets/emitter';
 
 import { invalidateTenantBillingCache, onPlanChanged } from './billing-plans-entitlements.service';
 import type {
@@ -649,7 +649,7 @@ export async function activatePaidOrder(
     }
 
     if (actorUserId) {
-      emitToUser(actorUserId, 'billing:payment_success', {
+      emitToWorkspaceUser(tenantId, actorUserId, 'billing:payment_success', {
         orderId,
         paymentId,
         planKey: newPlanKey,
@@ -1114,7 +1114,7 @@ export async function verifyTenantSubscriptionPayment(
     await invalidateTenantBillingCache(tenantId);
   }
 
-  emitToUser(actorUserId, 'billing:subscription_activated', {
+  emitToWorkspaceUser(tenantId, actorUserId, 'billing:subscription_activated', {
     subscriptionId: dto.razorpay_subscription_id,
     paymentId: dto.razorpay_payment_id,
   });

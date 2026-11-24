@@ -24,7 +24,7 @@ export const getMyTenants = asyncHandler(async (req: Request, res: Response) => 
 
 export const getTenantContext = asyncHandler(async (req: Request, res: Response) => {
   const effective =
-    req.user?.id && req.tenant?.id
+    !req.isSupportSession && req.user?.id && req.tenant?.id
       ? await rbacRepo.getEffectivePermissions(req.tenant.id, req.user.id)
       : {
           roles: req.membership?.roles ?? [],
@@ -33,16 +33,21 @@ export const getTenantContext = asyncHandler(async (req: Request, res: Response)
         };
 
   const isOwner =
-    req.membership?.roles?.includes('OWNER') ||
-    effective.roles?.includes('OWNER') ||
-    req.permissions?.includes('*');
+    !req.isSupportSession &&
+    (req.membership?.roles?.includes('OWNER') ||
+      effective.roles?.includes('OWNER') ||
+      req.permissions?.includes('*'));
 
   const businessModules = req.tenant
     ? await getModuleAvailability(req.tenant.id)
     : { leads: false };
   const basePermissions = effective.permissions ?? req.permissions ?? [];
   const policyPermissions =
-    !isOwner && businessModules.leads && req.tenant && req.membership?.roleIds?.length
+    !req.isSupportSession &&
+    !isOwner &&
+    businessModules.leads &&
+    req.tenant &&
+    req.membership?.roleIds?.length
       ? await pbacService.getPossiblePermissions(req.tenant.id, req.membership.roleIds, 'leads')
       : [];
   const finalPermissions = Array.from(

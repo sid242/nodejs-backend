@@ -25,9 +25,9 @@ export const createRoleDto = z.object({
     .regex(/^[a-zA-Z0-9_-]+$/, 'Role code must be alphanumeric with underscores or dashes')
     .optional(),
   description: z.string().trim().max(255).optional(),
-  scope: z.enum(['TENANT', 'PLATFORM']).default('TENANT').optional(),
+  scope: z.enum(['TENANT', 'PLATFORM']).optional(),
   permissions: z.array(z.string().min(1)).min(1, 'Role must have at least one permission'),
-  isActive: z.boolean().default(true).optional(),
+  isActive: z.boolean().optional(),
 });
 
 export type CreateRoleDto = z.infer<typeof createRoleDto>;
@@ -80,11 +80,11 @@ export const createPermissionInlineDto = z.object({
   code: z.string().trim().min(2).max(100).optional(),
   name: z.string().trim().min(2).max(100),
   description: z.string().trim().max(255).optional(),
-  scope: z.enum(['TENANT', 'PLATFORM']).default('TENANT').optional(),
+  scope: z.enum(['TENANT', 'PLATFORM']).optional(),
   resource: z.string().trim().max(50).optional(),
   action: z.string().trim().min(1).max(50).default('manage'),
-  riskLevel: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).default('LOW').optional(),
-  isAssignable: z.boolean().default(true).optional(),
+  riskLevel: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
+  isAssignable: z.boolean().optional(),
 });
 
 export type CreatePermissionInlineDto = z.input<typeof createPermissionInlineDto>;
@@ -131,11 +131,11 @@ export const createPermissionDto = z.object({
   code: z.string().trim().min(2).max(100).optional(),
   name: z.string().trim().min(2).max(100),
   description: z.string().trim().max(255).optional(),
-  scope: z.enum(['TENANT', 'PLATFORM']).default('TENANT').optional(),
+  scope: z.enum(['TENANT', 'PLATFORM']).optional(),
   resource: z.string().trim().max(50).optional(),
   action: z.string().trim().min(1).max(50).default('manage'),
-  riskLevel: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).default('LOW').optional(),
-  isAssignable: z.boolean().default(true).optional(),
+  riskLevel: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
+  isAssignable: z.boolean().optional(),
 });
 
 export type CreatePermissionDto = z.input<typeof createPermissionDto>;
