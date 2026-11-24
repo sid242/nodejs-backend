@@ -20,6 +20,16 @@ env:
   WORKER_SERVICE: app-worker
 
 jobs:
+  docker-build-check:
+    name: Verify Dockerfile build on PR
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build image (dry-run without push)
+        run: docker build -t app:pr-check .
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -146,10 +156,17 @@ jobs:
             --network-configuration "awsvpcConfiguration={subnets=[${{ vars.PRIVATE_SUBNETS }}],securityGroups=[${{ vars.APP_SECURITY_GROUP }}],assignPublicIp=DISABLED}" \
             --overrides '{"containerOverrides":[{"name":"api","command":["node","dist/db/migrate-all.js"]}]}' \
             --query 'tasks[0].taskArn' --output text)
+          echo "Waiting for migration task $TASK_ARN to finish..."
           aws ecs wait tasks-stopped --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN"
           CODE=$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN" \
             --query 'tasks[0].containers[0].exitCode' --output text)
-          test "$CODE" = "0"
+          if [ "$CODE" != "0" ]; then
+            REASON=$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN" \
+              --query 'tasks[0].stoppedReason' --output text)
+            echo "Migration task failed with exit code $CODE. Reason: $REASON"
+            exit 1
+          fi
+          echo "Migration task succeeded with exit code 0."
 
       - uses: aws-actions/amazon-ecs-deploy-task-definition@df4a08a49c370d50426fe35c6280771a48075323 # v2.1.2
         with:
@@ -164,3 +181,17 @@ jobs:
           service: ${{ env.WORKER_SERVICE }}
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
+
+      - name: Post-deploy smoke test (/health/live and /health/ready)
+        run: |
+          if [ -n "$PROD_API_BASE_URL" ]; then
+            echo "Verifying API live probe..."
+            curl -f --retry 5 --retry-delay 5 --max-time 10 "$PROD_API_BASE_URL/health/live"
+            echo "Verifying API ready probe..."
+            curl -f --retry 3 --retry-delay 5 --max-time 10 "$PROD_API_BASE_URL/health/ready"
+            echo "Smoke test passed successfully."
+          else
+            echo "PROD_API_BASE_URL not set; skipping remote smoke test."
+          fi
+        env:
+          PROD_API_BASE_URL: ${{ vars.PROD_API_BASE_URL }}

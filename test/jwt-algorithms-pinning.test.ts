@@ -16,16 +16,12 @@ test('verifyAccessToken accepts valid HS256 token and rejects algorithm none', (
   assert.equal(payload.sub, 'usr-123');
 
   // Algorithm 'none' attack payload
-  const noneToken = jwt.sign(
-    { sub: 'usr-hacker', typ: 'USER', email: 'hacker@example.com' },
-    '',
-    { audience: 'customer-api', algorithm: 'none' },
-  );
+  const noneToken = jwt.sign({ sub: 'usr-hacker', typ: 'USER', email: 'hacker@example.com' }, '', {
+    audience: 'customer-api',
+    algorithm: 'none',
+  });
 
-  assert.throws(
-    () => verifyAccessToken(noneToken),
-    /invalid algorithm|jwt signature is required/i,
-  );
+  assert.throws(() => verifyAccessToken(noneToken), /invalid algorithm|jwt signature is required/i);
 });
 
 test('verifySupportToken accepts valid HS256 token and rejects algorithm none', () => {
