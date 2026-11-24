@@ -18,7 +18,7 @@ export const createLeadDto = z.object({
   value: z.coerce.number().int().min(0).default(0),
   departmentId: z.string().max(50).optional(),
   regionId: z.string().max(50).optional(),
-  assignedMemberId: z.string().guid().optional(),
+  assignedMemberId: z.string().uuid().optional(),
   isConfidential: z.boolean().default(false),
   notes: z.string().max(2000).optional(),
 });
@@ -34,7 +34,7 @@ export const updateLeadDto = z.object({
   value: z.coerce.number().int().min(0).optional(),
   departmentId: z.string().max(50).optional(),
   regionId: z.string().max(50).optional(),
-  assignedMemberId: z.string().guid().nullable().optional(),
+  assignedMemberId: z.string().uuid().nullable().optional(),
   isConfidential: z.boolean().optional(),
   notes: z.string().max(2000).optional(),
 });
@@ -42,7 +42,7 @@ export const updateLeadDto = z.object({
 export type UpdateLeadDto = z.infer<typeof updateLeadDto>;
 
 export const leadIdParamDto = z.object({
-  leadId: z.string().guid(),
+  leadId: z.string().uuid(),
 });
 
 export type LeadIdParamDto = z.infer<typeof leadIdParamDto>;
@@ -51,7 +51,7 @@ export const listLeadsQueryDto = z.object({
   status: leadStatusSchema.optional(),
   departmentId: z.string().optional(),
   regionId: z.string().optional(),
-  assignedMemberId: z.string().guid().optional(),
+  assignedMemberId: z.string().uuid().optional(),
   search: z.string().optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),

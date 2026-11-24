@@ -49,14 +49,14 @@ export const cloneRoleDto = z.object({
 export type CloneRoleDto = z.infer<typeof cloneRoleDto>;
 
 export const explainAccessQueryDto = z.object({
-  memberId: z.string().guid(),
+  memberId: z.string().uuid(),
   permission: z.string().trim().min(1),
 });
 
 export type ExplainAccessQueryDto = z.infer<typeof explainAccessQueryDto>;
 
 export const assignRoleDto = z.object({
-  roleId: z.string().guid(),
+  roleId: z.string().uuid(),
 });
 
 export type AssignRoleDto = z.infer<typeof assignRoleDto>;
@@ -118,7 +118,7 @@ export const updateModuleDto = z.object({
 export type UpdateModuleDto = z.infer<typeof updateModuleDto>;
 
 export const createPermissionDto = z.object({
-  moduleId: z.string().guid().optional(),
+  moduleId: z.string().uuid().optional(),
   key: z
     .string()
     .trim()

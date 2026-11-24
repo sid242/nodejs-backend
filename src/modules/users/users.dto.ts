@@ -47,7 +47,7 @@ export const updateUserStatusDto = z.object({
 export type UpdateUserStatusDto = z.infer<typeof updateUserStatusDto>;
 
 export const userIdParamDto = z.object({
-  userId: z.string().guid(),
+  userId: z.string().uuid(),
 });
 
 export type UserIdParamDto = z.infer<typeof userIdParamDto>;

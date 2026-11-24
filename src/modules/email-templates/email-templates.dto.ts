@@ -21,26 +21,26 @@ export const emailDeliveryStatuses = [
 export const emailSuppressionReasons = ['BOUNCE', 'COMPLAINT', 'UNSUBSCRIBE', 'MANUAL'] as const;
 
 export const templateIdParamDto = z.object({
-  id: z.string().guid(),
+  id: z.string().uuid(),
 });
 
 export type TemplateIdParamDto = z.infer<typeof templateIdParamDto>;
 
 export const templateIdAndVersionParamDto = z.object({
-  id: z.string().guid(),
+  id: z.string().uuid(),
   version: z.coerce.number().int().min(1),
 });
 
 export type TemplateIdAndVersionParamDto = z.infer<typeof templateIdAndVersionParamDto>;
 
 export const suppressionIdParamDto = z.object({
-  id: z.string().guid(),
+  id: z.string().uuid(),
 });
 
 export type SuppressionIdParamDto = z.infer<typeof suppressionIdParamDto>;
 
 export const deliveryLogIdParamDto = z.object({
-  id: z.string().guid(),
+  id: z.string().uuid(),
 });
 
 export type DeliveryLogIdParamDto = z.infer<typeof deliveryLogIdParamDto>;
@@ -157,7 +157,7 @@ export const bounceWebhookDto = z.object({
   complaint: z.any().optional(),
   reason: z.string().optional(),
   details: z.string().optional(),
-  tenantId: z.string().guid().optional(),
+  tenantId: z.string().uuid().optional(),
 });
 
 export type BounceWebhookDto = z.infer<typeof bounceWebhookDto>;

@@ -113,14 +113,14 @@ export type ExportMembersQueryDto = z.infer<typeof exportMembersQueryDto>;
 export const addMemberDto = z.object({
   email: z.string().trim().email(),
   role: z.string().trim().min(2).max(50).default('MEMBER'),
-  roleId: z.string().guid().optional(),
+  roleId: z.string().uuid().optional(),
   firstName: z.string().trim().max(50).optional(),
   lastName: z.string().trim().max(50).optional(),
   phone: z.string().trim().max(30).optional(),
   memberCode: z.string().trim().max(50).optional(),
   jobTitle: z.string().trim().max(100).optional(),
   department: z.string().trim().max(100).optional(),
-  groupIds: z.array(z.string().guid()).optional(),
+  groupIds: z.array(z.string().uuid()).optional(),
   expiresInHours: z.coerce.number().int().min(1).max(168).default(48),
   message: z.string().trim().max(1000).optional(),
 });
@@ -131,7 +131,7 @@ export const updateMemberDto = z.object({
   memberCode: z.string().trim().max(50).optional().nullable(),
   jobTitle: z.string().trim().max(100).optional().nullable(),
   department: z.string().trim().max(100).optional().nullable(),
-  managerMemberId: z.string().guid().optional().nullable(),
+  managerMemberId: z.string().uuid().optional().nullable(),
   location: z.string().trim().max(100).optional().nullable(),
   employmentType: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACTOR', 'INTERN']).optional().nullable(),
   startDate: z.coerce.date().optional().nullable(),
@@ -142,7 +142,7 @@ export const updateMemberDto = z.object({
 export type UpdateMemberDto = z.infer<typeof updateMemberDto>;
 
 export const offboardMemberDto = z.object({
-  reassignToMemberId: z.string().guid().optional().nullable(),
+  reassignToMemberId: z.string().uuid().optional().nullable(),
   reason: z.string().trim().max(500).optional(),
 });
 export type OffboardMemberDto = z.infer<typeof offboardMemberDto>;
@@ -162,7 +162,7 @@ export type UpdateMemberStatusDto = z.infer<typeof updateMemberStatusDto>;
 export const bulkInviteItemDto = z.object({
   email: z.string().trim().email(),
   role: z.string().trim().min(2).max(50).default('MEMBER'),
-  roleId: z.string().guid().optional(),
+  roleId: z.string().uuid().optional(),
   firstName: z.string().trim().max(50).optional(),
   lastName: z.string().trim().max(50).optional(),
   phone: z.string().trim().max(30).optional(),
@@ -354,7 +354,7 @@ export type SearchAuditLogsDto = z.infer<typeof searchAuditLogsDto>;
 
 export const acceptInviteDto = z.object({
   token: z.string().min(1),
-  tenantId: z.string().guid().optional(),
+  tenantId: z.string().uuid().optional(),
 });
 
 export type AcceptInviteDto = z.infer<typeof acceptInviteDto>;
@@ -384,12 +384,12 @@ export const updateTenantSettingsDto = z.object({
   companySize: z.string().trim().max(100).optional().nullable(),
   legalName: z.string().trim().max(200).optional().nullable(),
   taxId: z.string().trim().max(100).optional().nullable(),
-  billingAddressId: z.string().guid().optional().nullable(),
+  billingAddressId: z.string().uuid().optional().nullable(),
   supportEmail: z.string().trim().email().optional().nullable().or(z.literal('')),
   websiteUrl: z.string().trim().url().optional().nullable().or(z.literal('')),
   termsUrl: z.string().trim().url().optional().nullable().or(z.literal('')),
   privacyUrl: z.string().trim().url().optional().nullable().or(z.literal('')),
-  defaultMemberRoleId: z.string().guid().optional().nullable(),
+  defaultMemberRoleId: z.string().uuid().optional().nullable(),
   allowedEmailDomains: z.array(z.string().trim().min(1)).optional(),
   autoJoinDomains: z.boolean().optional(),
 });

@@ -130,14 +130,14 @@ export const addressPatchDto = z
 export type AddressPatch = z.infer<typeof addressPatchDto>;
 
 export const addressIdParamDto = z.object({
-  id: z.string().guid(),
+  id: z.string().uuid(),
 });
 
 export const memberIdParamDto = z.object({
-  memberId: z.string().guid(),
+  memberId: z.string().uuid(),
 });
 
 export const memberAddressParamDto = z.object({
-  memberId: z.string().guid(),
-  id: z.string().guid(),
+  memberId: z.string().uuid(),
+  id: z.string().uuid(),
 });
