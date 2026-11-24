@@ -55,25 +55,60 @@ test('file scanner sends complete bytes and distinguishes verdicts from errors',
   assert.equal(requests, 3);
 });
 
-test('file scanner in development auto-marks as CLEAN when CLAMD_HOST is unset or unreachable', async (t) => {
+test('file scanner requires ClamAV daemon unless ALLOW_UNSCANNED_FILES is explicitly true', async (t) => {
   const bytes = Buffer.from('test data');
   const prevHost = env.CLAMD_HOST;
   const prevPort = env.CLAMD_PORT;
-  const prevNodeEnv = env.NODE_ENV;
+  const prevAllow = env.ALLOW_UNSCANNED_FILES;
 
-  (env as { NODE_ENV: string }).NODE_ENV = 'development';
   t.after(() => {
     env.CLAMD_HOST = prevHost;
     env.CLAMD_PORT = prevPort;
-    (env as { NODE_ENV: string }).NODE_ENV = prevNodeEnv;
+    (env as { ALLOW_UNSCANNED_FILES: boolean }).ALLOW_UNSCANNED_FILES = prevAllow;
   });
 
-  // 1. Unset CLAMD_HOST in development
+  // 1. Without ALLOW_UNSCANNED_FILES, missing CLAMD_HOST throws
+  (env as { ALLOW_UNSCANNED_FILES: boolean }).ALLOW_UNSCANNED_FILES = false;
+  env.CLAMD_HOST = undefined;
+  await assert.rejects(scanFileBytes(bytes), /A ClamAV daemon is required to scan files/);
+
+  // 2. Without ALLOW_UNSCANNED_FILES, unreachable CLAMD_HOST rejects with ECONNREFUSED
+  env.CLAMD_HOST = '127.0.0.1';
+  env.CLAMD_PORT = 1; // reserved port, unreachable
+  await assert.rejects(scanFileBytes(bytes), (err: any) => err.code === 'ECONNREFUSED');
+
+  // 3. With explicit ALLOW_UNSCANNED_FILES=true, missing CLAMD_HOST auto-marks as CLEAN
+  (env as { ALLOW_UNSCANNED_FILES: boolean }).ALLOW_UNSCANNED_FILES = true;
   env.CLAMD_HOST = undefined;
   assert.equal(await scanFileBytes(bytes), 'CLEAN');
 
-  // 2. Unreachable port in development (ECONNREFUSED)
+  // 4. With explicit ALLOW_UNSCANNED_FILES=true, unreachable CLAMD_HOST auto-marks as CLEAN
   env.CLAMD_HOST = '127.0.0.1';
-  env.CLAMD_PORT = 1; // reserved port, unreachable
+  env.CLAMD_PORT = 1;
   assert.equal(await scanFileBytes(bytes), 'CLEAN');
+});
+
+test('production config rejects ALLOW_UNSCANNED_FILES=true', async () => {
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const execFileAsync = promisify(execFile);
+
+  await assert.rejects(
+    execFileAsync(process.execPath, ['--import', 'tsx', '-e', "import('./src/config/env')"], {
+      env: {
+        ...process.env,
+        NODE_ENV: 'production',
+        ALLOW_UNSCANNED_FILES: 'true',
+        APP_BASE_DOMAIN: 'example.com',
+        ENCRYPTION_KEY: '12345678901234567890123456789012',
+        BFF_SHARED_SECRET: 'production-bff-secret-key-min-16-chars',
+        INTERNAL_API_SECRET: 'production-internal-secret-min-32-chars-long-example',
+      },
+      cwd: process.cwd(),
+    }),
+    (err: any) => {
+      const stderr = err.stderr || err.stdout || '';
+      return stderr.includes('ALLOW_UNSCANNED_FILES is strictly forbidden in production');
+    },
+  );
 });

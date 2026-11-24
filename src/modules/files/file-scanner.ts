@@ -5,8 +5,10 @@ import { logger } from '@/config/logger';
 
 export async function scanFileBytes(bytes: Uint8Array): Promise<'CLEAN' | 'INFECTED'> {
   if (!env.CLAMD_HOST) {
-    if (env.NODE_ENV === 'development') {
-      logger.warn('CLAMD_HOST not configured in development: auto-marking file as CLEAN');
+    if (env.ALLOW_UNSCANNED_FILES) {
+      logger.warn(
+        'CLAMD_HOST not configured and ALLOW_UNSCANNED_FILES=true: auto-marking file as CLEAN',
+      );
       return 'CLEAN';
     }
     throw new Error('A ClamAV daemon is required to scan files');
@@ -18,12 +20,9 @@ export async function scanFileBytes(bytes: Uint8Array): Promise<'CLEAN' | 'INFEC
     let reply = '';
 
     socket.on('error', (err) => {
-      if (
-        env.NODE_ENV === 'development' &&
-        (err as NodeJS.ErrnoException).code === 'ECONNREFUSED'
-      ) {
+      if (env.ALLOW_UNSCANNED_FILES && (err as NodeJS.ErrnoException).code === 'ECONNREFUSED') {
         logger.warn(
-          `ClamAV daemon at ${env.CLAMD_HOST}:${env.CLAMD_PORT} is unreachable in development: auto-marking file as CLEAN`,
+          `ClamAV daemon at ${env.CLAMD_HOST}:${env.CLAMD_PORT} is unreachable and ALLOW_UNSCANNED_FILES=true: auto-marking file as CLEAN`,
         );
         clearTimeout(timer);
         resolve('CLEAN');

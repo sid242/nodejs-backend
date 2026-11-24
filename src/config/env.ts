@@ -91,6 +91,7 @@ const schema = z.object({
   EMAIL_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(100).optional(),
   CLAMD_HOST: z.string().min(1).optional(),
   CLAMD_PORT: z.coerce.number().int().min(1).max(65535).default(3310),
+  ALLOW_UNSCANNED_FILES: bool.default('false'),
   FILE_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(100).optional(),
   MAINTENANCE_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(10).optional(),
   MAINTENANCE_BATCH_SIZE: z.coerce.number().int().min(1).max(10000).default(500),
@@ -168,6 +169,13 @@ if (parsed.data.NODE_ENV === 'production') {
   ) {
     console.error(
       'Invalid environment variables: Dedicated non-default INTERNAL_API_SECRET (min 32 chars) is required in production.',
+    );
+    process.exit(1);
+  }
+
+  if (parsed.data.ALLOW_UNSCANNED_FILES) {
+    console.error(
+      'Invalid environment variables: ALLOW_UNSCANNED_FILES is strictly forbidden in production.',
     );
     process.exit(1);
   }
