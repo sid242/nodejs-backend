@@ -1,6 +1,11 @@
+import fs from 'node:fs';
 import js from '@eslint/js';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+
+const baselineFiles = JSON.parse(
+  fs.readFileSync(new URL('./eslint-baseline.json', import.meta.url), 'utf-8'),
+);
 
 export default tseslint.config(
   js.configs.recommended,
@@ -13,8 +18,14 @@ export default tseslint.config(
     },
     rules: {
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
-      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-explicit-any': 'error',
       'no-unused-vars': 'off',
+    },
+  },
+  {
+    files: baselineFiles,
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'warn',
     },
   },
   {

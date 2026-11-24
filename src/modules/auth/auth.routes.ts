@@ -55,7 +55,10 @@ async function requireCallerAuth(req: Request, _res: Response, next: NextFunctio
   if (!token) return next(AppError.unauthorized('Authentication required'));
 
   try {
-    const decoded = jwt.verify(token, env.JWT_PLATFORM_SECRET, { audience: 'platform-api' }) as any;
+    const decoded = jwt.verify(token, env.JWT_PLATFORM_SECRET, {
+      audience: 'platform-api',
+      algorithms: ['HS256'],
+    }) as any;
     if (decoded?.typ === 'STAFF') {
       req.staff = {
         id: decoded.sub,

@@ -43,6 +43,7 @@ export async function requirePlatformAuth(
     try {
       const decoded = jwt.verify(token, env.JWT_PLATFORM_SECRET, {
         audience: 'platform-api',
+        algorithms: ['HS256'],
       });
       if (!decoded || typeof decoded !== 'object') {
         return next(AppError.unauthorized('Malformed platform staff token'));
