@@ -31,7 +31,7 @@ async function main() {
     if (!row.oidcClientSecret || row.oidcClientSecret === '••••••••') continue;
 
     if (needsReencryption(row.oidcClientSecret)) {
-      let plaintext = '';
+      let plaintext: string;
       try {
         plaintext = decrypt(row.oidcClientSecret);
       } catch {

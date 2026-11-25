@@ -68,8 +68,8 @@ test('createGroupDto validates name and optional slug correctly', () => {
 });
 
 test('addTenantGroupMembersDto deduplicates user IDs and validates UUID format', () => {
-  const uuid1 = 'a0000000-0000-0000-0000-000000000001';
-  const uuid2 = 'a0000000-0000-0000-0000-000000000002';
+  const uuid1 = 'a0000000-0000-4000-8000-000000000001';
+  const uuid2 = 'a0000000-0000-4000-8000-000000000002';
 
   const parsed = groupsDto.addTenantGroupMembersDto.parse({
     userIds: [uuid1, uuid2, uuid1, uuid2],

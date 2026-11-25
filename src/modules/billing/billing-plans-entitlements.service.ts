@@ -331,7 +331,7 @@ export async function assertQuota(
   if (entitlement.type === 'INTEGER') {
     const quota = Number(entitlement.value);
     const usage = await billingRepo.getTenantUsage(tenantId);
-    let currentUsage = 0;
+    let currentUsage: number;
 
     if (entitlementKey === 'members.max') {
       currentUsage = usage.members;

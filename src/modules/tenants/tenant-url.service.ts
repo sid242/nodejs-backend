@@ -68,7 +68,7 @@ export function getEffectiveUrlMode(
 
   const preferred = (tenant?.urlStyle as TenantUrlMode) || 'path';
 
-  let mode: TenantUrlMode = 'path';
+  let mode: TenantUrlMode;
   let reason: UrlFallbackReason | undefined;
 
   // Check if tenant is suspended or deactivated
@@ -151,7 +151,7 @@ export async function buildTenantUrl(
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
 
   return cache.wrap(`tenant:url:${tenantId}:${cleanPath}`, 300, async () => {
-    let tenant: (Tenant & { urlStyle?: string }) | null = null;
+    let tenant: (Tenant & { urlStyle?: string }) | null;
     if (typeof tenantOrId === 'string') {
       tenant = await tenantsRepo.findTenantById(tenantId);
     } else {

@@ -172,7 +172,7 @@ export async function createCustomTenantRole(
   let description: string | undefined;
   let scope: 'TENANT' | 'PLATFORM' = 'TENANT';
   let isActive = true;
-  let permissionKeys: string[] = [];
+  let permissionKeys: string[];
   let callerUserId: string | undefined;
 
   if (typeof inputOrName === 'string') {

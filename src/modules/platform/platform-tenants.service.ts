@@ -345,11 +345,9 @@ export async function retryTenantProvisioning(
 
   // Ensure system roles
   const systemRoles = await rbacRepo.findRolesByTenant(null);
-  let ownerRole = systemRoles.find((r) => r.name === rbacService.SYSTEM_ROLES.OWNER);
+  const ownerRole = systemRoles.find((r) => r.name === rbacService.SYSTEM_ROLES.OWNER);
   if (!ownerRole) {
     await rbacService.seedDefaultRbac();
-    const refreshed = await rbacRepo.findRolesByTenant(null);
-    ownerRole = refreshed.find((r) => r.name === rbacService.SYSTEM_ROLES.OWNER);
   }
 
   // Ensure default modules

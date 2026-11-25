@@ -21,9 +21,9 @@ import {
 } from '@/modules/billing/entitlements.defaults';
 
 describe('Phase 07: Plans, Entitlements and Subscriptions Unit Tests', () => {
-  const mockTenantId = '11111111-1111-1111-1111-111111111111';
-  const mockStaffId = '55555555-5555-5555-5555-555555555555';
-  const mockPlanId = '66666666-6666-6666-6666-666666666666';
+  const mockTenantId = '11111111-1111-4111-8111-111111111111';
+  const mockStaffId = '55555555-5555-4555-8555-555555555555';
+  const mockPlanId = '66666666-6666-4666-8666-666666666666';
 
   beforeEach(async () => {
     await billingService.invalidateTenantBillingCache(mockTenantId);

@@ -64,7 +64,7 @@ describe('Phase 04: Tenant Members & Invitations Unit Tests', () => {
         memberCode: 'MEM-00142',
         jobTitle: 'Senior Systems Architect',
         department: 'Core Infrastructure',
-        groupIds: ['b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e'],
+        groupIds: ['b2c3d4e5-f6a7-4b9c-8d1e-2f3a4b5c6d7e'],
         expiresInHours: 72,
         message: 'Welcome to the Core Infrastructure team at Acme!',
       };

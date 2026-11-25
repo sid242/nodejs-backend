@@ -25,12 +25,12 @@ export async function processWebhookDelivery(job: Job<WebhookDeliveryJobData>): 
     job.data;
 
   const startTime = Date.now();
-  let secret = '';
+  let secret: string;
   try {
     secret = decrypt(secretEncrypted);
   } catch (decErr) {
     logger.error({ err: decErr, endpointId }, 'Failed to decrypt webhook endpoint signing secret');
-    throw new Error('Signing secret decryption failed');
+    throw new Error('Signing secret decryption failed', { cause: decErr });
   }
 
   // 1. SSRF Safety Verification
@@ -71,8 +71,8 @@ export async function processWebhookDelivery(job: Job<WebhookDeliveryJobData>): 
   const timeoutId = setTimeout(() => controller.abort(), 10_000);
 
   let responseStatus: number | null = null;
-  let responseSnippet: string | null = null;
-  let isSuccess = false;
+  let responseSnippet: string | null;
+  let isSuccess: boolean;
 
   try {
     const response = await fetch(url, {

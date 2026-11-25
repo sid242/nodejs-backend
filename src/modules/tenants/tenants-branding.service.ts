@@ -429,7 +429,7 @@ export async function reverifyAllVerifiedDomains(): Promise<{ verified: number; 
     const challengeHostname = `_saas-verify.${domain}`;
     const expectedValue = `saas-verify=${branding.tenantId}`;
 
-    let matched = false;
+    let matched: boolean;
     try {
       const records = await dns.resolveTxt(challengeHostname);
       const flatRecords = records?.flat?.() ?? [];

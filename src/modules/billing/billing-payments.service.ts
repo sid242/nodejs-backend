@@ -55,7 +55,7 @@ export async function processBillingWebhook(dto: BillingWebhookDto) {
         status: 'RECEIVED',
       });
 
-  let webhookRecordId = '';
+  let webhookRecordId: string;
   let activeRecord = inserted;
   if (!inserted) {
     const existing = await billingRepo.findBillingWebhook(provider, eventId);

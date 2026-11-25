@@ -1,5 +1,5 @@
 import type { Request, RequestHandler, Response } from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { RedisStore } from 'rate-limit-redis';
 
 import { env } from '@/config/env';
@@ -23,6 +23,8 @@ export interface RateLimiterOptions {
  *   - failClosed: true (auth, SSO, handoff) -> passOnStoreError is false (fails closed if Redis is down).
  *   - failClosed: false (general APIs) -> passOnStoreError is true (fails open rather than taking read API down).
  */
+const getClientIpKey = (req: Request): string => (req.ip ? ipKeyGenerator(req.ip) : 'anonymous');
+
 const make = ({
   name,
   windowMs = env.RATE_LIMIT_WINDOW_MS,
@@ -50,7 +52,7 @@ const make = ({
                 ? req.body.identifier
                 : '';
         const email = rawEmail.trim().toLowerCase();
-        const ip = req.ip || 'anonymous';
+        const ip = getClientIpKey(req);
         return email ? `${ip}:${email}` : ip;
       }
 
@@ -59,7 +61,7 @@ const make = ({
         if (req.user?.id) {
           return `t:${req.tenant.id}:u:${req.user.id}`;
         }
-        return `t:${req.tenant.id}:${req.ip || 'anonymous'}`;
+        return `t:${req.tenant.id}:${getClientIpKey(req)}`;
       }
 
       // 3. User-scoped: throttles by authenticated user (preserves impersonation attribution)
@@ -73,7 +75,7 @@ const make = ({
       }
 
       // Default: IP-based
-      return req.ip || 'anonymous';
+      return getClientIpKey(req);
     },
     store: new RedisStore({
       sendCommand: (...args: string[]) => (redis as any).call(...args),
@@ -212,7 +214,7 @@ export const scimLimiter = rateLimit({
     prefix: 'rl:scim:',
   }),
   keyGenerator: (req: Request) => {
-    return req.tenantId ? `t:${req.tenantId}` : `ip:${req.ip || 'anonymous'}`;
+    return req.tenantId ? `t:${req.tenantId}` : `ip:${getClientIpKey(req)}`;
   },
   handler: (_req: Request, res: Response) => {
     res.setHeader('Content-Type', 'application/scim+json; charset=utf-8');

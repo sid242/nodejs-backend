@@ -37,7 +37,7 @@ test('Phase 02 Unit: listStaffQueryDto parses search, department, and pagination
 });
 
 test('Phase 02 Unit: inviteStaffDto validates required email, name, role and optional metadata', () => {
-  const roleId = '00000000-0000-0000-0000-000000000001';
+  const roleId = '00000000-0000-4000-8000-000000000001';
 
   // Valid invite input
   const valid = inviteStaffDto.parse({

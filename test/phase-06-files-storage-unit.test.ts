@@ -36,13 +36,13 @@ describe('Phase 06: Files & Storage Architecture Unit Tests', () => {
       const valid = requestUploadDto.parse({
         filename: 'quarterly-report.pdf',
         contentType: 'application/pdf',
-        folderId: 'a0000000-0000-0000-0000-000000000001',
+        folderId: 'a0000000-0000-4000-8000-000000000001',
         tags: ['finance', '2026', 'q3'],
         description: 'Final signed board deck',
       });
       assert.equal(valid.filename, 'quarterly-report.pdf');
       assert.equal(valid.tags?.length, 3);
-      assert.equal(valid.folderId, 'a0000000-0000-0000-0000-000000000001');
+      assert.equal(valid.folderId, 'a0000000-0000-4000-8000-000000000001');
     });
 
     it('rejects invalid UUIDs for folderId', () => {
@@ -102,7 +102,7 @@ describe('Phase 06: Files & Storage Architecture Unit Tests', () => {
       const valid = createFolderDto.parse({
         name: 'Invoices 2026',
         color: '#3B82F6',
-        parentId: 'a0000000-0000-0000-0000-000000000001',
+        parentId: 'a0000000-0000-4000-8000-000000000001',
       });
       assert.equal(valid.name, 'Invoices 2026');
       assert.equal(valid.color, '#3B82F6');

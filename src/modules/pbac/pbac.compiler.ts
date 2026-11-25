@@ -253,7 +253,7 @@ export function compilePoliciesToSqlScope(
     }
   }
 
-  let finalScope: SQL | undefined = undefined;
+  let finalScope: SQL | undefined;
 
   if (hasUnconditionalAllow) {
     // Allowed everything, except explicit conditional denies
