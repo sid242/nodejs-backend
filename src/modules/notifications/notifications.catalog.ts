@@ -14,6 +14,9 @@ export interface NotificationTypeDefinition {
   defaultPush: boolean;
   defaultDigest: NotificationDigest;
   isCritical?: boolean; // Cannot be disabled on email/in-app for security/compliance
+  pushSafe?: boolean; // True only when raw title/body never contains PHI or confidential text
+  pushTitle?: string;
+  pushBody?: string;
   description: string;
 }
 
@@ -66,6 +69,7 @@ export const NOTIFICATION_CATALOG: Record<string, NotificationTypeDefinition> = 
     defaultEmail: true,
     defaultPush: false,
     defaultDigest: 'NONE',
+    pushSafe: true,
     description: 'Triggered when an invitation to a workspace is sent',
   },
   'team.member_joined': {
@@ -77,6 +81,7 @@ export const NOTIFICATION_CATALOG: Record<string, NotificationTypeDefinition> = 
     defaultEmail: false,
     defaultPush: false,
     defaultDigest: 'DAILY',
+    pushSafe: true,
     description: 'Triggered when an invited member accepts and joins',
   },
   'team.member_removed': {
@@ -111,6 +116,9 @@ export const NOTIFICATION_CATALOG: Record<string, NotificationTypeDefinition> = 
     defaultEmail: false,
     defaultPush: true,
     defaultDigest: 'NONE',
+    pushSafe: false,
+    pushTitle: 'New chat mention',
+    pushBody: 'You were mentioned in Team Chat. Open the app to view.',
     description: 'Triggered when a member mentions you in a chat message',
   },
   'chat.direct_message': {
@@ -122,6 +130,9 @@ export const NOTIFICATION_CATALOG: Record<string, NotificationTypeDefinition> = 
     defaultEmail: false,
     defaultPush: true,
     defaultDigest: 'NONE',
+    pushSafe: false,
+    pushTitle: 'New direct message',
+    pushBody: 'You have a new direct message. Open the app to read.',
     description: 'Triggered when you receive a direct message',
   },
 
@@ -220,6 +231,7 @@ export const NOTIFICATION_CATALOG: Record<string, NotificationTypeDefinition> = 
     defaultEmail: false,
     defaultPush: false,
     defaultDigest: 'NONE',
+    pushSafe: true,
     description: 'Broadcast announcement sent by platform administration',
   },
   'system.maintenance': {
@@ -231,12 +243,35 @@ export const NOTIFICATION_CATALOG: Record<string, NotificationTypeDefinition> = 
     defaultEmail: true,
     defaultPush: false,
     defaultDigest: 'NONE',
+    pushSafe: true,
     description: 'System maintenance window notice',
   },
 };
 
 export function getCatalogEntry(type: string): NotificationTypeDefinition | undefined {
   return NOTIFICATION_CATALOG[type];
+}
+
+/**
+ * Returns a push-safe title/body pair so private chat/medical/account details
+ * are never exposed on lock-screen push notifications.
+ */
+export function resolveSafePushContent(
+  type: string | undefined,
+  rawTitle: string,
+  rawBody: string,
+): { title: string; body: string } {
+  if (type === 'push.test') {
+    return { title: rawTitle, body: rawBody };
+  }
+  const entry = type ? getCatalogEntry(type) : undefined;
+  if (entry?.pushSafe) {
+    return { title: rawTitle, body: rawBody };
+  }
+  return {
+    title: entry?.pushTitle ?? 'You have a new update',
+    body: entry?.pushBody ?? 'Open the app to view the latest details.',
+  };
 }
 
 export function getDefaultPreferencesForCategory(category: NotificationCategory) {

@@ -12,11 +12,33 @@ import {
   broadcastNotificationDto,
   listNotificationsQueryDto,
   notificationIdParamDto,
+  pushDeviceIdParamDto,
   pushSubscribeDto,
   pushUnsubscribeDto,
   readAllNotificationsDto,
   updatePreferencesDto,
 } from './notifications.dto';
+
+function mountPushSubRoutes(targetRouter: Router, prefix: string): void {
+  targetRouter.get(`${prefix}/public-key`, controller.getPushPublicKey);
+  targetRouter.get(`${prefix}/subscriptions`, controller.listPushDevices);
+  targetRouter.post(
+    `${prefix}/subscribe`,
+    validate({ body: pushSubscribeDto }),
+    controller.subscribePush,
+  );
+  targetRouter.delete(
+    `${prefix}/subscribe`,
+    validate({ body: pushUnsubscribeDto }),
+    controller.unsubscribePush,
+  );
+  targetRouter.delete(
+    `${prefix}/subscriptions/:id`,
+    validate({ params: pushDeviceIdParamDto }),
+    controller.removePushDevice,
+  );
+  targetRouter.post(`${prefix}/test`, controller.sendTestPush);
+}
 
 const router = Router();
 
@@ -41,12 +63,7 @@ router.post('/read-all', validate({ body: readAllNotificationsDto }), controller
 router.get('/preferences', controller.getPreferences);
 router.put('/preferences', validate({ body: updatePreferencesDto }), controller.updatePreferences);
 
-router.post('/push/subscribe', validate({ body: pushSubscribeDto }), controller.subscribePush);
-router.delete(
-  '/push/subscribe',
-  validate({ body: pushUnsubscribeDto }),
-  controller.unsubscribePush,
-);
+mountPushSubRoutes(router, '/push');
 
 router.post('/:id/read', validate({ params: notificationIdParamDto }), controller.markAsRead);
 router.post(
@@ -55,5 +72,10 @@ router.post(
   controller.archiveNotification,
 );
 router.delete('/:id', validate({ params: notificationIdParamDto }), controller.deleteNotification);
+
+export const platformPushRouter: Router = Router();
+platformPushRouter.use(requirePlatformAuth);
+platformPushRouter.use(notificationLimiter);
+mountPushSubRoutes(platformPushRouter, '');
 
 export default router;

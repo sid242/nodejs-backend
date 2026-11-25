@@ -7,12 +7,21 @@ import type {
   BroadcastNotificationDto,
   ListNotificationsQueryDto,
   NotificationIdParamDto,
+  PushDeviceIdParamDto,
   PushSubscribeDto,
   PushUnsubscribeDto,
   ReadAllNotificationsDto,
   UpdatePreferencesDto,
 } from './notifications.dto';
 import * as service from './notifications.service';
+import type { PushActor } from './push/push.types';
+
+function resolvePushActor(req: Request): PushActor {
+  if (req.staff?.id) {
+    return { actorType: 'STAFF', actorId: req.staff.id };
+  }
+  return { actorType: 'USER', actorId: req.user!.id };
+}
 
 export const listNotifications = asyncHandler(async (req: Request, res: Response) => {
   const query = req.query as unknown as ListNotificationsQueryDto;
@@ -63,16 +72,47 @@ export const updatePreferences = asyncHandler(async (req: Request, res: Response
   res.json(AppResponse.ok(result, 'Notification preferences updated successfully'));
 });
 
+export const getPushPublicKey = asyncHandler(async (_req: Request, res: Response) => {
+  const result = service.getPushPublicKeyConfig();
+  res.json(AppResponse.ok(result));
+});
+
+export const listPushDevices = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.listPushDevices(resolvePushActor(req));
+  res.json(AppResponse.ok(result));
+});
+
 export const subscribePush = asyncHandler(async (req: Request, res: Response) => {
   const dto = req.body as PushSubscribeDto;
-  const result = await service.subscribePush(req.user!.id, dto);
+  const result = await service.subscribePush(resolvePushActor(req), dto);
   res.status(201).json(AppResponse.created(result, 'Web push subscribed'));
 });
 
 export const unsubscribePush = asyncHandler(async (req: Request, res: Response) => {
   const { endpoint } = req.body as PushUnsubscribeDto;
-  const result = await service.unsubscribePush(req.user!.id, endpoint);
+  const result = await service.unsubscribePush(resolvePushActor(req), endpoint);
   res.json(AppResponse.ok(result, 'Web push unsubscribed'));
+});
+
+export const removePushDevice = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params as PushDeviceIdParamDto;
+  const result = await service.removePushDevice(resolvePushActor(req), id);
+  res.json(AppResponse.ok(result, 'Push device removed'));
+});
+
+export const sendTestPush = asyncHandler(async (req: Request, res: Response) => {
+  const actor = resolvePushActor(req);
+  const link =
+    actor.actorType === 'STAFF'
+      ? '/platform/settings/notifications'
+      : req.tenant?.slug
+        ? `/w/${req.tenant.slug}/settings/notifications`
+        : '/settings/notifications';
+  const result = await service.sendTestPush(actor, {
+    tenantId: req.tenant?.id ?? null,
+    link,
+  });
+  res.json(AppResponse.ok(result, 'Test push notification queued'));
 });
 
 export const broadcast = asyncHandler(async (req: Request, res: Response) => {

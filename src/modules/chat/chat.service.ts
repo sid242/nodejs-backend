@@ -5,7 +5,7 @@ import { AppError } from '@/lib/errors';
 import { getClientHost } from '@/lib/request-context';
 import { createDownloadUrl, createUploadPost } from '@/lib/s3';
 import { generateSlug, safeFilename } from '@/lib/utils';
-import { notify } from '@/modules/notifications/notifications.service';
+import { notify, notifyStaffPush } from '@/modules/notifications/notifications.service';
 import { emitToChatActor, emitToChatChannel, emitToChatScope } from '@/sockets/emitter';
 
 import type {
@@ -701,6 +701,33 @@ export async function sendMessage(
           tenantId: ctx.tenantId,
           actorUserId: ctx.actorId,
           data: { channelId, messageId: created.id },
+        }).catch(() => {});
+      }
+    }
+  } else {
+    // Platform internal chat push alerts for mentioned staff or DM recipients
+    const notifyMentionIds = validMentions.filter((id) => id !== ctx.actorId);
+    if (notifyMentionIds.length > 0) {
+      void notifyStaffPush({
+        staffIds: notifyMentionIds,
+        type: 'chat.mention',
+        title: 'New chat mention',
+        body: 'You were mentioned in Operator Chat.',
+        link: `/platform/chat?channel=${channelId}`,
+        referenceId: created.id,
+      }).catch(() => {});
+    } else if (channel.type === 'DIRECT') {
+      const recipients = members
+        .filter((m) => m.actorId !== ctx.actorId && !m.isMuted)
+        .map((m) => m.actorId);
+      if (recipients.length > 0) {
+        void notifyStaffPush({
+          staffIds: recipients,
+          type: 'chat.direct_message',
+          title: 'New direct message',
+          body: 'You received a direct message in Operator Chat.',
+          link: `/platform/chat?channel=${channelId}`,
+          referenceId: created.id,
         }).catch(() => {});
       }
     }

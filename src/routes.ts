@@ -16,7 +16,9 @@ import groupRoutes from '@/modules/groups/groups.routes';
 import internalRoutes from '@/modules/internal/internal.routes';
 import leadsRoutes from '@/modules/leads/leads.routes';
 import maintenanceRoutes from '@/modules/maintenance/maintenance.routes';
-import notificationsRoutes from '@/modules/notifications/notifications.routes';
+import notificationsRoutes, {
+  platformPushRouter,
+} from '@/modules/notifications/notifications.routes';
 import {
   isModuleInstalled,
   optionalModuleKeys,
@@ -63,6 +65,7 @@ router.use('/platform/maintenance', maintenanceRoutes);
 router.use('/platform/privacy', platformPrivacyRouter);
 router.use('/platform/metrics', platformMetricsRouter);
 router.use('/platform/support', platformSupportRouter);
+router.use('/platform/notifications/push', platformPushRouter);
 router.use('/platform/chat', platformChatRouter);
 router.use('/chat', tenantChatRouter);
 router.use('/consent', consentRouter);

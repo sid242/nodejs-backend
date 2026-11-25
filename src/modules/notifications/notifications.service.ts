@@ -7,7 +7,11 @@ import { AppError } from '@/lib/errors';
 import { notificationQueue } from '@/queues/index';
 import { emitToUser, emitToWorkspaceUser } from '@/sockets/emitter';
 
-import { getCatalogEntry, getDefaultPreferencesForCategory } from './notifications.catalog';
+import {
+  getCatalogEntry,
+  getDefaultPreferencesForCategory,
+  resolveSafePushContent,
+} from './notifications.catalog';
 import type {
   BroadcastNotificationDto,
   ListNotificationsQueryDto,
@@ -17,6 +21,9 @@ import type {
   PushSubscribeDto,
 } from './notifications.dto';
 import * as repo from './notifications.repository';
+import { assertValidPushEndpoint } from './push/push.security';
+import type { PushActor } from './push/push.types';
+import { getVapidPublicKey, isWebPushConfigured } from './push/webpush.provider';
 
 export interface NotifyRecipient {
   userId: string;
@@ -156,19 +163,26 @@ export async function notify(params: NotifyParams): Promise<void> {
         );
       }
 
-      // Web Push dispatch
-      if (channelPush && !inQuietHours) {
+      // Web Push dispatch (enqueue only when VAPID/push keys are configured)
+      if (channelPush && !inQuietHours && isWebPushConfigured()) {
+        const safePush = resolveSafePushContent(params.type, created.title, created.body);
         await notificationQueue.add(
           'send-push',
           {
             notificationId: created.id,
+            actorType: 'USER',
+            actorId: recipient.userId,
             userId: recipient.userId,
-            title: created.title,
-            body: created.body,
+            title: safePush.title,
+            body: safePush.body,
             link: created.link,
+            tenantId: params.tenantId ?? null,
+            category,
           },
           {
             jobId: `notif-push-${created.id}`,
+            attempts: 5,
+            backoff: { type: 'exponential', delay: 2000 },
             removeOnComplete: true,
           },
         );
@@ -275,20 +289,147 @@ export async function updateUserPreferences(
   return { preferences: upserted };
 }
 
-export async function subscribePush(userId: string, dto: PushSubscribeDto) {
-  const sub = await repo.upsertPushSubscription(
-    userId,
-    dto.endpoint,
-    dto.keys.p256dh,
-    dto.keys.auth,
-    dto.userAgent,
-  );
+function normalizePushActor(actorOrUserId: PushActor | string): PushActor {
+  return typeof actorOrUserId === 'string'
+    ? { actorType: 'USER', actorId: actorOrUserId }
+    : actorOrUserId;
+}
+
+export function getPushPublicKeyConfig() {
+  const publicKey = getVapidPublicKey();
+  return {
+    enabled: Boolean(publicKey),
+    publicKey,
+  };
+}
+
+export async function listPushDevices(actorOrUserId: PushActor | string) {
+  const actor = normalizePushActor(actorOrUserId);
+  const rows = await repo.listPushDevicesForActor(actor);
+  return {
+    devices: rows.map((row) => ({
+      id: row.id,
+      channel: row.channel,
+      platform: row.platform,
+      appVersion: row.appVersion,
+      userAgent: row.userAgent,
+      failureCount: row.failureCount,
+      disabledAt: row.disabledAt,
+      createdAt: row.createdAt,
+      lastUsedAt: row.lastUsedAt,
+    })),
+  };
+}
+
+export async function subscribePush(actorOrUserId: PushActor | string, dto: PushSubscribeDto) {
+  const actor = normalizePushActor(actorOrUserId);
+  assertValidPushEndpoint(dto.endpoint);
+  const sub = await repo.upsertPushSubscription(actor, {
+    endpoint: dto.endpoint,
+    p256dh: dto.keys.p256dh,
+    auth: dto.keys.auth,
+    userAgent: dto.userAgent,
+    platform: dto.platform,
+    appVersion: dto.appVersion,
+  });
   return { subscribed: true, id: sub.id };
 }
 
-export async function unsubscribePush(userId: string, endpoint: string) {
-  const deleted = await repo.deletePushSubscription(userId, endpoint);
+export async function unsubscribePush(actorOrUserId: PushActor | string, endpoint: string) {
+  const actor = normalizePushActor(actorOrUserId);
+  const deleted = await repo.deletePushSubscription(actor, endpoint);
   return { unsubscribed: deleted };
+}
+
+export async function removePushDevice(actorOrUserId: PushActor | string, deviceId: string) {
+  const actor = normalizePushActor(actorOrUserId);
+  const removed = await repo.deletePushSubscriptionById(actor, deviceId);
+  if (!removed) {
+    throw AppError.notFound('Push device subscription not found');
+  }
+  return { removed: true };
+}
+
+export async function sendTestPush(
+  actorOrUserId: PushActor | string,
+  options?: { tenantId?: string | null; link?: string | null },
+) {
+  if (!isWebPushConfigured()) {
+    throw AppError.badRequest('Web Push is not configured on this server (missing VAPID keys).');
+  }
+  const actor = normalizePushActor(actorOrUserId);
+  const devices = await repo.getEnabledPushDevicesForActor(actor);
+  if (devices.length === 0) {
+    throw AppError.badRequest('No active push devices registered for this account.');
+  }
+
+  const notificationId = `test-${actor.actorId}-${Date.now()}`;
+  const defaultLink =
+    actor.actorType === 'STAFF' ? '/platform/settings/notifications' : '/settings/notifications';
+  await notificationQueue.add(
+    'send-push',
+    {
+      notificationId,
+      actorType: actor.actorType,
+      actorId: actor.actorId,
+      userId: actor.actorType === 'USER' ? actor.actorId : undefined,
+      title: 'Push notifications are active',
+      body: 'This is a test push notification confirming your browser subscription works.',
+      link: options?.link ?? defaultLink,
+      tenantId: options?.tenantId ?? null,
+      category: 'SYSTEM',
+    },
+    {
+      jobId: `notif-${notificationId}`,
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 1000 },
+      removeOnComplete: true,
+    },
+  );
+  return { queued: true, deviceCount: devices.length };
+}
+
+export async function notifyStaffPush(params: {
+  staffIds: string[];
+  type: string;
+  category?: NotificationCategory;
+  title: string;
+  body: string;
+  link?: string | null;
+  referenceId: string;
+}): Promise<void> {
+  if (!isWebPushConfigured() || params.staffIds.length === 0) return;
+  const safePush = resolveSafePushContent(params.type, params.title, params.body);
+  const category = params.category ?? getCatalogEntry(params.type)?.category ?? 'TEAM';
+
+  for (const staffId of params.staffIds) {
+    try {
+      await notificationQueue.add(
+        'send-push',
+        {
+          notificationId: `${params.referenceId}-${staffId}`,
+          actorType: 'STAFF',
+          actorId: staffId,
+          title: safePush.title,
+          body: safePush.body,
+          link: params.link ?? null,
+          tenantId: null,
+          category,
+        },
+        {
+          jobId: `notif-staff-push-${params.referenceId}-${staffId}`,
+          attempts: 5,
+          backoff: { type: 'exponential', delay: 2000 },
+          removeOnComplete: true,
+        },
+      );
+    } catch (err) {
+      logger.error(
+        { err, staffId, type: params.type },
+        'Failed to enqueue staff push notification',
+      );
+    }
+  }
 }
 
 export async function broadcast(

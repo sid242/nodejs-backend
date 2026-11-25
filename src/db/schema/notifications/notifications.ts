@@ -1,7 +1,9 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   index,
+  integer,
   jsonb,
   pgTable,
   text,
@@ -14,8 +16,10 @@ import {
   notificationCategoryEnum,
   notificationDigestEnum,
   notificationSeverityEnum,
+  pushChannelEnum,
 } from '../enums';
 import { users } from '../identity/users';
+import { platformStaff } from '../platform/platform-staff';
 import { tenantMembers } from '../tenancy/tenant-members';
 import { tenants } from '../tenancy/tenants';
 
@@ -101,17 +105,40 @@ export const pushSubscriptions = pgTable(
   'PushSubscription',
   {
     id: uuid('id').defaultRandom().primaryKey(),
-    userId: uuid('userId')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    endpoint: text('endpoint').notNull().unique(),
-    p256dh: text('p256dh').notNull(),
-    auth: text('auth').notNull(),
+    userId: uuid('userId').references(() => users.id, { onDelete: 'cascade' }),
+    staffId: uuid('staffId').references(() => platformStaff.id, { onDelete: 'cascade' }),
+    channel: pushChannelEnum('channel').notNull().default('webpush'),
+    token: text('token'),
+    endpoint: text('endpoint'),
+    p256dh: text('p256dh'),
+    auth: text('auth'),
+    platform: text('platform').notNull().default('web'),
+    appVersion: text('appVersion'),
     userAgent: text('userAgent'),
+    failureCount: integer('failureCount').notNull().default(0),
+    disabledAt: timestamp('disabledAt', { precision: 3, mode: 'date' }),
     createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
     lastUsedAt: timestamp('lastUsedAt', { precision: 3, mode: 'date' }),
   },
-  (table) => [index('PushSub_userId_idx').on(table.userId)],
+  (table) => [
+    index('PushSub_userId_idx').on(table.userId),
+    index('PushSub_staffId_idx').on(table.staffId),
+    uniqueIndex('PushSub_endpoint_uidx')
+      .on(table.endpoint)
+      .where(sql`"endpoint" IS NOT NULL`),
+    uniqueIndex('PushSub_channel_token_uidx')
+      .on(table.channel, table.token)
+      .where(sql`"token" IS NOT NULL`),
+    check(
+      'PushSub_owner_xor_chk',
+      sql`(("userId" IS NOT NULL AND "staffId" IS NULL) OR ("userId" IS NULL AND "staffId" IS NOT NULL))`,
+    ),
+    check(
+      'PushSub_channel_creds_chk',
+      sql`(("channel" = 'webpush' AND "endpoint" IS NOT NULL AND "p256dh" IS NOT NULL AND "auth" IS NOT NULL) OR ("channel" IN ('fcm', 'apns') AND "token" IS NOT NULL))`,
+    ),
+    check('PushSub_failure_count_chk', sql`"failureCount" >= 0`),
+  ],
 );
 
 export type PushSubscriptionRecord = typeof pushSubscriptions.$inferSelect;

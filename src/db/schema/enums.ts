@@ -219,3 +219,5 @@ export const chatChannelTypeEnum = pgEnum('ChatChannelType', [
 export const chatParticipantRoleEnum = pgEnum('ChatParticipantRole', ['OWNER', 'ADMIN', 'MEMBER']);
 
 export const chatMessageTypeEnum = pgEnum('ChatMessageType', ['TEXT', 'SYSTEM']);
+
+export const pushChannelEnum = pgEnum('PushChannel', ['webpush', 'fcm', 'apns']);

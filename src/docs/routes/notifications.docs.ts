@@ -6,6 +6,7 @@ import {
   broadcastNotificationDto,
   listNotificationsQueryDto,
   notificationIdParamDto,
+  pushDeviceIdParamDto,
   pushSubscribeDto,
   pushUnsubscribeDto,
   readAllNotificationsDto,
@@ -200,38 +201,121 @@ export function registerNotificationsDocs(registry: OpenAPIRegistry): void {
     },
   });
 
-  registry.registerPath({
-    method: 'post',
-    path: '/api/v1/notifications/push/subscribe',
-    summary: 'Register Web Push subscription',
-    tags: ['Notifications'],
-    security: [{ [bearerAuth.name]: [] }],
-    request: {
-      body: { content: { 'application/json': { schema: pushSubscribeDto } } },
-    },
-    responses: {
-      201: successResponse(
-        z.object({ subscribed: z.boolean(), id: z.string().uuid() }),
-        'Web push subscribed',
-      ),
-      401: errorResponse('Unauthorized'),
-    },
-  });
+  const PushDeviceSchema = registry.register(
+    'PushDevice',
+    z.object({
+      id: z.string().uuid(),
+      channel: z.enum(['webpush', 'fcm', 'apns']),
+      platform: z.string(),
+      appVersion: z.string().nullable(),
+      userAgent: z.string().nullable(),
+      failureCount: z.number(),
+      disabledAt: z.string().datetime().nullable(),
+      createdAt: z.string().datetime(),
+      lastUsedAt: z.string().datetime().nullable(),
+    }),
+  );
 
-  registry.registerPath({
-    method: 'delete',
-    path: '/api/v1/notifications/push/subscribe',
-    summary: 'Unsubscribe Web Push subscription',
-    tags: ['Notifications'],
-    security: [{ [bearerAuth.name]: [] }],
-    request: {
-      body: { content: { 'application/json': { schema: pushUnsubscribeDto } } },
-    },
-    responses: {
-      200: successResponse(z.object({ unsubscribed: z.boolean() }), 'Web push unsubscribed'),
-      401: errorResponse('Unauthorized'),
-    },
-  });
+  for (const [scopeTag, pushPrefix] of [
+    ['Notifications', '/api/v1/notifications/push'],
+    ['Platform', '/api/v1/platform/notifications/push'],
+  ] as const) {
+    registry.registerPath({
+      method: 'get',
+      path: `${pushPrefix}/public-key`,
+      summary: 'Get Web Push VAPID public key',
+      tags: [scopeTag],
+      security: [{ [bearerAuth.name]: [] }],
+      responses: {
+        200: successResponse(
+          z.object({ enabled: z.boolean(), publicKey: z.string().nullable() }),
+          'VAPID public key configuration',
+        ),
+        401: errorResponse('Unauthorized'),
+      },
+    });
+
+    registry.registerPath({
+      method: 'get',
+      path: `${pushPrefix}/subscriptions`,
+      summary: 'List registered push devices',
+      tags: [scopeTag],
+      security: [{ [bearerAuth.name]: [] }],
+      responses: {
+        200: successResponse(
+          z.object({ devices: z.array(PushDeviceSchema) }),
+          'Registered push devices',
+        ),
+        401: errorResponse('Unauthorized'),
+      },
+    });
+
+    registry.registerPath({
+      method: 'post',
+      path: `${pushPrefix}/subscribe`,
+      summary: 'Register Web Push subscription',
+      tags: [scopeTag],
+      security: [{ [bearerAuth.name]: [] }],
+      request: {
+        body: { content: { 'application/json': { schema: pushSubscribeDto } } },
+      },
+      responses: {
+        201: successResponse(
+          z.object({ subscribed: z.boolean(), id: z.string().uuid() }),
+          'Web push subscribed',
+        ),
+        400: errorResponse('Invalid or unsupported push endpoint'),
+        401: errorResponse('Unauthorized'),
+      },
+    });
+
+    registry.registerPath({
+      method: 'delete',
+      path: `${pushPrefix}/subscribe`,
+      summary: 'Unsubscribe Web Push subscription by endpoint',
+      tags: [scopeTag],
+      security: [{ [bearerAuth.name]: [] }],
+      request: {
+        body: { content: { 'application/json': { schema: pushUnsubscribeDto } } },
+      },
+      responses: {
+        200: successResponse(z.object({ unsubscribed: z.boolean() }), 'Web push unsubscribed'),
+        401: errorResponse('Unauthorized'),
+      },
+    });
+
+    registry.registerPath({
+      method: 'delete',
+      path: `${pushPrefix}/subscriptions/{id}`,
+      summary: 'Remove registered push device by ID',
+      tags: [scopeTag],
+      security: [{ [bearerAuth.name]: [] }],
+      request: {
+        params: pushDeviceIdParamDto,
+      },
+      responses: {
+        200: successResponse(z.object({ removed: z.boolean() }), 'Push device removed'),
+        401: errorResponse('Unauthorized'),
+        404: errorResponse('Push device subscription not found'),
+      },
+    });
+
+    registry.registerPath({
+      method: 'post',
+      path: `${pushPrefix}/test`,
+      summary: 'Send test push notification',
+      tags: [scopeTag],
+      security: [{ [bearerAuth.name]: [] }],
+      responses: {
+        200: successResponse(
+          z.object({ queued: z.boolean(), deviceCount: z.number() }),
+          'Test push queued',
+        ),
+        400: errorResponse('Push unavailable or no active devices'),
+        401: errorResponse('Unauthorized'),
+      },
+    });
+  }
 
   registry.registerPath({
     method: 'post',

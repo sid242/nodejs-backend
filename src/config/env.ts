@@ -119,6 +119,20 @@ const schema = z.object({
   SENTRY_DSN: z.string().optional(),
   SENTRY_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(1.0),
 
+  // Web Push (VAPID)
+  VAPID_PUBLIC_KEY: z
+    .string()
+    .transform((v) => (v?.trim() ? v : undefined))
+    .optional(),
+  VAPID_PRIVATE_KEY: z
+    .string()
+    .transform((v) => (v?.trim() ? v : undefined))
+    .optional(),
+  VAPID_SUBJECT: z
+    .string()
+    .transform((v) => (v?.trim() ? v : undefined))
+    .optional(),
+
   // Row-Level Security (RLS) Pilot Enforcement
   RLS_ENFORCEMENT_PILOT: z.preprocess(
     (val) => val === 'true' || val === true,

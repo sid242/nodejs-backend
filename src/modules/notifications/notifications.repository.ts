@@ -17,6 +17,7 @@ import type {
   NotificationCategory,
   NotificationPreferenceItemDto,
 } from './notifications.dto';
+import type { PushActor, PushDevice } from './push/push.types';
 
 export interface PaginatedNotificationsResult {
   items: NotificationRecord[];
@@ -281,53 +282,169 @@ export async function upsertPreferences(
   return results;
 }
 
-// Push Subscriptions
-export async function upsertPushSubscription(
-  userId: string,
-  endpoint: string,
-  p256dh: string,
-  auth: string,
-  userAgent?: string,
-): Promise<PushSubscriptionRecord> {
-  const [sub] = await db
-    .insert(pushSubscriptions)
-    .values({
-      userId,
-      endpoint,
-      p256dh,
-      auth,
-      userAgent: userAgent ?? null,
-      lastUsedAt: new Date(),
-    })
-    .onConflictDoUpdate({
-      target: [pushSubscriptions.endpoint],
-      set: {
-        userId,
-        p256dh,
-        auth,
-        userAgent: userAgent ?? null,
-        lastUsedAt: new Date(),
-      },
-    })
-    .returning();
-  if (!sub) {
-    throw new Error('Failed to upsert push subscription');
-  }
-  return sub;
+// Push Subscriptions & Multi-Channel Devices
+const MAX_DEVICES_PER_ACTOR = 10;
+
+function actorWhere(actor: PushActor) {
+  return actor.actorType === 'STAFF'
+    ? eq(pushSubscriptions.staffId, actor.actorId)
+    : eq(pushSubscriptions.userId, actor.actorId);
 }
 
-export async function deletePushSubscription(userId: string, endpoint: string): Promise<boolean> {
+function toPushDevice(row: PushSubscriptionRecord): PushDevice {
+  return {
+    id: row.id,
+    actorType: row.staffId ? 'STAFF' : 'USER',
+    actorId: (row.staffId ?? row.userId)!,
+    channel: row.channel,
+    platform: row.platform,
+    endpoint: row.endpoint,
+    p256dh: row.p256dh,
+    auth: row.auth,
+    token: row.token,
+    failureCount: row.failureCount,
+  };
+}
+
+export async function upsertPushSubscription(
+  actor: PushActor,
+  input: {
+    endpoint: string;
+    p256dh: string;
+    auth: string;
+    userAgent?: string;
+    platform?: string;
+    appVersion?: string;
+  },
+): Promise<PushSubscriptionRecord> {
+  const now = new Date();
+  const ownerValues =
+    actor.actorType === 'STAFF'
+      ? { userId: null, staffId: actor.actorId }
+      : { userId: actor.actorId, staffId: null };
+
+  return db.transaction(async (tx) => {
+    const [sub] = await tx
+      .insert(pushSubscriptions)
+      .values({
+        ...ownerValues,
+        channel: 'webpush',
+        endpoint: input.endpoint,
+        p256dh: input.p256dh,
+        auth: input.auth,
+        platform: input.platform ?? 'web',
+        appVersion: input.appVersion ?? null,
+        userAgent: input.userAgent ?? null,
+        failureCount: 0,
+        disabledAt: null,
+        lastUsedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: [pushSubscriptions.endpoint],
+        targetWhere: sql`"endpoint" IS NOT NULL`,
+        set: {
+          ...ownerValues,
+          channel: 'webpush',
+          p256dh: input.p256dh,
+          auth: input.auth,
+          platform: input.platform ?? 'web',
+          appVersion: input.appVersion ?? null,
+          userAgent: input.userAgent ?? null,
+          failureCount: 0,
+          disabledAt: null,
+          lastUsedAt: now,
+        },
+      })
+      .returning();
+
+    if (!sub) {
+      throw new Error('Failed to upsert push subscription');
+    }
+
+    // Enforce bounded device list per actor (drop oldest beyond MAX_DEVICES_PER_ACTOR)
+    const ownedRows = await tx
+      .select({ id: pushSubscriptions.id })
+      .from(pushSubscriptions)
+      .where(actorWhere(actor))
+      .orderBy(desc(pushSubscriptions.lastUsedAt), desc(pushSubscriptions.createdAt));
+
+    if (ownedRows.length > MAX_DEVICES_PER_ACTOR) {
+      const idsToDrop = ownedRows.slice(MAX_DEVICES_PER_ACTOR).map((r) => r.id);
+      await tx.delete(pushSubscriptions).where(inArray(pushSubscriptions.id, idsToDrop));
+    }
+
+    return sub;
+  });
+}
+
+export async function deletePushSubscription(actor: PushActor, endpoint: string): Promise<boolean> {
   const res = await db
     .delete(pushSubscriptions)
-    .where(and(eq(pushSubscriptions.userId, userId), eq(pushSubscriptions.endpoint, endpoint)))
+    .where(and(actorWhere(actor), eq(pushSubscriptions.endpoint, endpoint)))
     .returning({ id: pushSubscriptions.id });
   return res.length > 0;
+}
+
+export async function deletePushSubscriptionById(actor: PushActor, id: string): Promise<boolean> {
+  const res = await db
+    .delete(pushSubscriptions)
+    .where(and(actorWhere(actor), eq(pushSubscriptions.id, id)))
+    .returning({ id: pushSubscriptions.id });
+  return res.length > 0;
+}
+
+export async function deletePushDeviceRowById(id: string): Promise<boolean> {
+  const res = await db
+    .delete(pushSubscriptions)
+    .where(eq(pushSubscriptions.id, id))
+    .returning({ id: pushSubscriptions.id });
+  return res.length > 0;
+}
+
+export async function listPushDevicesForActor(actor: PushActor): Promise<PushSubscriptionRecord[]> {
+  return db
+    .select()
+    .from(pushSubscriptions)
+    .where(actorWhere(actor))
+    .orderBy(desc(pushSubscriptions.lastUsedAt), desc(pushSubscriptions.createdAt));
+}
+
+export async function getEnabledPushDevicesForActor(actor: PushActor): Promise<PushDevice[]> {
+  const rows = await db
+    .select()
+    .from(pushSubscriptions)
+    .where(and(actorWhere(actor), isNull(pushSubscriptions.disabledAt)));
+  return rows.map(toPushDevice);
 }
 
 export async function getPushSubscriptionsForUser(
   userId: string,
 ): Promise<PushSubscriptionRecord[]> {
-  return db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, userId));
+  return db
+    .select()
+    .from(pushSubscriptions)
+    .where(and(eq(pushSubscriptions.userId, userId), isNull(pushSubscriptions.disabledAt)));
+}
+
+export async function markPushDeviceSent(id: string): Promise<void> {
+  await db
+    .update(pushSubscriptions)
+    .set({
+      failureCount: 0,
+      disabledAt: null,
+      lastUsedAt: new Date(),
+    })
+    .where(eq(pushSubscriptions.id, id));
+}
+
+export async function markPushDeviceFailed(id: string, disableThreshold = 5): Promise<void> {
+  await db
+    .update(pushSubscriptions)
+    .set({
+      failureCount: sql`${pushSubscriptions.failureCount} + 1`,
+      disabledAt: sql`CASE WHEN ${pushSubscriptions.failureCount} + 1 >= ${disableThreshold} THEN NOW() ELSE ${pushSubscriptions.disabledAt} END`,
+    })
+    .where(eq(pushSubscriptions.id, id));
 }
 
 // Housekeeping

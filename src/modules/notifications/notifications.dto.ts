@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { isAllowedPushEndpoint } from './push/push.security';
+
 export const NOTIFICATION_CATEGORIES = [
   'SECURITY',
   'ACCOUNT',
@@ -70,12 +72,16 @@ export const updatePreferencesDto = z.object({
 export type UpdatePreferencesDto = z.infer<typeof updatePreferencesDto>;
 
 export const pushSubscribeDto = z.object({
-  endpoint: z.string().url(),
+  endpoint: z.string().url().refine(isAllowedPushEndpoint, {
+    message: 'Unsupported push endpoint host. Only trusted HTTPS Web Push services are permitted.',
+  }),
   keys: z.object({
-    p256dh: z.string().min(1),
-    auth: z.string().min(1),
+    p256dh: z.string().min(1).max(512),
+    auth: z.string().min(1).max(256),
   }),
   userAgent: z.string().max(500).optional(),
+  platform: z.enum(['web', 'android', 'ios']).default('web').optional(),
+  appVersion: z.string().max(64).optional(),
 });
 export type PushSubscribeDto = z.infer<typeof pushSubscribeDto>;
 
@@ -83,6 +89,11 @@ export const pushUnsubscribeDto = z.object({
   endpoint: z.string().url(),
 });
 export type PushUnsubscribeDto = z.infer<typeof pushUnsubscribeDto>;
+
+export const pushDeviceIdParamDto = z.object({
+  id: z.string().uuid(),
+});
+export type PushDeviceIdParamDto = z.infer<typeof pushDeviceIdParamDto>;
 
 export const broadcastNotificationDto = z.object({
   title: z.string().min(1).max(255),
