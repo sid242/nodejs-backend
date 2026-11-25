@@ -64,7 +64,7 @@
     "ioredis": "^5.4.2",
     "jose": "^6.2.18",
     "jsonwebtoken": "^9.0.2",
-    "nodemailer": "^10.1.1",
+    "nodemailer": "^10.6.1",
     "otpauth": "^9.6.0",
     "pino": "^10.4.0",
     "pino-http": "^10.3.0",
