@@ -83,13 +83,15 @@ export async function seedDefaultRbac(): Promise<void> {
         'files:write',
         'addresses:read',
         'addresses:write',
+        'chat:read',
+        'chat:write',
       ],
     },
     {
       name: SYSTEM_ROLES.VIEWER,
       code: 'VIEWER',
       description: 'Read-only access to tenant files and info',
-      permissions: ['tenants:read', 'members:read', 'files:read', 'addresses:read'],
+      permissions: ['tenants:read', 'members:read', 'files:read', 'addresses:read', 'chat:read'],
     },
   ];
 

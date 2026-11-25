@@ -208,3 +208,14 @@ export const tenantTombstoneReasonEnum = pgEnum('TenantTombstoneReason', [
   'TERMS_VIOLATION',
   'LEGAL',
 ]);
+
+export const chatChannelTypeEnum = pgEnum('ChatChannelType', [
+  'DIRECT',
+  'GROUP',
+  'PUBLIC',
+  'PRIVATE',
+]);
+
+export const chatParticipantRoleEnum = pgEnum('ChatParticipantRole', ['OWNER', 'ADMIN', 'MEMBER']);
+
+export const chatMessageTypeEnum = pgEnum('ChatMessageType', ['TEXT', 'SYSTEM']);

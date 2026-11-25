@@ -80,6 +80,11 @@ export const PLATFORM_PERMISSIONS = {
   SUPPORT_TICKETS_READ: 'support_tickets:read',
   SUPPORT_TICKETS_MANAGE: 'support_tickets:manage',
   FEEDBACK_READ: 'feedback:read',
+
+  // Internal Platform Staff Chat
+  CHAT_READ: 'platform_chat:read',
+  CHAT_WRITE: 'platform_chat:write',
+  CHAT_MANAGE: 'platform_chat:manage',
 } as const;
 
 export type PlatformPermissionKey =
@@ -350,6 +355,27 @@ export const PLATFORM_PERMISSION_CATALOGUE: PlatformPermissionDefinition[] = [
     resource: 'platform_metrics',
     action: 'read',
   },
+  {
+    key: PLATFORM_PERMISSIONS.CHAT_READ,
+    name: 'Read Platform Chat',
+    description: 'View internal platform staff channels, direct messages, and message history',
+    resource: 'platform_chat',
+    action: 'read',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.CHAT_WRITE,
+    name: 'Send Platform Chat Messages',
+    description: 'Send messages, react, share attachments, and create staff channels or DMs',
+    resource: 'platform_chat',
+    action: 'write',
+  },
+  {
+    key: PLATFORM_PERMISSIONS.CHAT_MANAGE,
+    name: 'Manage Platform Chat Channels',
+    description: 'Manage internal platform chat channels, membership, pins, and moderation',
+    resource: 'platform_chat',
+    action: 'manage',
+  },
 ];
 
 export const PLATFORM_ROLES = {
@@ -382,6 +408,8 @@ export const SYSTEM_PLATFORM_ROLES = {
       PLATFORM_PERMISSIONS.SUPPORT_WRITE,
       PLATFORM_PERMISSIONS.AUDIT_READ,
       PLATFORM_PERMISSIONS.HEALTH_READ,
+      PLATFORM_PERMISSIONS.CHAT_READ,
+      PLATFORM_PERMISSIONS.CHAT_WRITE,
     ],
   },
   BILLING_STAFF: {
@@ -393,6 +421,8 @@ export const SYSTEM_PLATFORM_ROLES = {
       PLATFORM_PERMISSIONS.BILLING_READ,
       PLATFORM_PERMISSIONS.BILLING_MANAGE,
       PLATFORM_PERMISSIONS.AUDIT_READ,
+      PLATFORM_PERMISSIONS.CHAT_READ,
+      PLATFORM_PERMISSIONS.CHAT_WRITE,
     ],
   },
   TECHNICAL_SUPPORT: {
@@ -404,6 +434,8 @@ export const SYSTEM_PLATFORM_ROLES = {
       PLATFORM_PERMISSIONS.TENANTS_READ,
       PLATFORM_PERMISSIONS.SUPPORT_START,
       PLATFORM_PERMISSIONS.SUPPORT_END,
+      PLATFORM_PERMISSIONS.CHAT_READ,
+      PLATFORM_PERMISSIONS.CHAT_WRITE,
     ],
   },
   READ_ONLY_AUDITOR: {
@@ -419,6 +451,7 @@ export const SYSTEM_PLATFORM_ROLES = {
       PLATFORM_PERMISSIONS.BILLING_READ,
       PLATFORM_PERMISSIONS.HEALTH_READ,
       PLATFORM_PERMISSIONS.LEGAL_HOLD_READ,
+      PLATFORM_PERMISSIONS.CHAT_READ,
     ],
   },
 } as const;

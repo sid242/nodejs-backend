@@ -2,6 +2,7 @@ import { addressesModuleDefinition } from '@/modules/addresses/addresses.permiss
 import { analyticsModuleDefinition } from '@/modules/analytics/analytics.permissions';
 import { auditModuleDefinition } from '@/modules/audit/audit.permissions';
 import { billingModuleDefinition } from '@/modules/billing/billing.permissions';
+import { chatModuleDefinition } from '@/modules/chat/chat.permissions';
 import { developersModuleDefinition } from '@/modules/developers/developers.permissions';
 import { emailTemplatesModuleDefinition } from '@/modules/email-templates/email-templates.permissions';
 import { filesModuleDefinition } from '@/modules/files/files.permissions';
@@ -37,5 +38,6 @@ export const SYSTEM_MODULE_DEFINITIONS: DomainModuleDefinition[] = [
   analyticsModuleDefinition,
   onboardingModuleDefinition,
   supportModuleDefinition,
+  chatModuleDefinition,
   ...optionalModuleKeys.filter(isModuleInstalled).map((key) => optionalModules[key].catalog),
 ];

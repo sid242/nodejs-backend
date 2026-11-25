@@ -131,6 +131,37 @@ export const TENANT_TABLES: TenantTableRegistration[] = [
     tenantColumn: 'tenantId',
     dependsOn: ['SupportTicket'],
   },
+  { name: 'ChatChannel', table: schema.chatChannels, tenantColumn: 'tenantId' },
+  {
+    name: 'ChatChannelMember',
+    table: schema.chatChannelMembers,
+    tenantColumn: 'tenantId',
+    dependsOn: ['ChatChannel'],
+  },
+  {
+    name: 'ChatMessage',
+    table: schema.chatMessages,
+    tenantColumn: 'tenantId',
+    dependsOn: ['ChatChannel', 'ChatChannelMember'],
+  },
+  {
+    name: 'ChatMessageReaction',
+    table: schema.chatMessageReactions,
+    tenantColumn: 'tenantId',
+    dependsOn: ['ChatMessage', 'ChatChannel', 'ChatChannelMember'],
+  },
+  {
+    name: 'ChatMessageAttachment',
+    table: schema.chatMessageAttachments,
+    tenantColumn: 'tenantId',
+    dependsOn: ['ChatMessage', 'ChatChannel'],
+  },
+  {
+    name: 'ChatMessageMention',
+    table: schema.chatMessageMentions,
+    tenantColumn: 'tenantId',
+    dependsOn: ['ChatMessage', 'ChatChannel', 'ChatChannelMember'],
+  },
 ];
 
 /**
@@ -191,6 +222,12 @@ export const PRIMARY_ONLY_TABLES: string[] = [
   'TenantLegalHold',
   'PlatformMetricsDaily',
   'FeedbackItem',
+  'PlatformChatChannel',
+  'PlatformChatChannelMember',
+  'PlatformChatMessage',
+  'PlatformChatMessageReaction',
+  'PlatformChatMessageAttachment',
+  'PlatformChatMessageMention',
 ];
 
 const tenantTableMap = new Map<string, TenantTableRegistration>(

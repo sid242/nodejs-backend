@@ -102,6 +102,28 @@ export const NOTIFICATION_CATALOG: Record<string, NotificationTypeDefinition> = 
     defaultDigest: 'NONE',
     description: 'Triggered when a member role or permission changes',
   },
+  'chat.mention': {
+    type: 'chat.mention',
+    category: 'TEAM',
+    severity: 'INFO',
+    titleTemplate: '{{senderName}} mentioned you in {{channelName}}',
+    defaultInApp: true,
+    defaultEmail: false,
+    defaultPush: true,
+    defaultDigest: 'NONE',
+    description: 'Triggered when a member mentions you in a chat message',
+  },
+  'chat.direct_message': {
+    type: 'chat.direct_message',
+    category: 'TEAM',
+    severity: 'INFO',
+    titleTemplate: 'New direct message from {{senderName}}',
+    defaultInApp: true,
+    defaultEmail: false,
+    defaultPush: true,
+    defaultDigest: 'NONE',
+    description: 'Triggered when you receive a direct message',
+  },
 
   // Billing
   'billing.invoice_created': {

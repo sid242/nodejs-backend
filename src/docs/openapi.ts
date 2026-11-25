@@ -3,6 +3,7 @@ import { OpenApiGeneratorV3 } from '@asteasolutions/zod-to-openapi';
 import { bearerAuth, ErrorEnvelope, registry, SuccessEnvelope } from '@/docs/helpers';
 import { registerAddressesDocs } from '@/docs/routes/addresses.docs';
 import { registerAuthDocs } from '@/docs/routes/auth.docs';
+import { registerChatDocs } from '@/docs/routes/chat.docs';
 import { registerEmailTemplatesDocs } from '@/docs/routes/email-templates.docs';
 import { registerFilesDocs } from '@/docs/routes/files.docs';
 import { registerGeoDocs } from '@/docs/routes/geo.docs';
@@ -29,6 +30,7 @@ registerGeoDocs(registry);
 registerAddressesDocs(registry);
 registerNotificationsDocs(registry);
 registerSearchDocs(registry);
+registerChatDocs(registry);
 
 // ---------------------------------------------------------------------------
 // OpenAPI Document Builder

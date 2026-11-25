@@ -442,6 +442,20 @@
       "when": 1795329221625,
       "tag": "0062_sso_connection_test_status",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1795590017596,
+      "tag": "0063_chat_channels_and_messages",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1795592587106,
+      "tag": "0064_chat_hardening",
+      "breakpoints": true
     }
   ]
 }
