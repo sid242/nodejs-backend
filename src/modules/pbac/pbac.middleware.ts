@@ -77,6 +77,8 @@ export function requirePolicy(options: RequirePolicyOptions) {
         userId: req.user?.id ?? '',
         memberId: req.membership?.id,
         roleKeys: req.membership?.roles ?? [],
+        groupIds: req.membership?.groupIds ?? [],
+        groupSlugs: req.membership?.groupSlugs ?? [],
         departmentId: req.membership?.departmentId ?? null,
         regionId: req.membership?.regionId ?? null,
       };

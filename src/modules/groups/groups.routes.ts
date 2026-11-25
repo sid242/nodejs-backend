@@ -1,7 +1,7 @@
 import { Router } from 'express';
 
 import { requireAuth } from '@/middleware/auth';
-import { requirePermission } from '@/middleware/rbac';
+import { requireAnyPermission, requirePermission } from '@/middleware/rbac';
 import { requireTenant } from '@/middleware/tenant';
 import { validate } from '@/middleware/validate';
 
@@ -98,6 +98,28 @@ router.get(
   requirePermission('groups:read'),
   validate({ params: dto.groupIdParamDto }),
   controller.getGroupPermissions,
+);
+
+// Group Policy Bindings
+router.get(
+  '/:groupId/policies',
+  requirePermission('groups:read'),
+  validate({ params: dto.groupIdParamDto }),
+  controller.listGroupPolicies,
+);
+
+router.post(
+  '/:groupId/policies',
+  requireAnyPermission(['groups:assign-roles', 'roles:update']),
+  validate({ params: dto.groupIdParamDto, body: dto.bindPolicyDto }),
+  controller.bindGroupPolicy,
+);
+
+router.delete(
+  '/:groupId/policies/:policyId',
+  requireAnyPermission(['groups:assign-roles', 'roles:update']),
+  validate({ params: dto.groupPolicyParamsDto }),
+  controller.unbindGroupPolicy,
 );
 
 export default router;

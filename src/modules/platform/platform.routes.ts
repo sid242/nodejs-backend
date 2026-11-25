@@ -523,6 +523,67 @@ router.delete(
   platformGroupsController.removePlatformGroupMember,
 );
 
+router.get(
+  '/groups/:groupId/roles',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.GROUPS_READ),
+  validate({ params: groupsDto.groupIdParamDto }),
+  platformGroupsController.listPlatformGroupRoles,
+);
+
+router.post(
+  '/groups/:groupId/roles',
+  requirePlatformPermission([
+    PLATFORM_PERMISSIONS.GROUPS_UPDATE,
+    PLATFORM_PERMISSIONS.ROLES_MANAGE,
+  ]),
+  validate({ params: groupsDto.groupIdParamDto, body: groupsDto.bindRoleDto }),
+  platformGroupsController.bindPlatformGroupRole,
+);
+
+router.delete(
+  '/groups/:groupId/roles/:roleId',
+  requirePlatformPermission([
+    PLATFORM_PERMISSIONS.GROUPS_UPDATE,
+    PLATFORM_PERMISSIONS.ROLES_MANAGE,
+  ]),
+  validate({ params: groupsDto.groupRoleParamsDto }),
+  platformGroupsController.unbindPlatformGroupRole,
+);
+
+router.get(
+  '/groups/:groupId/permissions',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.GROUPS_READ),
+  validate({ params: groupsDto.groupIdParamDto }),
+  platformGroupsController.getPlatformGroupPermissions,
+);
+
+router.get(
+  '/groups/:groupId/policies',
+  requirePlatformPermission(PLATFORM_PERMISSIONS.GROUPS_READ),
+  validate({ params: groupsDto.groupIdParamDto }),
+  platformGroupsController.listPlatformGroupPolicies,
+);
+
+router.post(
+  '/groups/:groupId/policies',
+  requirePlatformPermission([
+    PLATFORM_PERMISSIONS.GROUPS_UPDATE,
+    PLATFORM_PERMISSIONS.ROLES_MANAGE,
+  ]),
+  validate({ params: groupsDto.groupIdParamDto, body: groupsDto.bindPolicyDto }),
+  platformGroupsController.bindPlatformGroupPolicy,
+);
+
+router.delete(
+  '/groups/:groupId/policies/:policyId',
+  requirePlatformPermission([
+    PLATFORM_PERMISSIONS.GROUPS_UPDATE,
+    PLATFORM_PERMISSIONS.ROLES_MANAGE,
+  ]),
+  validate({ params: groupsDto.groupPolicyParamsDto }),
+  platformGroupsController.unbindPlatformGroupPolicy,
+);
+
 // ==========================================
 // 8. Platform PBAC Policies
 // ==========================================

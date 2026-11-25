@@ -98,3 +98,27 @@ export const getGroupPermissions = asyncHandler(async (req: Request, res: Respon
   const result = await groupsService.getTenantGroupPermissions(req.tenant!.id, groupId);
   AppResponse.ok(result, 'Group contributed permissions retrieved successfully').send(res);
 });
+
+export const listGroupPolicies = asyncHandler(async (req: Request, res: Response) => {
+  const groupId = (req.params.groupId ?? req.valid?.params?.groupId) as string;
+  const result = await groupsService.listTenantGroupPolicies(req.tenant!.id, groupId);
+  AppResponse.ok(result, 'Group policies retrieved successfully').send(res);
+});
+
+export const bindGroupPolicy = asyncHandler(async (req: Request, res: Response) => {
+  const groupId = (req.params.groupId ?? req.valid?.params?.groupId) as string;
+  const result = await groupsService.bindTenantGroupPolicy(
+    req.tenant!.id,
+    groupId,
+    req.user!.id,
+    req.valid!.body,
+  );
+  AppResponse.ok(result, 'Policy bound to user group successfully').send(res);
+});
+
+export const unbindGroupPolicy = asyncHandler(async (req: Request, res: Response) => {
+  const groupId = (req.params.groupId ?? req.valid?.params?.groupId) as string;
+  const policyId = (req.params.policyId ?? req.valid?.params?.policyId) as string;
+  await groupsService.unbindTenantGroupPolicy(req.tenant!.id, groupId, req.user!.id, policyId);
+  AppResponse.ok({ success: true }, 'Policy unbound from user group successfully').send(res);
+});

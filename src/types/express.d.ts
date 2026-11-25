@@ -34,6 +34,8 @@ export interface TenantMembershipContext {
   status: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
   roles: string[];
   roleIds?: string[];
+  groupIds?: string[];
+  groupSlugs?: string[];
   departmentId?: string | null;
   regionId?: string | null;
 }

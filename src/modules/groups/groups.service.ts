@@ -1,18 +1,27 @@
 import { AppError } from '@/lib/errors';
 import { logSecurityEvent } from '@/modules/audit/audit.service';
+import { pbacService } from '@/modules/pbac/pbac.service';
+import * as platformRepo from '@/modules/platform/platform.repository';
 import { logPlatformAction } from '@/modules/platform/platform.repository';
+import { policiesRepo } from '@/modules/policies/policies.repository';
 import { rbacRepo } from '@/modules/rbac/rbac.repository';
 import { invalidateRbacCache } from '@/modules/rbac/rbac.service';
 
 import type {
   AddPlatformGroupMembersInput,
   AddTenantGroupMembersInput,
+  BindPolicyInput,
   BindRoleInput,
   CreateGroupInput,
   ListGroupsQuery,
   UpdateGroupInput,
 } from './groups.dto';
 import { groupsRepo } from './groups.repository';
+
+async function invalidateTenantGroupAccess(tenantId: string, userId?: string): Promise<void> {
+  await pbacService.invalidateTenantCache(tenantId);
+  await invalidateRbacCache(tenantId, userId);
+}
 
 export function slugify(name: string): string {
   return name
@@ -147,6 +156,10 @@ export async function updateTenantGroup(
     },
   });
 
+  if (input.status && input.status !== existing.status) {
+    await invalidateTenantGroupAccess(tenantId);
+  }
+
   return updated;
 }
 
@@ -176,6 +189,8 @@ export async function archiveTenantGroup(tenantId: string, groupId: string, acto
       slug: existing.slug,
     },
   });
+
+  await invalidateTenantGroupAccess(tenantId);
 
   return archived;
 }
@@ -240,8 +255,8 @@ export async function addTenantGroupMembers(
     },
   });
 
-  // Invalidate RBAC cache for the tenant
-  await invalidateRbacCache(tenantId);
+  // Invalidate RBAC & PBAC caches for the tenant
+  await invalidateTenantGroupAccess(tenantId);
 
   return {
     addedCount: added.length,
@@ -277,8 +292,8 @@ export async function removeTenantGroupMember(
     },
   });
 
-  // Invalidate RBAC cache for the removed user
-  await invalidateRbacCache(tenantId, targetUserId);
+  // Invalidate RBAC & PBAC cache for the removed user
+  await invalidateTenantGroupAccess(tenantId, targetUserId);
 
   return { success: true };
 }
@@ -353,8 +368,8 @@ export async function bindTenantGroupRole(
     },
   });
 
-  // Invalidate RBAC cache for all users in the tenant
-  await invalidateRbacCache(tenantId);
+  // Invalidate RBAC & PBAC cache for all users in the tenant
+  await invalidateTenantGroupAccess(tenantId);
 
   return {
     success: true,
@@ -394,8 +409,8 @@ export async function unbindTenantGroupRole(
     },
   });
 
-  // Invalidate RBAC cache for all users in the tenant
-  await invalidateRbacCache(tenantId);
+  // Invalidate RBAC & PBAC cache for all users in the tenant
+  await invalidateTenantGroupAccess(tenantId);
 
   return { success: true };
 }
@@ -421,6 +436,102 @@ export async function getTenantGroupPermissions(tenantId: string, groupId: strin
     groupName: group.name,
     permissions,
   };
+}
+
+// ----------------------------------------------------------------------------
+// Tenant Group Policy Binding Services
+// ----------------------------------------------------------------------------
+
+export async function listTenantGroupPolicies(tenantId: string, groupId: string) {
+  const group = await groupsRepo.findGroupById(groupId, 'TENANT', tenantId);
+  if (!group) {
+    throw AppError.notFound('User group not found');
+  }
+
+  return groupsRepo.listGroupPolicies(groupId, 'TENANT', tenantId);
+}
+
+export async function bindTenantGroupPolicy(
+  tenantId: string,
+  groupId: string,
+  actorUserId: string,
+  input: BindPolicyInput,
+) {
+  const group = await groupsRepo.findGroupById(groupId, 'TENANT', tenantId);
+  if (!group) {
+    throw AppError.notFound('User group not found');
+  }
+  if (group.status === 'ARCHIVED') {
+    throw AppError.badRequest('Cannot bind policies to an archived group');
+  }
+
+  const policyIds = Array.from(new Set(input.policyIds));
+  const boundPolicies: Array<{ id: string; name: string }> = [];
+
+  for (const policyId of policyIds) {
+    const policy = await policiesRepo.findPolicyById(tenantId, policyId);
+    if (!policy) {
+      throw AppError.notFound(`Policy not found: ${policyId}`);
+    }
+
+    await groupsRepo.bindPolicyToGroup(groupId, policy.id, tenantId);
+    boundPolicies.push({ id: policy.id, name: policy.name });
+  }
+
+  await logSecurityEvent({
+    tenantId,
+    userId: actorUserId,
+    action: 'group:policy_bound',
+    entityType: 'UserGroup',
+    entityId: groupId,
+    metadata: {
+      policyIds: boundPolicies.map((p) => p.id),
+      policyNames: boundPolicies.map((p) => p.name),
+      reason: input.reason,
+    },
+  });
+
+  await pbacService.invalidateGroupPoliciesCache(tenantId, groupId);
+
+  return {
+    success: true,
+    groupId,
+    policies: boundPolicies,
+  };
+}
+
+export async function unbindTenantGroupPolicy(
+  tenantId: string,
+  groupId: string,
+  actorUserId: string,
+  policyId: string,
+) {
+  const group = await groupsRepo.findGroupById(groupId, 'TENANT', tenantId);
+  if (!group) {
+    throw AppError.notFound('User group not found');
+  }
+
+  const policy = await policiesRepo.findPolicyById(tenantId, policyId);
+  const removed = await groupsRepo.unbindPolicyFromGroup(groupId, policyId, 'TENANT', tenantId);
+  if (!removed) {
+    throw AppError.notFound('Policy is not bound to this user group');
+  }
+
+  await logSecurityEvent({
+    tenantId,
+    userId: actorUserId,
+    action: 'group:policy_unbound',
+    entityType: 'UserGroup',
+    entityId: groupId,
+    metadata: {
+      policyId,
+      policyName: policy?.name,
+    },
+  });
+
+  await pbacService.invalidateGroupPoliciesCache(tenantId, groupId);
+
+  return { success: true };
 }
 
 // ============================================================================
@@ -665,4 +776,192 @@ export async function listPlatformGroupMembers(groupId: string, page = 1, limit 
   }
 
   return groupsRepo.listPlatformGroupMembers(groupId, page, limit);
+}
+
+// ----------------------------------------------------------------------------
+// Platform Group Role & Policy Binding Services
+// ----------------------------------------------------------------------------
+
+export async function listPlatformGroupRoles(groupId: string) {
+  const group = await groupsRepo.findGroupById(groupId, 'PLATFORM');
+  if (!group) {
+    throw AppError.notFound('Platform group not found');
+  }
+
+  return groupsRepo.listPlatformGroupRoles(groupId);
+}
+
+export async function bindPlatformGroupRole(
+  groupId: string,
+  actorStaffId: string,
+  input: BindRoleInput,
+) {
+  const group = await groupsRepo.findGroupById(groupId, 'PLATFORM');
+  if (!group) {
+    throw AppError.notFound('Platform group not found');
+  }
+  if (group.status === 'ARCHIVED') {
+    throw AppError.badRequest('Cannot bind roles to an archived platform group');
+  }
+
+  const roleIdsToBind = Array.from(new Set(input.roleIds));
+  const boundRoles: Array<{ id: string; name: string }> = [];
+
+  for (const rId of roleIdsToBind) {
+    const role = await platformRepo.findRoleById(rId);
+    if (!role) {
+      throw AppError.notFound(`Platform role not found: ${rId}`);
+    }
+
+    await groupsRepo.bindPlatformRoleToGroup(groupId, rId);
+    boundRoles.push({ id: role.id, name: role.name });
+  }
+
+  await logPlatformAction({
+    actorStaffId,
+    action: 'platform_group:role_bound',
+    targetType: 'platform_group',
+    targetId: groupId,
+    metadata: {
+      roleIds: boundRoles.map((r) => r.id),
+      roleNames: boundRoles.map((r) => r.name),
+      reason: input.reason,
+    },
+  });
+
+  return {
+    success: true,
+    groupId,
+    roleId: boundRoles[0]?.id,
+    roleName: boundRoles[0]?.name,
+    roles: boundRoles,
+  };
+}
+
+export async function unbindPlatformGroupRole(
+  groupId: string,
+  actorStaffId: string,
+  roleId: string,
+) {
+  const group = await groupsRepo.findGroupById(groupId, 'PLATFORM');
+  if (!group) {
+    throw AppError.notFound('Platform group not found');
+  }
+
+  const role = await platformRepo.findRoleById(roleId);
+  const unbound = await groupsRepo.unbindPlatformRoleFromGroup(groupId, roleId);
+  if (!unbound) {
+    throw AppError.notFound('Role is not bound to this platform group');
+  }
+
+  await logPlatformAction({
+    actorStaffId,
+    action: 'platform_group:role_unbound',
+    targetType: 'platform_group',
+    targetId: groupId,
+    metadata: {
+      roleId,
+      roleName: role?.name,
+    },
+  });
+
+  return { success: true };
+}
+
+export async function getPlatformGroupPermissions(groupId: string) {
+  const group = await groupsRepo.findGroupById(groupId, 'PLATFORM');
+  if (!group) {
+    throw AppError.notFound('Platform group not found');
+  }
+
+  const permissions = await groupsRepo.getPlatformGroupContributedPermissions(groupId);
+  return {
+    groupId,
+    groupName: group.name,
+    permissions,
+  };
+}
+
+export async function listPlatformGroupPolicies(groupId: string) {
+  const group = await groupsRepo.findGroupById(groupId, 'PLATFORM');
+  if (!group) {
+    throw AppError.notFound('Platform group not found');
+  }
+
+  return groupsRepo.listGroupPolicies(groupId, 'PLATFORM');
+}
+
+export async function bindPlatformGroupPolicy(
+  groupId: string,
+  actorStaffId: string,
+  input: BindPolicyInput,
+) {
+  const group = await groupsRepo.findGroupById(groupId, 'PLATFORM');
+  if (!group) {
+    throw AppError.notFound('Platform group not found');
+  }
+  if (group.status === 'ARCHIVED') {
+    throw AppError.badRequest('Cannot bind policies to an archived platform group');
+  }
+
+  const policyIds = Array.from(new Set(input.policyIds));
+  const boundPolicies: Array<{ id: string; name: string }> = [];
+
+  for (const policyId of policyIds) {
+    const policy = await policiesRepo.findPlatformPolicyById(policyId);
+    if (!policy) {
+      throw AppError.notFound(`Platform policy not found: ${policyId}`);
+    }
+
+    await groupsRepo.bindPolicyToGroup(groupId, policy.id);
+    boundPolicies.push({ id: policy.id, name: policy.name });
+  }
+
+  await logPlatformAction({
+    actorStaffId,
+    action: 'platform_group:policy_bound',
+    targetType: 'platform_group',
+    targetId: groupId,
+    metadata: {
+      policyIds: boundPolicies.map((p) => p.id),
+      policyNames: boundPolicies.map((p) => p.name),
+      reason: input.reason,
+    },
+  });
+
+  return {
+    success: true,
+    groupId,
+    policies: boundPolicies,
+  };
+}
+
+export async function unbindPlatformGroupPolicy(
+  groupId: string,
+  actorStaffId: string,
+  policyId: string,
+) {
+  const group = await groupsRepo.findGroupById(groupId, 'PLATFORM');
+  if (!group) {
+    throw AppError.notFound('Platform group not found');
+  }
+
+  const policy = await policiesRepo.findPlatformPolicyById(policyId);
+  const removed = await groupsRepo.unbindPolicyFromGroup(groupId, policyId, 'PLATFORM');
+  if (!removed) {
+    throw AppError.notFound('Policy is not bound to this platform group');
+  }
+
+  await logPlatformAction({
+    actorStaffId,
+    action: 'platform_group:policy_unbound',
+    targetType: 'platform_group',
+    targetId: groupId,
+    metadata: {
+      policyId,
+      policyName: policy?.name,
+    },
+  });
+
+  return { success: true };
 }

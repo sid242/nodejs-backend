@@ -59,7 +59,7 @@ export async function loginStaff(
 
   await platformRepo.updateStaffLastLogin(staff.id);
 
-  const permissions = await platformRepo.getRolePermissionKeys(staff.roleId);
+  const permissions = await platformRepo.getEffectiveStaffPermissionKeys(staff.id, staff.roleId);
   const role = await platformRepo.findRoleById(staff.roleId);
 
   const token = jwt.sign(

@@ -2,16 +2,25 @@ import { and, asc, count, desc, eq, ilike, inArray, isNotNull, isNull, or, sql }
 
 import type { DbExecutor } from '@/config/db';
 import {
+  groupPolicies,
   permissions,
+  platformPermissions,
+  platformRolePermissions,
+  platformRolePolicies,
+  platformRoles,
   platformStaff,
+  policies,
   rolePermissions,
+  rolePolicies,
   roles,
   tenantMembers,
   userGroupMembers,
+  userGroupPlatformRoles,
   userGroupRoles,
   userGroups,
   type NewUserGroup,
   type NewUserGroupMember,
+  type Policy,
   type RoleRecord,
   type UserGroup,
   type UserGroupMember,
@@ -603,6 +612,219 @@ export async function findGroupMemberUserIds(
   return rows.map((r) => r.userId!).filter(Boolean);
 }
 
+export async function bindPlatformRoleToGroup(
+  groupId: string,
+  roleId: string,
+  executor?: DbExecutor,
+): Promise<void> {
+  const exec = executor ?? primaryDbHandle();
+  await exec.insert(userGroupPlatformRoles).values({ groupId, roleId }).onConflictDoNothing();
+}
+
+export async function unbindPlatformRoleFromGroup(
+  groupId: string,
+  roleId: string,
+  executor?: DbExecutor,
+): Promise<boolean> {
+  const exec = executor ?? primaryDbHandle();
+  const deleted = await exec
+    .delete(userGroupPlatformRoles)
+    .where(
+      and(eq(userGroupPlatformRoles.groupId, groupId), eq(userGroupPlatformRoles.roleId, roleId)),
+    )
+    .returning();
+  return deleted.length > 0;
+}
+
+export async function listPlatformGroupRoles(
+  groupId: string,
+  executor?: DbExecutor,
+): Promise<
+  Array<{
+    id: string;
+    tenantId: null;
+    code: string;
+    key: string;
+    name: string;
+    description: string | null;
+    scope: 'PLATFORM';
+    isActive: boolean;
+    isSystem: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+    permissions: string[];
+  }>
+> {
+  const exec = executor ?? primaryDbHandle();
+  const groupRoles = await exec
+    .select({
+      id: platformRoles.id,
+      key: platformRoles.key,
+      name: platformRoles.name,
+      description: platformRoles.description,
+      isActive: platformRoles.isActive,
+      isSystem: platformRoles.isSystem,
+      createdAt: platformRoles.createdAt,
+      updatedAt: platformRoles.updatedAt,
+    })
+    .from(userGroupPlatformRoles)
+    .innerJoin(platformRoles, eq(userGroupPlatformRoles.roleId, platformRoles.id))
+    .where(eq(userGroupPlatformRoles.groupId, groupId));
+
+  const roleIds = groupRoles.map((r) => r.id);
+  const permsByRole = new Map<string, string[]>();
+  if (roleIds.length > 0) {
+    const permRows = await exec
+      .select({
+        roleId: platformRolePermissions.roleId,
+        permissionKey: platformPermissions.key,
+      })
+      .from(platformRolePermissions)
+      .innerJoin(
+        platformPermissions,
+        eq(platformRolePermissions.permissionId, platformPermissions.id),
+      )
+      .where(inArray(platformRolePermissions.roleId, roleIds));
+
+    for (const row of permRows) {
+      const list = permsByRole.get(row.roleId) ?? [];
+      list.push(row.permissionKey);
+      permsByRole.set(row.roleId, list);
+    }
+  }
+
+  return groupRoles.map((r) => ({
+    ...r,
+    tenantId: null,
+    code: r.key,
+    scope: 'PLATFORM' as const,
+    permissions: permsByRole.get(r.id) ?? [],
+  }));
+}
+
+export async function getPlatformGroupContributedPermissions(
+  groupId: string,
+  executor?: DbExecutor,
+): Promise<string[]> {
+  const exec = executor ?? primaryDbHandle();
+  const perms = await exec
+    .selectDistinct({ key: platformPermissions.key })
+    .from(userGroupPlatformRoles)
+    .innerJoin(platformRoles, eq(userGroupPlatformRoles.roleId, platformRoles.id))
+    .innerJoin(platformRolePermissions, eq(platformRoles.id, platformRolePermissions.roleId))
+    .innerJoin(
+      platformPermissions,
+      eq(platformRolePermissions.permissionId, platformPermissions.id),
+    )
+    .where(and(eq(userGroupPlatformRoles.groupId, groupId), eq(platformRoles.isActive, true)));
+
+  return perms.map((p) => p.key);
+}
+
+export async function bindPolicyToGroup(
+  groupId: string,
+  policyId: string,
+  tenantId?: string,
+  executor?: DbExecutor,
+): Promise<void> {
+  const exec = resolveGroupExecutor(tenantId ? 'TENANT' : 'PLATFORM', tenantId, executor);
+  await exec
+    .insert(groupPolicies)
+    .values({ groupId, policyId, tenantId: tenantId ?? null })
+    .onConflictDoNothing();
+}
+
+export async function unbindPolicyFromGroup(
+  groupId: string,
+  policyId: string,
+  scope: 'PLATFORM' | 'TENANT',
+  tenantId?: string,
+  executor?: DbExecutor,
+): Promise<boolean> {
+  const exec = resolveGroupExecutor(scope, tenantId, executor);
+  const conditions = [eq(groupPolicies.groupId, groupId), eq(groupPolicies.policyId, policyId)];
+  if (scope === 'TENANT' && tenantId) {
+    conditions.push(eq(groupPolicies.tenantId, tenantId));
+  } else if (scope === 'PLATFORM') {
+    conditions.push(isNull(groupPolicies.tenantId));
+  }
+
+  const deleted = await exec
+    .delete(groupPolicies)
+    .where(and(...conditions))
+    .returning();
+  return deleted.length > 0;
+}
+
+export async function listGroupPolicies(
+  groupId: string,
+  scope: 'PLATFORM' | 'TENANT',
+  tenantId?: string,
+  executor?: DbExecutor,
+): Promise<{
+  directPolicies: Policy[];
+  inheritedRolePolicies: Array<{
+    policy: Policy;
+    roleId: string;
+    roleName: string;
+    roleCode: string | null;
+  }>;
+}> {
+  const exec = resolveGroupExecutor(scope, tenantId, executor);
+
+  const directWhere =
+    scope === 'TENANT' && tenantId
+      ? and(eq(groupPolicies.groupId, groupId), eq(groupPolicies.tenantId, tenantId))
+      : and(eq(groupPolicies.groupId, groupId), isNull(groupPolicies.tenantId));
+
+  const directRows = await exec
+    .select({ policy: policies })
+    .from(groupPolicies)
+    .innerJoin(policies, eq(groupPolicies.policyId, policies.id))
+    .where(directWhere)
+    .orderBy(desc(policies.priority), desc(policies.createdAt));
+
+  if (scope === 'TENANT' && tenantId) {
+    const inheritedRows = await exec
+      .select({
+        policy: policies,
+        roleId: roles.id,
+        roleName: roles.name,
+        roleCode: roles.code,
+      })
+      .from(userGroupRoles)
+      .innerJoin(roles, eq(userGroupRoles.roleId, roles.id))
+      .innerJoin(rolePolicies, eq(roles.id, rolePolicies.roleId))
+      .innerJoin(policies, eq(rolePolicies.policyId, policies.id))
+      .where(and(eq(userGroupRoles.groupId, groupId), eq(rolePolicies.tenantId, tenantId)))
+      .orderBy(desc(policies.priority), desc(policies.createdAt));
+
+    return {
+      directPolicies: directRows.map((r) => r.policy),
+      inheritedRolePolicies: inheritedRows,
+    };
+  }
+
+  const inheritedPlatformRows = await exec
+    .select({
+      policy: policies,
+      roleId: platformRoles.id,
+      roleName: platformRoles.name,
+      roleCode: platformRoles.key,
+    })
+    .from(userGroupPlatformRoles)
+    .innerJoin(platformRoles, eq(userGroupPlatformRoles.roleId, platformRoles.id))
+    .innerJoin(platformRolePolicies, eq(platformRoles.id, platformRolePolicies.roleId))
+    .innerJoin(policies, eq(platformRolePolicies.policyId, policies.id))
+    .where(eq(userGroupPlatformRoles.groupId, groupId))
+    .orderBy(desc(policies.priority), desc(policies.createdAt));
+
+  return {
+    directPolicies: directRows.map((r) => r.policy),
+    inheritedRolePolicies: inheritedPlatformRows,
+  };
+}
+
 export const groupsRepo = {
   createGroup,
   findGroupById,
@@ -622,4 +844,11 @@ export const groupsRepo = {
   listGroupRoles,
   getGroupContributedPermissions,
   findGroupMemberUserIds,
+  bindPlatformRoleToGroup,
+  unbindPlatformRoleFromGroup,
+  listPlatformGroupRoles,
+  getPlatformGroupContributedPermissions,
+  bindPolicyToGroup,
+  unbindPolicyFromGroup,
+  listGroupPolicies,
 };

@@ -2,7 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { PgColumn } from 'drizzle-orm/pg-core';
 
 import { db } from '@/config/db';
-import { policies, Policy, rolePolicies } from '@/db/schema/access/policies';
+import { groupPolicies, policies, Policy, rolePolicies } from '@/db/schema/access/policies';
 import { cache } from '@/lib/cache';
 
 import { compilePoliciesToSqlScope } from './pbac.compiler';
@@ -19,6 +19,10 @@ const PBAC_CACHE_TTL = 300; // 5 minutes
 
 function getRolePoliciesCacheKey(tenantId: string, roleId: string): string {
   return `pbac:role:${tenantId}:${roleId}`;
+}
+
+function getGroupPoliciesCacheKey(tenantId: string, groupId: string): string {
+  return `pbac:group:${tenantId}:${groupId}`;
 }
 
 export class PbacService {
@@ -47,7 +51,30 @@ export class PbacService {
   }
 
   /**
-   * Fetches and aggregates all active policies across multiple roles for a tenant.
+   * Fetches all active policies directly bound to a tenant user group.
+   */
+  async getPoliciesForGroup(tenantId: string, groupId: string): Promise<Policy[]> {
+    const cacheKey = getGroupPoliciesCacheKey(tenantId, groupId);
+
+    return cache.wrap(cacheKey, PBAC_CACHE_TTL, async () => {
+      const rows = await db
+        .select({ policy: policies })
+        .from(groupPolicies)
+        .innerJoin(policies, eq(groupPolicies.policyId, policies.id))
+        .where(
+          and(
+            eq(groupPolicies.groupId, groupId),
+            eq(groupPolicies.tenantId, tenantId),
+            eq(policies.isActive, true),
+          ),
+        );
+
+      return rows?.map((r) => r.policy) ?? [];
+    });
+  }
+
+  /**
+   * Fetches and aggregates all active policies across roles and direct group bindings.
    * Filters by target resource and action.
    */
   async getEffectivePolicies(
@@ -55,18 +82,26 @@ export class PbacService {
     roleIds: string[],
     resource: string,
     action: string,
+    groupIds?: string[],
   ): Promise<Policy[]> {
-    if (!roleIds || roleIds.length === 0) {
+    const hasRoles = Boolean(roleIds && roleIds.length > 0);
+    const hasGroups = Boolean(groupIds && groupIds.length > 0);
+    if (!hasRoles && !hasGroups) {
       return [];
     }
 
-    const allRolePolicies = await Promise.all(
-      roleIds.map((rid) => this.getPoliciesForRole(tenantId, rid)),
-    );
+    const [allRolePolicies, allGroupPolicies] = await Promise.all([
+      hasRoles
+        ? Promise.all(roleIds.map((rid) => this.getPoliciesForRole(tenantId, rid)))
+        : Promise.resolve([]),
+      hasGroups
+        ? Promise.all((groupIds ?? []).map((gid) => this.getPoliciesForGroup(tenantId, gid)))
+        : Promise.resolve([]),
+    ]);
 
     // Deduplicate policies by ID
     const policyMap = new Map<string, Policy>();
-    for (const list of allRolePolicies) {
+    for (const list of [...allRolePolicies, ...allGroupPolicies]) {
       for (const policy of list ?? []) {
         if (
           (policy?.resource === resource || policy?.resource === '*') &&
@@ -122,6 +157,7 @@ export class PbacService {
       roleIds,
       resourceType,
       action,
+      context.actor?.groupIds,
     );
 
     return evaluatePolicies(effectivePolicies, context);
@@ -143,6 +179,7 @@ export class PbacService {
       roleIds,
       resourceType,
       action,
+      actorContext?.groupIds,
     );
 
     return compilePoliciesToSqlScope(effectivePolicies, tableColumns, actorContext);
@@ -154,6 +191,24 @@ export class PbacService {
   async invalidateRolePoliciesCache(tenantId: string, roleId: string): Promise<void> {
     const cacheKey = getRolePoliciesCacheKey(tenantId, roleId);
     await cache.del(cacheKey);
+  }
+
+  /**
+   * Invalidates cached policies directly bound to a group.
+   */
+  async invalidateGroupPoliciesCache(tenantId: string, groupId: string): Promise<void> {
+    const cacheKey = getGroupPoliciesCacheKey(tenantId, groupId);
+    await cache.del(cacheKey);
+  }
+
+  /**
+   * Invalidates all PBAC role and group policy caches for a tenant.
+   */
+  async invalidateTenantCache(tenantId: string): Promise<void> {
+    await Promise.all([
+      cache.delByPrefix(`pbac:role:${tenantId}:`),
+      cache.delByPrefix(`pbac:group:${tenantId}:`),
+    ]);
   }
 }
 

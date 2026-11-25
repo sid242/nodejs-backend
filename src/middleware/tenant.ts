@@ -287,6 +287,8 @@ export async function resolveTenantContext(
     let effectivePermissions: string[] = [];
     let roles: string[] = [];
     let roleIds: string[] = [];
+    let groupIds: string[] = [];
+    let groupSlugs: string[] = [];
 
     if (activeSupportSession) {
       // Under audited support delegation, staff access is granted with specific support scope
@@ -300,6 +302,8 @@ export async function resolveTenantContext(
       const resolved = await resolveUserPermissions(tenant.id, req.user.id);
       roles = resolved.roles;
       roleIds = resolved.roleIds ?? [];
+      groupIds = resolved.groupIds ?? [];
+      groupSlugs = resolved.groupSlugs ?? [];
       effectivePermissions = roles.includes(SYSTEM_ROLES.OWNER) ? ['*'] : resolved.permissions;
     }
 
@@ -327,6 +331,8 @@ export async function resolveTenantContext(
         status: member.status,
         roles,
         roleIds,
+        groupIds,
+        groupSlugs,
         departmentId: member.departmentId ?? member.department ?? null,
         regionId: member.regionId ?? member.location ?? null,
       };

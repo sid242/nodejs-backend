@@ -23,6 +23,8 @@ export interface ActorContext {
   userId: string;
   memberId?: string;
   roleKeys: string[];
+  groupIds?: string[];
+  groupSlugs?: string[];
   departmentId?: string | null;
   regionId?: string | null;
   attributes?: Record<string, unknown>;

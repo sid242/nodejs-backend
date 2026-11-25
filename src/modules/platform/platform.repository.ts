@@ -15,6 +15,9 @@ import {
   tenantDbOperations,
   tenantMembers,
   tenants,
+  userGroupMembers,
+  userGroupPlatformRoles,
+  userGroups,
   users,
   type NewPlatformAuditLog,
   type NewPlatformRole,
@@ -329,6 +332,46 @@ export async function getRolePermissionKeys(roleId: string): Promise<string[]> {
     )
     .where(eq(platformRolePermissions.roleId, roleId));
   return rows.map((r) => r.key);
+}
+
+/**
+ * Resolves all distinct platform permission keys for a staff member across
+ * both their direct primary role and active platform user groups.
+ */
+export async function getEffectiveStaffPermissionKeys(
+  staffId: string,
+  directRoleId: string,
+): Promise<string[]> {
+  const groupRoleRows = await db
+    .selectDistinct({ roleId: userGroupPlatformRoles.roleId })
+    .from(userGroupMembers)
+    .innerJoin(userGroups, eq(userGroupMembers.groupId, userGroups.id))
+    .innerJoin(userGroupPlatformRoles, eq(userGroupMembers.groupId, userGroupPlatformRoles.groupId))
+    .innerJoin(platformRoles, eq(userGroupPlatformRoles.roleId, platformRoles.id))
+    .where(
+      and(
+        eq(userGroupMembers.staffId, staffId),
+        eq(userGroups.scope, 'PLATFORM'),
+        eq(userGroups.status, 'ACTIVE'),
+        eq(platformRoles.isActive, true),
+      ),
+    );
+
+  const roleIds = Array.from(new Set([directRoleId, ...groupRoleRows.map((r) => r.roleId)])).filter(
+    Boolean,
+  );
+  if (roleIds.length === 0) return [];
+
+  const permRows = await db
+    .selectDistinct({ key: platformPermissions.key })
+    .from(platformRolePermissions)
+    .innerJoin(
+      platformPermissions,
+      eq(platformRolePermissions.permissionId, platformPermissions.id),
+    )
+    .where(inArray(platformRolePermissions.roleId, roleIds));
+
+  return permRows.map((r) => r.key);
 }
 
 export async function listPermissions(): Promise<PlatformPermission[]> {

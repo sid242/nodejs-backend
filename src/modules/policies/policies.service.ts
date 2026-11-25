@@ -104,11 +104,8 @@ export class PoliciesService {
       throw AppError.notFound('Policy not found');
     }
 
-    // Invalidate PBAC cache for all roles linked to this policy
-    const linkedRoles = await policiesRepo.getRolesByPolicyId(tenantId, policyId);
-    await Promise.all(
-      linkedRoles.map((r) => pbacService.invalidateRolePoliciesCache(tenantId, r.id)),
-    );
+    // Invalidate PBAC cache for all roles and groups in this tenant
+    await pbacService.invalidateTenantCache(tenantId);
 
     await safeAuditLog({
       tenantId,
@@ -124,16 +121,13 @@ export class PoliciesService {
   async deletePolicy(tenantId: string, policyId: string, userId?: string): Promise<void> {
     const before = await this.getPolicyById(tenantId, policyId);
 
-    const linkedRoles = await policiesRepo.getRolesByPolicyId(tenantId, policyId);
     const deleted = await policiesRepo.deletePolicy(tenantId, policyId);
     if (!deleted) {
       throw AppError.notFound('Policy not found');
     }
 
-    // Invalidate PBAC cache for all roles linked to this policy
-    await Promise.all(
-      linkedRoles.map((r) => pbacService.invalidateRolePoliciesCache(tenantId, r.id)),
-    );
+    // Invalidate PBAC cache for all roles and groups in this tenant
+    await pbacService.invalidateTenantCache(tenantId);
 
     await safeAuditLog({
       tenantId,

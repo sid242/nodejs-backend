@@ -68,6 +68,22 @@ export const bindRoleDto = z.object({
 
 export type BindRoleInput = z.infer<typeof bindRoleDto>;
 
+export const bindPolicyDto = z.object({
+  policyIds: z
+    .array(z.string().trim().uuid('Invalid policy ID format'))
+    .min(1, 'At least one policy ID is required'),
+  reason: z.string().trim().max(255).optional(),
+});
+
+export type BindPolicyInput = z.infer<typeof bindPolicyDto>;
+
+export const groupPolicyParamsDto = z.object({
+  groupId: z.string().trim().uuid('Invalid group ID format'),
+  policyId: z.string().trim().uuid('Invalid policy ID format'),
+});
+
+export type GroupPolicyParams = z.infer<typeof groupPolicyParamsDto>;
+
 export const groupRoleParamsDto = z.object({
   groupId: z.string().trim().uuid('Invalid group ID format'),
   roleId: z.string().trim().uuid('Invalid role ID format'),

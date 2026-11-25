@@ -52,6 +52,18 @@ export const COMMON_ACTOR_ATTRIBUTES: AttributeDefinition[] = [
     type: 'array',
     description: 'List of role keys assigned to the member',
   },
+  {
+    name: 'Group IDs',
+    path: 'actor.groupIds',
+    type: 'array',
+    description: 'Active user group IDs the member belongs to',
+  },
+  {
+    name: 'Group Slugs',
+    path: 'actor.groupSlugs',
+    type: 'array',
+    description: 'Active user group slugs the member belongs to',
+  },
 ];
 
 export const COMMON_ENV_ATTRIBUTES: AttributeDefinition[] = [

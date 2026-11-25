@@ -60,3 +60,51 @@ export const removePlatformGroupMember = asyncHandler(async (req: Request, res: 
     res,
   );
 });
+
+export const listPlatformGroupRoles = asyncHandler(async (req: Request, res: Response) => {
+  const groupId = (req.params.groupId ?? req.valid?.params?.groupId) as string;
+  const result = await groupsService.listPlatformGroupRoles(groupId);
+  AppResponse.ok(result, 'Platform group roles retrieved successfully').send(res);
+});
+
+export const bindPlatformGroupRole = asyncHandler(async (req: Request, res: Response) => {
+  const groupId = (req.params.groupId ?? req.valid?.params?.groupId) as string;
+  const result = await groupsService.bindPlatformGroupRole(groupId, req.staff!.id, req.valid!.body);
+  AppResponse.ok(result, 'Role bound to platform group successfully').send(res);
+});
+
+export const unbindPlatformGroupRole = asyncHandler(async (req: Request, res: Response) => {
+  const groupId = (req.params.groupId ?? req.valid?.params?.groupId) as string;
+  const roleId = (req.params.roleId ?? req.valid?.params?.roleId) as string;
+  await groupsService.unbindPlatformGroupRole(groupId, req.staff!.id, roleId);
+  AppResponse.ok({ success: true }, 'Role unbound from platform group successfully').send(res);
+});
+
+export const getPlatformGroupPermissions = asyncHandler(async (req: Request, res: Response) => {
+  const groupId = (req.params.groupId ?? req.valid?.params?.groupId) as string;
+  const result = await groupsService.getPlatformGroupPermissions(groupId);
+  AppResponse.ok(result, 'Platform group permissions retrieved successfully').send(res);
+});
+
+export const listPlatformGroupPolicies = asyncHandler(async (req: Request, res: Response) => {
+  const groupId = (req.params.groupId ?? req.valid?.params?.groupId) as string;
+  const result = await groupsService.listPlatformGroupPolicies(groupId);
+  AppResponse.ok(result, 'Platform group policies retrieved successfully').send(res);
+});
+
+export const bindPlatformGroupPolicy = asyncHandler(async (req: Request, res: Response) => {
+  const groupId = (req.params.groupId ?? req.valid?.params?.groupId) as string;
+  const result = await groupsService.bindPlatformGroupPolicy(
+    groupId,
+    req.staff!.id,
+    req.valid!.body,
+  );
+  AppResponse.ok(result, 'Policy bound to platform group successfully').send(res);
+});
+
+export const unbindPlatformGroupPolicy = asyncHandler(async (req: Request, res: Response) => {
+  const groupId = (req.params.groupId ?? req.valid?.params?.groupId) as string;
+  const policyId = (req.params.policyId ?? req.valid?.params?.policyId) as string;
+  await groupsService.unbindPlatformGroupPolicy(groupId, req.staff!.id, policyId);
+  AppResponse.ok({ success: true }, 'Policy unbound from platform group successfully').send(res);
+});

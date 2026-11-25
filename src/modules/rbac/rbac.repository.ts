@@ -625,6 +625,8 @@ export async function countTenantOwners(tenantId: string): Promise<number> {
 export interface EffectivePermissionsResult {
   roles: string[];
   roleIds?: string[];
+  groupIds?: string[];
+  groupSlugs?: string[];
   permissions: string[];
   provenance?: {
     directRoles: string[];
@@ -656,13 +658,36 @@ export async function getEffectivePermissions(
     .limit(1);
 
   if (!member) {
-    return { roles: [], permissions: [], provenance: { directRoles: [], groupRoles: [] } };
+    return {
+      roles: [],
+      groupIds: [],
+      groupSlugs: [],
+      permissions: [],
+      provenance: { directRoles: [], groupRoles: [] },
+    };
   }
 
   // 1. Direct active member roles
   const directRoles = await getMemberRoles(member.id);
 
-  // 2. Active roles inherited through active tenant user groups
+  // 2. Active group memberships + roles inherited through active tenant user groups
+  const activeGroups = await exec
+    .selectDistinct({
+      id: userGroups.id,
+      slug: userGroups.slug,
+    })
+    .from(userGroupMembers)
+    .innerJoin(userGroups, eq(userGroupMembers.groupId, userGroups.id))
+    .where(
+      and(
+        eq(userGroupMembers.userId, userId),
+        eq(userGroupMembers.tenantId, tenantId),
+        eq(userGroups.status, 'ACTIVE'),
+      ),
+    );
+  const groupIds = activeGroups.map((g) => g.id);
+  const groupSlugs = activeGroups.map((g) => g.slug);
+
   const groupRoles = await exec
     .select({
       id: roles.id,
@@ -701,6 +726,9 @@ export async function getEffectivePermissions(
   if (allAssignedRoles.length === 0) {
     return {
       roles: [],
+      roleIds: [],
+      groupIds,
+      groupSlugs,
       permissions: [],
       provenance: { directRoles: directRoleNames, groupRoles: groupRoleNames },
     };
@@ -733,6 +761,8 @@ export async function getEffectivePermissions(
   return {
     roles: roleNames,
     roleIds,
+    groupIds,
+    groupSlugs,
     permissions: perms.map((p) => p.key),
     provenance: {
       directRoles: directRoleNames,

@@ -25,8 +25,11 @@ export class LeadsService {
 
     // Apply fine-grained PBAC scope compilation for non-owner actors
     if (!isOwnerOrSupport) {
-      // Default deny for non-owner actors without roles or context
-      if (!actorContext || !roleIds || roleIds.length === 0) {
+      const hasRoles = Boolean(roleIds && roleIds.length > 0);
+      const hasGroups = Boolean(actorContext?.groupIds && actorContext.groupIds.length > 0);
+
+      // Default deny for non-owner actors without roles/groups or context
+      if (!actorContext || (!hasRoles && !hasGroups)) {
         return {
           items: [],
           total: 0,
@@ -37,7 +40,7 @@ export class LeadsService {
 
       const compiledScope = await pbacService.compileQueryScope(
         tenantId,
-        roleIds,
+        roleIds ?? [],
         'leads',
         'read',
         leads as unknown as Record<string, PgColumn>,
@@ -95,7 +98,12 @@ export class LeadsService {
   ): Promise<Lead> {
     const existing = await this.getLeadById(tenantId, leadId, targetDb);
 
-    if (!isOwnerOrSupport && actorContext && roleIds) {
+    const hasRolesOrGroups = Boolean(
+      (roleIds && roleIds.length > 0) ||
+      (actorContext?.groupIds && actorContext.groupIds.length > 0),
+    );
+    if (!isOwnerOrSupport && actorContext && hasRolesOrGroups) {
+      const effectiveRoleIds = roleIds ?? [];
       // 1. Separate sensitive action checks
       const isReassigning =
         data.assignedMemberId !== undefined && data.assignedMemberId !== existing.assignedMemberId;
@@ -105,7 +113,7 @@ export class LeadsService {
       if (isReassigning) {
         const reassignEval = await pbacService.evaluateAccess(
           tenantId,
-          roleIds,
+          effectiveRoleIds,
           'leads',
           'reassign',
           {
@@ -124,7 +132,7 @@ export class LeadsService {
       if (isChangingConfidential) {
         const confEval = await pbacService.evaluateAccess(
           tenantId,
-          roleIds,
+          effectiveRoleIds,
           'leads',
           'set_confidential',
           {
@@ -149,11 +157,17 @@ export class LeadsService {
         ...data,
       };
 
-      const proposedEval = await pbacService.evaluateAccess(tenantId, roleIds, 'leads', 'update', {
-        actor: actorContext,
-        resource: mergedProposed as unknown as Record<string, unknown>,
-        env: { currentTime: new Date() },
-      });
+      const proposedEval = await pbacService.evaluateAccess(
+        tenantId,
+        effectiveRoleIds,
+        'leads',
+        'update',
+        {
+          actor: actorContext,
+          resource: mergedProposed as unknown as Record<string, unknown>,
+          env: { currentTime: new Date() },
+        },
+      );
 
       if (!proposedEval.allowed) {
         throw AppError.forbidden('Access denied: proposed update violates workspace policy', {

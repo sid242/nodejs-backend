@@ -66,7 +66,10 @@ export async function requirePlatformAuth(
         return next(AppError.unauthorized('Platform staff account is deactivated or suspended'));
       }
 
-      const permissions = await platformRepo.getRolePermissionKeys(staffMember.roleId);
+      const permissions = await platformRepo.getEffectiveStaffPermissionKeys(
+        staffMember.id,
+        staffMember.roleId,
+      );
       req.staff = {
         id: staffMember.id,
         email: staffMember.email,
@@ -88,7 +91,10 @@ export async function requirePlatformAuth(
         if (supportPayload.typ === 'SUPPORT' && supportPayload.staffId) {
           const staffMember = await platformRepo.findStaffById(supportPayload.staffId);
           if (staffMember && staffMember.status === 'ACTIVE') {
-            const permissions = await platformRepo.getRolePermissionKeys(staffMember.roleId);
+            const permissions = await platformRepo.getEffectiveStaffPermissionKeys(
+              staffMember.id,
+              staffMember.roleId,
+            );
             req.staff = {
               id: staffMember.id,
               email: staffMember.email,

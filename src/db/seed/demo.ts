@@ -1,6 +1,6 @@
 import { pathToFileURL } from 'node:url';
 import bcrypt from 'bcryptjs';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { closeDb, db } from '@/config/db';
 import { logger } from '@/config/logger';
@@ -9,14 +9,23 @@ import {
   appModules,
   auditLogs,
   emailTemplates,
+  groupPolicies,
   platformAuditLogs,
+  platformRolePolicies,
+  platformRoles,
   platformStaff,
   platformSupportSessions,
+  policies,
+  rolePolicies,
   tenantBrandings,
   tenantMemberRoles,
   tenantMembers,
   tenantModules,
   tenants,
+  userGroupMembers,
+  userGroupPlatformRoles,
+  userGroupRoles,
+  userGroups,
   users,
 } from '@/db/schema/index';
 import { assignInitialSubscription, seedDefaultPlans } from '@/modules/billing/billing.service';
@@ -402,6 +411,8 @@ export async function seedDemo({ reset = true } = {}): Promise<void> {
     TRUNCATE TABLE 
       "PlatformSupportSession",
       "PlatformAuditLog",
+      "PlatformRolePolicy",
+      "UserGroupPlatformRole",
       "PlatformUserGroupMember",
       "PlatformUserGroupRole",
       "PlatformUserGroup",
@@ -429,6 +440,9 @@ export async function seedDemo({ reset = true } = {}): Promise<void> {
       "TenantInvitation",
       "tenant_sso_configs",
       "tenant_scim_tokens",
+      "GroupPolicy",
+      "RolePolicy",
+      "Policy",
       "UserGroupMember",
       "UserGroupRole",
       "UserGroup",
@@ -623,6 +637,367 @@ export async function seedDemo({ reset = true } = {}): Promise<void> {
     }
   }
   logger.info('   ✔ Subscriptions initialized for all 6 tenants.');
+
+  // ----------------------------------------------------
+  // 5b. Seed Basic Platform & Tenant PBAC Policies
+  // ----------------------------------------------------
+  logger.info('5b. Seeding starter PBAC policies and role bindings...');
+
+  const platformRolesList = await db.select().from(platformRoles);
+  const platformRoleByKey = new Map(platformRolesList.map((r) => [r.key, r.id]));
+  const systemRoleByName = new Map(systemRoles.map((r) => [r.name, r.id]));
+
+  const platformPoliciesSeed = [
+    {
+      name: 'Platform Billing High-Value Refund Guard',
+      description: 'Explicitly denies automated billing refunds exceeding 5,000 minor-x100 units.',
+      resource: 'billing',
+      action: 'refund',
+      effect: 'deny' as const,
+      priority: 100,
+      conditions: {
+        attribute: 'resource.amountMinor',
+        operator: '$gt',
+        value: 500000,
+      },
+      roleKeys: ['BILLING_STAFF'],
+    },
+    {
+      name: 'Platform Billing Standard Operations',
+      description: 'Grants standard billing and subscription management to billing operators.',
+      resource: 'billing',
+      action: '*',
+      effect: 'allow' as const,
+      priority: 50,
+      conditions: { always: true },
+      roleKeys: ['BILLING_STAFF'],
+    },
+    {
+      name: 'Platform Support Read-Only Tenant Inspection',
+      description: 'Allows support and compliance staff to read workspace metadata.',
+      resource: 'tenants',
+      action: 'read',
+      effect: 'allow' as const,
+      priority: 50,
+      conditions: { always: true },
+      roleKeys: ['SUPPORT_STAFF', 'READ_ONLY_AUDITOR'],
+    },
+    {
+      name: 'Platform Compliance Role & Policy Read',
+      description: 'Allows read-only auditors to inspect platform roles and security policies.',
+      resource: 'roles',
+      action: 'read',
+      effect: 'allow' as const,
+      priority: 50,
+      conditions: { always: true },
+      roleKeys: ['READ_ONLY_AUDITOR'],
+    },
+  ];
+
+  for (const def of platformPoliciesSeed) {
+    let [policyRecord] = await db
+      .select()
+      .from(policies)
+      .where(and(isNull(policies.tenantId), eq(policies.name, def.name)))
+      .limit(1);
+
+    if (!policyRecord) {
+      [policyRecord] = await db
+        .insert(policies)
+        .values({
+          tenantId: null,
+          name: def.name,
+          description: def.description,
+          resource: def.resource,
+          action: def.action,
+          effect: def.effect,
+          priority: def.priority,
+          conditions: def.conditions,
+          isActive: true,
+        })
+        .returning();
+    }
+
+    if (policyRecord) {
+      for (const roleKey of def.roleKeys) {
+        const roleId = platformRoleByKey.get(roleKey);
+        if (roleId) {
+          await db
+            .insert(platformRolePolicies)
+            .values({ roleId, policyId: policyRecord.id })
+            .onConflictDoNothing();
+        }
+      }
+    }
+  }
+
+  const tenantPoliciesSeed = [
+    {
+      name: 'Workspace Admin Full Access',
+      description:
+        'Allows tenant administrators to perform actions across all workspace resources.',
+      resource: '*',
+      action: '*',
+      effect: 'allow' as const,
+      priority: 80,
+      conditions: { always: true },
+      roleNames: ['ADMIN'],
+    },
+    {
+      name: 'Protect Confidential Leads from Deletion',
+      description: 'Prevents non-admin members from deleting leads marked as confidential.',
+      resource: 'leads',
+      action: 'delete',
+      effect: 'deny' as const,
+      priority: 100,
+      conditions: {
+        attribute: 'resource.isConfidential',
+        operator: '$eq',
+        value: true,
+      },
+      roleNames: ['MEMBER', 'VIEWER'],
+    },
+    {
+      name: 'Standard Lead Read Access',
+      description: 'Allows workspace members and viewers to read non-confidential leads.',
+      resource: 'leads',
+      action: 'read',
+      effect: 'allow' as const,
+      priority: 50,
+      conditions: {
+        attribute: 'resource.isConfidential',
+        operator: '$ne',
+        value: true,
+      },
+      roleNames: ['MEMBER', 'VIEWER'],
+    },
+    {
+      name: 'Manage Assigned Leads',
+      description: 'Allows members to update CRM leads assigned to their membership.',
+      resource: 'leads',
+      action: 'update',
+      effect: 'allow' as const,
+      priority: 50,
+      conditions: {
+        attribute: 'resource.assignedMemberId',
+        operator: '$eq',
+        value: 'actor.memberId',
+      },
+      roleNames: ['MEMBER'],
+    },
+    {
+      name: 'Create Standard Leads',
+      description: 'Allows members to create non-confidential CRM leads.',
+      resource: 'leads',
+      action: 'create',
+      effect: 'allow' as const,
+      priority: 40,
+      conditions: {
+        attribute: 'resource.isConfidential',
+        operator: '$ne',
+        value: true,
+      },
+      roleNames: ['MEMBER'],
+    },
+  ];
+
+  for (const tenantDef of DEMO_CREDENTIALS.tenants) {
+    const tid = tenantIdMap.get(tenantDef.tenantSlug);
+    if (!tid) continue;
+
+    for (const def of tenantPoliciesSeed) {
+      let [policyRecord] = await db
+        .select()
+        .from(policies)
+        .where(and(eq(policies.tenantId, tid), eq(policies.name, def.name)))
+        .limit(1);
+
+      if (!policyRecord) {
+        [policyRecord] = await db
+          .insert(policies)
+          .values({
+            tenantId: tid,
+            name: def.name,
+            description: def.description,
+            resource: def.resource,
+            action: def.action,
+            effect: def.effect,
+            priority: def.priority,
+            conditions: def.conditions,
+            isActive: true,
+          })
+          .returning();
+      }
+
+      if (policyRecord) {
+        for (const roleName of def.roleNames) {
+          const roleId = systemRoleByName.get(roleName);
+          if (roleId) {
+            await db
+              .insert(rolePolicies)
+              .values({ roleId, policyId: policyRecord.id, tenantId: tid })
+              .onConflictDoNothing();
+          }
+        }
+      }
+    }
+  }
+  logger.info('   ✔ Starter PBAC policies seeded for platform and all tenants.');
+
+  // ----------------------------------------------------
+  // 5c. Seed Sample Platform & Tenant User Groups (with Roles & Policies)
+  // ----------------------------------------------------
+  logger.info('5c. Seeding sample platform and tenant user groups...');
+  const auditorStaffId = staffIdMap.get('staff.auditor@yopmail.com');
+  const readOnlyAuditorRoleId = platformRoleByKey.get('READ_ONLY_AUDITOR');
+  const acmeIdForGroup = tenantIdMap.get('acme-realty');
+  const acmeManagerId = userIdMap.get('manager@acme.com');
+  const acmeAgentId = userIdMap.get('agent@acme.com');
+  const memberRoleId = systemRoleByName.get('MEMBER');
+
+  if (auditorStaffId && readOnlyAuditorRoleId) {
+    let [platformGroup] = await db
+      .select()
+      .from(userGroups)
+      .where(and(eq(userGroups.scope, 'PLATFORM'), eq(userGroups.slug, 'security-compliance-team')))
+      .limit(1);
+
+    if (!platformGroup) {
+      [platformGroup] = await db
+        .insert(userGroups)
+        .values({
+          name: 'Security & Compliance Team',
+          slug: 'security-compliance-team',
+          description:
+            'Internal platform compliance cohort with read-only audit & policy oversight.',
+          scope: 'PLATFORM',
+          tenantId: null,
+          status: 'ACTIVE',
+          createdBy: auditorStaffId,
+          updatedBy: auditorStaffId,
+        })
+        .returning();
+    }
+
+    if (platformGroup) {
+      await db
+        .insert(userGroupMembers)
+        .values({
+          groupId: platformGroup.id,
+          staffId: auditorStaffId,
+          addedBy: auditorStaffId,
+        })
+        .onConflictDoNothing();
+
+      await db
+        .insert(userGroupPlatformRoles)
+        .values({
+          groupId: platformGroup.id,
+          roleId: readOnlyAuditorRoleId,
+        })
+        .onConflictDoNothing();
+
+      const [platformSupportInspectPolicy] = await db
+        .select()
+        .from(policies)
+        .where(
+          and(
+            isNull(policies.tenantId),
+            eq(policies.name, 'Platform Compliance Role & Policy Read'),
+          ),
+        )
+        .limit(1);
+
+      if (platformSupportInspectPolicy) {
+        await db
+          .insert(groupPolicies)
+          .values({
+            groupId: platformGroup.id,
+            policyId: platformSupportInspectPolicy.id,
+            tenantId: null,
+          })
+          .onConflictDoNothing();
+      }
+    }
+  }
+
+  if (acmeIdForGroup && acmeManagerId && acmeAgentId && memberRoleId) {
+    let [acmeGroup] = await db
+      .select()
+      .from(userGroups)
+      .where(
+        and(
+          eq(userGroups.scope, 'TENANT'),
+          eq(userGroups.tenantId, acmeIdForGroup),
+          eq(userGroups.slug, 'sales-operations-squad'),
+        ),
+      )
+      .limit(1);
+
+    if (!acmeGroup) {
+      [acmeGroup] = await db
+        .insert(userGroups)
+        .values({
+          name: 'Sales Operations Squad',
+          slug: 'sales-operations-squad',
+          description: 'Regional CRM sales specialists collaborating on qualified customer leads.',
+          scope: 'TENANT',
+          tenantId: acmeIdForGroup,
+          status: 'ACTIVE',
+          createdBy: acmeManagerId,
+          updatedBy: acmeManagerId,
+        })
+        .returning();
+    }
+
+    if (acmeGroup) {
+      await db
+        .insert(userGroupMembers)
+        .values([
+          {
+            groupId: acmeGroup.id,
+            userId: acmeManagerId,
+            tenantId: acmeIdForGroup,
+            addedBy: acmeManagerId,
+          },
+          {
+            groupId: acmeGroup.id,
+            userId: acmeAgentId,
+            tenantId: acmeIdForGroup,
+            addedBy: acmeManagerId,
+          },
+        ])
+        .onConflictDoNothing();
+
+      await db
+        .insert(userGroupRoles)
+        .values({
+          groupId: acmeGroup.id,
+          roleId: memberRoleId,
+        })
+        .onConflictDoNothing();
+
+      const [leadUpdatePolicy] = await db
+        .select()
+        .from(policies)
+        .where(
+          and(eq(policies.tenantId, acmeIdForGroup), eq(policies.name, 'Manage Assigned Leads')),
+        )
+        .limit(1);
+
+      if (leadUpdatePolicy) {
+        await db
+          .insert(groupPolicies)
+          .values({
+            groupId: acmeGroup.id,
+            policyId: leadUpdatePolicy.id,
+            tenantId: acmeIdForGroup,
+          })
+          .onConflictDoNothing();
+      }
+    }
+  }
+  logger.info('   ✔ Sample platform & tenant user groups seeded with roles and policies.');
 
   // ----------------------------------------------------
   // 6. Seed Active Audited Support Delegation Session

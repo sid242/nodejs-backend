@@ -13,6 +13,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
+import { userGroups } from '../identity/user-groups';
 import { users } from '../identity/users';
 import { platformRoles } from '../platform/platform-roles';
 import { tenants } from '../tenancy/index';
@@ -101,3 +102,49 @@ export const platformRolePolicies = pgTable(
 
 export type PlatformRolePolicy = typeof platformRolePolicies.$inferSelect;
 export type NewPlatformRolePolicy = typeof platformRolePolicies.$inferInsert;
+
+// scope: primary
+export const userGroupPlatformRoles = pgTable(
+  'UserGroupPlatformRole',
+  {
+    groupId: uuid('groupId')
+      .notNull()
+      .references(() => userGroups.id, { onDelete: 'cascade' }),
+    roleId: uuid('roleId')
+      .notNull()
+      .references(() => platformRoles.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.groupId, table.roleId] }),
+    index('UserGroupPlatformRole_groupId_idx').on(table.groupId),
+    index('UserGroupPlatformRole_roleId_idx').on(table.roleId),
+  ],
+);
+
+export type UserGroupPlatformRole = typeof userGroupPlatformRoles.$inferSelect;
+export type NewUserGroupPlatformRole = typeof userGroupPlatformRoles.$inferInsert;
+
+// scope: primary
+export const groupPolicies = pgTable(
+  'GroupPolicy',
+  {
+    groupId: uuid('groupId')
+      .notNull()
+      .references(() => userGroups.id, { onDelete: 'cascade' }),
+    policyId: uuid('policyId')
+      .notNull()
+      .references(() => policies.id, { onDelete: 'cascade' }),
+    tenantId: uuid('tenantId').references(() => tenants.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('createdAt', { precision: 3, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.groupId, table.policyId] }),
+    index('GroupPolicy_groupId_idx').on(table.groupId),
+    index('GroupPolicy_policyId_idx').on(table.policyId),
+    index('GroupPolicy_tenantId_idx').on(table.tenantId),
+  ],
+);
+
+export type GroupPolicy = typeof groupPolicies.$inferSelect;
+export type NewGroupPolicy = typeof groupPolicies.$inferInsert;
