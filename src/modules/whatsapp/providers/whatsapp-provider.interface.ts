@@ -26,4 +26,5 @@ export interface IWhatsAppProvider {
   exchangeCodeForToken(code: string): Promise<TokenExchangeResult>;
   debugToken(inputToken: string): Promise<TokenDebugResult>;
   subscribeWabaWebhooks(wabaId: string, accessToken: string): Promise<boolean>;
+  unsubscribeWabaWebhooks(wabaId: string, accessToken: string): Promise<boolean>;
 }

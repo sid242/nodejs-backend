@@ -36,9 +36,7 @@ export async function processWhatsAppWebhookJob(job: Job<WebhookJobData>): Promi
         if (!value) continue;
 
         const meta = value.metadata as Record<string, unknown> | undefined;
-        const phoneNumberId = meta?.phone_number_id
-          ? String(meta.phone_number_id)
-          : (defaultPhoneId ?? '');
+        const phoneNumberId = String(meta?.phone_number_id ?? defaultPhoneId ?? '');
 
         // 1. Process Delivery Status Updates (SENT, DELIVERED, READ, FAILED)
         const statuses = (value.statuses as Array<Record<string, unknown>>) ?? [];
@@ -227,12 +225,20 @@ export async function processWhatsAppWebhookJob(job: Job<WebhookJobData>): Promi
         const eventType = String(value.event ?? '');
         const templateId = String(value.message_template_id ?? '');
         const templateName = String(value.message_template_name ?? '');
+        const templateLang = String(value.message_template_language ?? value.language ?? '');
 
         if (eventType && (templateId || templateName)) {
           const templates = await templateRepo.listTemplates({ tenantId, search: templateName });
-          const matched = templates.items.find(
-            (t) => t.metaTemplateId === templateId || t.name === templateName,
-          );
+          const matched = templates.items.find((t) => {
+            if (templateId && t.metaTemplateId === templateId) return true;
+            if (templateName && t.name === templateName) {
+              if (templateLang && t.language) {
+                return t.language === templateLang;
+              }
+              return true;
+            }
+            return false;
+          });
 
           if (matched) {
             const statusMap: Record<string, WhatsAppTemplateStatus> = {
@@ -245,6 +251,7 @@ export async function processWhatsAppWebhookJob(job: Job<WebhookJobData>): Promi
 
             await templateRepo.updateTemplate(tenantId, matched.id, {
               status: mappedStatus,
+              metaTemplateId: templateId || matched.metaTemplateId,
               rejectionReason: value.reason ? String(value.reason) : null,
               lastSyncedAt: new Date(),
             });

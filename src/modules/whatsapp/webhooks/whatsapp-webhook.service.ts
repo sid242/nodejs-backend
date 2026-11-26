@@ -9,10 +9,25 @@ import { whatsAppWebhookQueue } from '@/queues/index';
 import * as accountRepo from '../repositories/whatsapp-account.repository';
 import { assertValidMetaSignature } from './whatsapp-signature.service';
 
+function timingSafeCompare(a?: string, b?: string): boolean {
+  if (!a || !b) return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
 export function verifySubscription(mode?: string, token?: string, challenge?: string): string {
   const expectedToken = env.META_WEBHOOK_VERIFY_TOKEN;
 
-  if (mode === 'subscribe' && token === expectedToken && challenge) {
+  // W9: Reject default verify token in production
+  if (env.NODE_ENV === 'production' && expectedToken === 'whatsapp-verify-token') {
+    logger.error('Insecure default META_WEBHOOK_VERIFY_TOKEN configured in production');
+    throw AppError.internal('Insecure webhook verification token configured');
+  }
+
+  // W9: Timing-safe comparison to prevent side-channel timing attacks
+  if (mode === 'subscribe' && timingSafeCompare(token, expectedToken) && challenge) {
     logger.info('Meta webhook subscription verified successfully');
     return challenge;
   }
@@ -53,7 +68,7 @@ export async function processWebhookPayload(
     return { status: 'duplicate_ignored' };
   }
 
-  // 3. Extract and route PER CHANGE (W1: batched payloads are routed per entry and change)
+  // 3. Extract and route PER CHANGE (W1, W2: route per change; lookup by phone or WABA ID)
   const entries = (payload.entry as Array<Record<string, unknown>>) ?? [];
   const jobsToEnqueue: Array<{
     name: string;
@@ -84,7 +99,7 @@ export async function processWebhookPayload(
       const phoneNumberId = meta?.phone_number_id ? String(meta.phone_number_id) : undefined;
 
       // Resolve tenant routing per change:
-      // First try by phone_number_id, if missing or not resolved, try by wabaId
+      // First try by phone_number_id, if missing (e.g. template status W2), resolve by wabaId
       let routing:
         | {
             tenantId: string;
@@ -110,6 +125,15 @@ export async function processWebhookPayload(
         continue;
       }
 
+      // W13: Ignore events for disconnected accounts
+      if (routing.connectionStatus !== 'CONNECTED') {
+        logger.info(
+          { tenantId: routing.tenantId, wabaId: routing.wabaId, status: routing.connectionStatus },
+          'Ignoring webhook event for non-connected WhatsApp tenant account',
+        );
+        changeIndex++;
+        continue;
+      }
       // Enqueue job with ONLY this entry and this change
       const changePayload = {
         object: payload.object ?? 'whatsapp_business_account',
@@ -144,11 +168,11 @@ export async function processWebhookPayload(
   }
 
   if (jobsToEnqueue.length === 0) {
-    logger.info('Webhook event contained no resolvable changes; acknowledging');
-    return { status: 'ignored_no_routable_changes' };
+    logger.info('Webhook event contained no resolvable or active changes; acknowledging');
+    return { status: 'acknowledged' };
   }
 
-  // 4. Safely enqueue all jobs; on failure throw 500 so Meta retries
+  // 4. Safely enqueue all jobs; on failure throw 500 so Meta retries (W3)
   try {
     await whatsAppWebhookQueue.addBulk(jobsToEnqueue);
     // 5. Mark deduplication in Redis ONLY AFTER successful enqueue!

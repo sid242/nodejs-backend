@@ -71,6 +71,7 @@ export async function disconnectAccount(
     .update(whatsAppBusinessAccounts)
     .set({
       connectionStatus: 'DISCONNECTED',
+      encryptedAccessToken: '',
       disconnectedAt: new Date(),
       updatedAt: new Date(),
     })

@@ -12,12 +12,13 @@ import { basicAuth } from '@/middleware/basic-auth';
 import { errorHandler, notFound } from '@/middleware/error';
 import { httpLogger } from '@/middleware/http-logger';
 import { maintenanceMiddleware } from '@/middleware/maintenance';
-import { globalLimiter } from '@/middleware/rate-limit';
+import { globalLimiter, whatsAppWebhookLimiter } from '@/middleware/rate-limit';
 import { auditSupportActions } from '@/middleware/support';
 import publicApiRouter from '@/modules/developers/public-api.routes';
 import healthRoutes from '@/modules/health/health.routes';
 import internalRoutes from '@/modules/internal/internal.routes';
 import { ssoAuthRouter } from '@/modules/sso/sso.routes';
+import * as whatsAppWebhookController from '@/modules/whatsapp/webhooks/whatsapp-webhook.controller';
 import { metricsMiddleware, metricsRouter } from '@/observability/metrics';
 import { bullBoardRouter } from '@/queues/bull-board';
 import apiRoutes from '@/routes';
@@ -59,6 +60,12 @@ export function createApp(): Express {
   app.use(cookieParser());
   app.use(auditSupportActions);
   app.use(maintenanceMiddleware);
+
+  // Dedicated WhatsApp Webhook Route mounted before globalLimiter with dedicated burst limiter (W9)
+  const whatsAppWebhookRouter = express.Router();
+  whatsAppWebhookRouter.get('/whatsapp', whatsAppWebhookController.verifyWebhook);
+  whatsAppWebhookRouter.post('/whatsapp', whatsAppWebhookController.handleWebhook);
+  app.use('/api/v1/webhooks', whatsAppWebhookLimiter, whatsAppWebhookRouter);
 
   app.use('/api/v1', globalLimiter, apiRoutes);
   app.use('/sso', globalLimiter, ssoAuthRouter);

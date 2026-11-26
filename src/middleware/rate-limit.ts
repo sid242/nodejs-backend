@@ -122,6 +122,13 @@ const make = ({
 
 export const globalLimiter = make({ name: 'global', limit: env.RATE_LIMIT_MAX });
 
+// Generous limiter for inbound Meta WhatsApp Webhook events to prevent 429 drops on event bursts
+export const whatsAppWebhookLimiter = make({
+  name: 'whatsapp-webhook',
+  limit: 10_000,
+  windowMs: 60_000,
+});
+
 // Brute-force & credential-stuffing protection for login/register/refresh using composite IP + Email
 export const authLimiter = make({
   name: 'auth',
