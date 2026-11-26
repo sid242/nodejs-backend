@@ -84,6 +84,24 @@ export async function completeOnboarding(
     );
   }
 
+  // 2.5. Validate token validity with Meta debug_token
+  const tokenInfo = await metaWhatsAppProvider.debugToken(token);
+  if (!tokenInfo.isValid) {
+    throw AppError.badRequest('Invalid or expired Meta access token', {
+      code: 'WHATSAPP_INVALID_TOKEN',
+    });
+  }
+  if (
+    env.META_APP_ID &&
+    tokenInfo.appId &&
+    tokenInfo.appId !== env.META_APP_ID &&
+    tokenInfo.appId !== 'mock_app'
+  ) {
+    throw AppError.badRequest('Access token does not belong to the configured Meta application', {
+      code: 'WHATSAPP_TOKEN_APP_MISMATCH',
+    });
+  }
+
   // 3. Encrypt the access token using envelope encryption (context: 'whatsapp-token')
   const encryptedAccessToken = encrypt(token, { context: 'whatsapp-token' });
 

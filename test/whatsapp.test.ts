@@ -166,3 +166,92 @@ test('WhatsApp OTP Authentication Flow', async (t) => {
     );
   });
 });
+
+test('WhatsApp Onboarding Session & Token Validation (W7)', async (t) => {
+  const onboardingService = await import('@/modules/whatsapp/services/whatsapp-onboarding.service');
+  const { metaWhatsAppProvider } =
+    await import('@/modules/whatsapp/providers/meta-cloud-api.provider');
+
+  const testTenantId = 'tenant_w7_test_01';
+  const testUserId = 'user_w7_test_01';
+
+  await t.test('creates onboarding session with valid single-use nonce', async () => {
+    const session = await onboardingService.createOnboardingSession(testTenantId, testUserId);
+    assert.ok(session.state, 'Session state nonce should be present');
+    assert.equal(typeof session.state, 'string');
+    assert.ok(session.state.length >= 32, 'Nonce should be cryptographically random hex');
+  });
+
+  await t.test('rejects completeOnboarding when state nonce is missing or invalid', async () => {
+    await assert.rejects(
+      async () => {
+        await onboardingService.completeOnboarding(testTenantId, testUserId, {
+          state: 'invalid-or-unregistered-nonce',
+          wabaId: 'waba_123',
+          accessToken: 'test_token',
+        });
+      },
+      (err: unknown) => {
+        return (
+          err instanceof AppError &&
+          err.status === 400 &&
+          (err.details as Record<string, unknown>)?.code === 'WHATSAPP_INVALID_ONBOARDING_STATE'
+        );
+      },
+    );
+  });
+
+  await t.test('rejects completeOnboarding when tenant does not match session tenant', async () => {
+    const session = await onboardingService.createOnboardingSession(testTenantId, testUserId);
+    await assert.rejects(
+      async () => {
+        await onboardingService.completeOnboarding('different_tenant_99', testUserId, {
+          state: session.state,
+          wabaId: 'waba_123',
+          accessToken: 'test_token',
+        });
+      },
+      (err: unknown) => {
+        return err instanceof AppError && err.status === 403;
+      },
+    );
+  });
+
+  await t.test('rejects completeOnboarding when debugToken marks token invalid', async () => {
+    const session = await onboardingService.createOnboardingSession(testTenantId, testUserId);
+    const origDebug = metaWhatsAppProvider.debugToken.bind(metaWhatsAppProvider);
+    // Mock debugToken to simulate invalid token
+    metaWhatsAppProvider.debugToken = async () => ({
+      appId: 'mock_app',
+      isValid: false,
+      scopes: [],
+    });
+
+    try {
+      await assert.rejects(
+        async () => {
+          await onboardingService.completeOnboarding(testTenantId, testUserId, {
+            state: session.state,
+            wabaId: 'waba_123',
+            accessToken: 'invalid_token',
+          });
+        },
+        (err: unknown) => {
+          return (
+            err instanceof AppError &&
+            err.status === 400 &&
+            (err.details as Record<string, unknown>)?.code === 'WHATSAPP_INVALID_TOKEN'
+          );
+        },
+      );
+    } finally {
+      metaWhatsAppProvider.debugToken = origDebug;
+    }
+  });
+
+  await t.test('metaWhatsAppProvider.debugToken returns token debug info', async () => {
+    const res = await metaWhatsAppProvider.debugToken('sample_token');
+    assert.equal(typeof res.isValid, 'boolean');
+    assert.ok(Array.isArray(res.scopes));
+  });
+});

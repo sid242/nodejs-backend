@@ -9,6 +9,7 @@ import type {
   SendMediaMessageInput,
   SendTemplateMessageInput,
   SendTextMessageInput,
+  TokenDebugResult,
   TokenExchangeResult,
   UploadMediaInput,
 } from '../types/whatsapp-provider.types';
@@ -23,5 +24,6 @@ export interface IWhatsAppProvider {
   getPhoneNumbers(wabaId: string, accessToken: string): Promise<ProviderPhoneNumber[]>;
   uploadMedia(input: UploadMediaInput): Promise<ProviderMediaResult>;
   exchangeCodeForToken(code: string): Promise<TokenExchangeResult>;
+  debugToken(inputToken: string): Promise<TokenDebugResult>;
   subscribeWabaWebhooks(wabaId: string, accessToken: string): Promise<boolean>;
 }

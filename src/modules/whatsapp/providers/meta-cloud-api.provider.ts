@@ -14,6 +14,7 @@ import type {
   SendTemplateMessageInput,
   SendTextMessageInput,
   TemplateComponentDefinition,
+  TokenDebugResult,
   TokenExchangeResult,
   UploadMediaInput,
   WhatsAppTemplateCategory,
@@ -404,14 +405,17 @@ export class MetaCloudApiProvider implements IWhatsAppProvider {
       );
     }
 
-    const endpoint = `/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&code=${encodeURIComponent(code)}`;
-
     const res = await this.request<{
       access_token: string;
       token_type: string;
       expires_in?: number;
-    }>(endpoint, {
-      method: 'GET',
+    }>('/oauth/access_token', {
+      method: 'POST',
+      body: JSON.stringify({
+        client_id: appId,
+        client_secret: appSecret,
+        code,
+      }),
       accessToken: `${appId}|${appSecret}`,
     });
 
@@ -419,6 +423,32 @@ export class MetaCloudApiProvider implements IWhatsAppProvider {
       accessToken: res.access_token,
       tokenType: res.token_type,
       expiresIn: res.expires_in,
+    };
+  }
+
+  async debugToken(inputToken: string): Promise<TokenDebugResult> {
+    const appId = env.META_APP_ID;
+    const appSecret = env.META_APP_SECRET;
+
+    if (!appId || !appSecret) {
+      return { appId: 'mock_app', isValid: true, scopes: [] };
+    }
+
+    const res = await this.request<{
+      data: {
+        app_id: string;
+        is_valid: boolean;
+        scopes?: string[];
+      };
+    }>(`/debug_token?input_token=${encodeURIComponent(inputToken)}`, {
+      method: 'GET',
+      accessToken: `${appId}|${appSecret}`,
+    });
+
+    return {
+      appId: res.data.app_id,
+      isValid: res.data.is_valid,
+      scopes: res.data.scopes || [],
     };
   }
 

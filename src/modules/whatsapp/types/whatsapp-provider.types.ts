@@ -140,3 +140,9 @@ export interface TokenExchangeResult {
   tokenType: string;
   expiresIn?: number;
 }
+
+export interface TokenDebugResult {
+  appId: string;
+  isValid: boolean;
+  scopes: string[];
+}
