@@ -166,3 +166,54 @@ test('WhatsApp OTP Authentication Flow', async (t) => {
     );
   });
 });
+
+test('WhatsApp Delivery Status Progression Guard (W12)', async (t) => {
+  const { shouldUpdateMessageStatus } =
+    await import('@/modules/whatsapp/utils/status-progression.util');
+
+  await t.test(
+    'allows valid forward progression (QUEUED -> ACCEPTED -> SENT -> DELIVERED -> READ)',
+    () => {
+      assert.equal(shouldUpdateMessageStatus('QUEUED', 'ACCEPTED'), true);
+      assert.equal(shouldUpdateMessageStatus('ACCEPTED', 'SENT'), true);
+      assert.equal(shouldUpdateMessageStatus('SENT', 'DELIVERED'), true);
+      assert.equal(shouldUpdateMessageStatus('DELIVERED', 'READ'), true);
+      // Direct skip progression is also valid (e.g. Meta skips SENT directly to DELIVERED)
+      assert.equal(shouldUpdateMessageStatus('QUEUED', 'SENT'), true);
+      assert.equal(shouldUpdateMessageStatus('SENT', 'READ'), true);
+    },
+  );
+
+  await t.test('rejects regressive out-of-order status updates', () => {
+    // Late SENT arriving after message is already DELIVERED
+    assert.equal(shouldUpdateMessageStatus('DELIVERED', 'SENT'), false);
+    // Late DELIVERED arriving after message is already READ
+    assert.equal(shouldUpdateMessageStatus('READ', 'DELIVERED'), false);
+    // Late SENT arriving after message is already READ
+    assert.equal(shouldUpdateMessageStatus('READ', 'SENT'), false);
+    // Duplicate status update
+    assert.equal(shouldUpdateMessageStatus('SENT', 'SENT'), false);
+    assert.equal(shouldUpdateMessageStatus('DELIVERED', 'DELIVERED'), false);
+    assert.equal(shouldUpdateMessageStatus('READ', 'READ'), false);
+  });
+
+  await t.test('handles failure transitions and prevents downgrading delivered messages', () => {
+    // Failure from pre-delivery states is allowed
+    assert.equal(shouldUpdateMessageStatus('QUEUED', 'FAILED'), true);
+    assert.equal(shouldUpdateMessageStatus('ACCEPTED', 'FAILED'), true);
+    assert.equal(shouldUpdateMessageStatus('SENT', 'FAILED'), true);
+
+    // Late FAILED error cannot downgrade already DELIVERED or READ messages
+    assert.equal(shouldUpdateMessageStatus('DELIVERED', 'FAILED'), false);
+    assert.equal(shouldUpdateMessageStatus('READ', 'FAILED'), false);
+  });
+
+  await t.test('allows Meta transient recovery: DELIVERED or READ supersedes FAILED', () => {
+    // Meta sometimes recovers transient delivery failure
+    assert.equal(shouldUpdateMessageStatus('FAILED', 'DELIVERED'), true);
+    assert.equal(shouldUpdateMessageStatus('FAILED', 'READ'), true);
+    // But SENT cannot supersede FAILED
+    assert.equal(shouldUpdateMessageStatus('FAILED', 'SENT'), false);
+    assert.equal(shouldUpdateMessageStatus('FAILED', 'ACCEPTED'), false);
+  });
+});

@@ -1,7 +1,7 @@
 import type { Job } from 'bullmq';
 
 import { logger } from '@/config/logger';
-import type { WhatsAppMessageType } from '@/db/schema/enums';
+import type { WhatsAppMessageInternalStatus, WhatsAppMessageType } from '@/db/schema/enums';
 import { runWithTenantDb } from '@/db/tenancy/context';
 import { getTenantDb } from '@/db/tenancy/tenant-db';
 import { emitToRoom } from '@/sockets/emitter';
@@ -12,6 +12,7 @@ import * as messageRepo from '../repositories/whatsapp-message.repository';
 import * as templateRepo from '../repositories/whatsapp-template.repository';
 import type { WhatsAppTemplateStatus } from '../types/whatsapp-provider.types';
 import { normalizePhoneNumber } from '../utils/phone-number.util';
+import { shouldUpdateMessageStatus } from '../utils/status-progression.util';
 
 export interface WebhookJobData {
   tenantId: string;
@@ -49,21 +50,45 @@ export async function processWhatsAppWebhookJob(job: Job<WebhookJobData>): Promi
             continue;
           }
 
+          let newInternalStatus: WhatsAppMessageInternalStatus | undefined;
+          if (status === 'sent') {
+            newInternalStatus = 'SENT';
+          } else if (status === 'delivered') {
+            newInternalStatus = 'DELIVERED';
+          } else if (status === 'read') {
+            newInternalStatus = 'READ';
+          } else if (status === 'failed') {
+            newInternalStatus = 'FAILED';
+          }
+
+          if (!newInternalStatus) {
+            continue;
+          }
+
+          if (!shouldUpdateMessageStatus(message.internalStatus, newInternalStatus)) {
+            logger.debug(
+              {
+                messageId: message.id,
+                currentStatus: message.internalStatus,
+                ignoredStatus: newInternalStatus,
+              },
+              'Ignored out-of-order or regressive WhatsApp delivery status update',
+            );
+            continue;
+          }
+
           const patch: Record<string, unknown> = {
             providerStatus: status,
+            internalStatus: newInternalStatus,
           };
 
-          if (status === 'sent') {
-            patch.internalStatus = 'SENT';
+          if (newInternalStatus === 'SENT') {
             patch.sentAt = timestamp;
-          } else if (status === 'delivered') {
-            patch.internalStatus = 'DELIVERED';
+          } else if (newInternalStatus === 'DELIVERED') {
             patch.deliveredAt = timestamp;
-          } else if (status === 'read') {
-            patch.internalStatus = 'READ';
+          } else if (newInternalStatus === 'READ') {
             patch.readAt = timestamp;
-          } else if (status === 'failed') {
-            patch.internalStatus = 'FAILED';
+          } else if (newInternalStatus === 'FAILED') {
             patch.failedAt = timestamp;
             const errors = (statusObj.errors as Array<Record<string, unknown>>) ?? [];
             if (errors[0]) {
