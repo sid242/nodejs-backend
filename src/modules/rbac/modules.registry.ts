@@ -21,6 +21,7 @@ import {
   membersModuleDefinition,
   tenantsModuleDefinition,
 } from '@/modules/tenants/tenants.permissions';
+import { whatsappModuleDefinition } from '@/modules/whatsapp/whatsapp.permissions';
 
 import type { DomainModuleDefinition } from './modules.types';
 
@@ -39,5 +40,6 @@ export const SYSTEM_MODULE_DEFINITIONS: DomainModuleDefinition[] = [
   onboardingModuleDefinition,
   supportModuleDefinition,
   chatModuleDefinition,
+  whatsappModuleDefinition,
   ...optionalModuleKeys.filter(isModuleInstalled).map((key) => optionalModules[key].catalog),
 ];

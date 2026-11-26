@@ -162,12 +162,77 @@ export const TENANT_TABLES: TenantTableRegistration[] = [
     tenantColumn: 'tenantId',
     dependsOn: ['ChatMessage', 'ChatChannel', 'ChatChannelMember'],
   },
+
+  // WhatsApp Business Platform Tables
+  {
+    name: 'WhatsAppBusinessAccount',
+    table: schema.whatsAppBusinessAccounts,
+    tenantColumn: 'tenantId',
+  },
+  { name: 'WhatsAppContact', table: schema.whatsAppContacts, tenantColumn: 'tenantId' },
+  { name: 'WhatsAppUsageRecord', table: schema.whatsAppUsageRecords, tenantColumn: 'tenantId' },
+  {
+    name: 'WhatsAppPhoneNumber',
+    table: schema.whatsAppPhoneNumbers,
+    tenantColumn: 'tenantId',
+    dependsOn: ['WhatsAppBusinessAccount'],
+  },
+  {
+    name: 'WhatsAppTemplate',
+    table: schema.whatsAppTemplates,
+    tenantColumn: 'tenantId',
+    dependsOn: ['WhatsAppBusinessAccount'],
+  },
+  {
+    name: 'WhatsAppContactConsent',
+    table: schema.whatsAppContactConsents,
+    tenantColumn: 'tenantId',
+    dependsOn: ['WhatsAppContact'],
+  },
+  {
+    name: 'WhatsAppConversation',
+    table: schema.whatsAppConversations,
+    tenantColumn: 'tenantId',
+    dependsOn: ['WhatsAppContact'],
+  },
+  {
+    name: 'WhatsAppMessage',
+    table: schema.whatsAppMessages,
+    tenantColumn: 'tenantId',
+    dependsOn: ['WhatsAppContact'],
+  },
+  {
+    name: 'WhatsAppMessageAttachment',
+    table: schema.whatsAppMessageAttachments,
+    tenantColumn: 'tenantId',
+    dependsOn: ['WhatsAppMessage'],
+  },
+  {
+    name: 'WhatsAppScheduledMessage',
+    table: schema.whatsAppScheduledMessages,
+    tenantColumn: 'tenantId',
+    dependsOn: ['WhatsAppMessage'],
+  },
+  {
+    name: 'WhatsAppCampaign',
+    table: schema.whatsAppCampaigns,
+    tenantColumn: 'tenantId',
+    dependsOn: ['WhatsAppTemplate'],
+  },
+  {
+    name: 'WhatsAppCampaignRecipient',
+    table: schema.whatsAppCampaignRecipients,
+    tenantColumn: 'tenantId',
+    dependsOn: ['WhatsAppCampaign', 'WhatsAppContact'],
+  },
 ];
 
 /**
  * Tables that strictly reside in the primary cluster and are not tenant-scoped.
  */
 export const PRIMARY_ONLY_TABLES: string[] = [
+  'PlatformWhatsAppAccountRegistry',
+  'WhatsAppOtpChallenge',
   'Announcement',
   'AnnouncementDismissal',
   'ChangelogEntry',

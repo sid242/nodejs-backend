@@ -16,3 +16,4 @@ export * from './privacy';
 export * from './analytics';
 export * from './onboarding';
 export * from './chat';
+export * from './whatsapp';

@@ -138,6 +138,17 @@ const schema = z.object({
     (val) => val === 'true' || val === true,
     z.boolean().default(false),
   ),
+
+  // Meta WhatsApp Business Cloud API Configuration
+  META_APP_ID: z.string().optional(),
+  META_APP_SECRET: z.string().optional(),
+  META_CONFIG_ID: z.string().optional(),
+  META_GRAPH_API_VERSION: z.string().default('v21.0'),
+  META_WEBHOOK_VERIFY_TOKEN: z.string().default('whatsapp-verify-token'),
+  WHATSAPP_TOKEN_ENCRYPTION_KEY: z.string().optional(),
+  WHATSAPP_WEBHOOK_URL: z.string().optional(),
+  WHATSAPP_DEFAULT_TIMEZONE: z.string().default('UTC'),
+  WHATSAPP_SEND_RATE_LIMIT_PER_SEC: z.coerce.number().int().min(1).max(500).default(80),
 });
 
 const parsed = schema.safeParse(process.env);

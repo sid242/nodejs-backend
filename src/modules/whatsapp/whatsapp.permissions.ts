@@ -1,0 +1,146 @@
+import type { DomainModuleDefinition } from '@/modules/rbac/modules.types';
+
+export const WHATSAPP_PERMISSIONS = {
+  ACCOUNT_READ: 'whatsapp:account:read',
+  ACCOUNT_MANAGE: 'whatsapp:account:manage',
+  PHONE_NUMBER_READ: 'whatsapp:phone-number:read',
+  PHONE_NUMBER_MANAGE: 'whatsapp:phone-number:manage',
+  TEMPLATE_READ: 'whatsapp:template:read',
+  TEMPLATE_WRITE: 'whatsapp:template:write',
+  TEMPLATE_SUBMIT: 'whatsapp:template:submit',
+  TEMPLATE_DELETE: 'whatsapp:template:delete',
+  MESSAGE_READ: 'whatsapp:message:read',
+  MESSAGE_SEND: 'whatsapp:message:send',
+  CONTACT_READ: 'whatsapp:contact:read',
+  CONTACT_MANAGE: 'whatsapp:contact:manage',
+  CONVERSATION_READ: 'whatsapp:conversation:read',
+  CONVERSATION_REPLY: 'whatsapp:conversation:reply',
+  CONVERSATION_ASSIGN: 'whatsapp:conversation:assign',
+  CAMPAIGN_READ: 'whatsapp:campaign:read',
+  CAMPAIGN_WRITE: 'whatsapp:campaign:write',
+  CAMPAIGN_MANAGE: 'whatsapp:campaign:manage',
+  USAGE_READ: 'whatsapp:usage:read',
+} as const;
+
+export const whatsappModuleDefinition: DomainModuleDefinition = {
+  key: 'whatsapp',
+  name: 'WhatsApp Business',
+  description:
+    'Manage WhatsApp Business accounts, phone numbers, templates, messaging, and conversations',
+  permissions: [
+    {
+      key: WHATSAPP_PERMISSIONS.ACCOUNT_READ,
+      name: 'View WhatsApp Account',
+      action: 'read',
+      description: 'View connected WhatsApp business accounts and connection status',
+    },
+    {
+      key: WHATSAPP_PERMISSIONS.ACCOUNT_MANAGE,
+      name: 'Manage WhatsApp Account',
+      action: 'manage',
+      description: 'Connect, disconnect and configure WhatsApp business accounts',
+    },
+    {
+      key: WHATSAPP_PERMISSIONS.PHONE_NUMBER_READ,
+      name: 'View Phone Numbers',
+      action: 'read',
+      description: 'View connected WhatsApp phone numbers and quality status',
+    },
+    {
+      key: WHATSAPP_PERMISSIONS.PHONE_NUMBER_MANAGE,
+      name: 'Manage Phone Numbers',
+      action: 'manage',
+      description: 'Enable, disable or configure default sending numbers',
+    },
+    {
+      key: WHATSAPP_PERMISSIONS.TEMPLATE_READ,
+      name: 'View Templates',
+      action: 'read',
+      description: 'View WhatsApp message templates and approval statuses',
+    },
+    {
+      key: WHATSAPP_PERMISSIONS.TEMPLATE_WRITE,
+      name: 'Create and Edit Templates',
+      action: 'write',
+      description: 'Create draft message templates and edit variable mappings',
+    },
+    {
+      key: WHATSAPP_PERMISSIONS.TEMPLATE_SUBMIT,
+      name: 'Submit Templates to Meta',
+      action: 'submit',
+      description: 'Submit message templates to Meta for approval',
+    },
+    {
+      key: WHATSAPP_PERMISSIONS.TEMPLATE_DELETE,
+      name: 'Delete Templates',
+      action: 'delete',
+      description: 'Delete message templates from Meta and tenant catalog',
+    },
+    {
+      key: WHATSAPP_PERMISSIONS.MESSAGE_READ,
+      name: 'View Messages',
+      action: 'read',
+      description: 'View sent and received WhatsApp messages and delivery logs',
+    },
+    {
+      key: WHATSAPP_PERMISSIONS.MESSAGE_SEND,
+      name: 'Send Messages',
+      action: 'send',
+      description: 'Send template, text, and media messages via WhatsApp',
+    },
+    {
+      key: WHATSAPP_PERMISSIONS.CONTACT_READ,
+      name: 'View Contacts',
+      action: 'read',
+      description: 'View WhatsApp customer contacts and consent records',
+    },
+    {
+      key: WHATSAPP_PERMISSIONS.CONTACT_MANAGE,
+      name: 'Manage Contacts & Consent',
+      action: 'manage',
+      description: 'Manage contact information and opt-in/opt-out consent status',
+    },
+    {
+      key: WHATSAPP_PERMISSIONS.CONVERSATION_READ,
+      name: 'View Conversations',
+      action: 'read',
+      description: 'View customer conversations and chat history in the inbox',
+    },
+    {
+      key: WHATSAPP_PERMISSIONS.CONVERSATION_REPLY,
+      name: 'Reply to Conversations',
+      action: 'reply',
+      description: 'Send replies to incoming customer inquiries within the 24-hour service window',
+    },
+    {
+      key: WHATSAPP_PERMISSIONS.CONVERSATION_ASSIGN,
+      name: 'Assign Conversations',
+      action: 'assign',
+      description: 'Assign conversations to staff team members',
+    },
+    {
+      key: WHATSAPP_PERMISSIONS.CAMPAIGN_READ,
+      name: 'View Campaigns',
+      action: 'read',
+      description: 'View WhatsApp marketing campaigns and delivery analytics',
+    },
+    {
+      key: WHATSAPP_PERMISSIONS.CAMPAIGN_WRITE,
+      name: 'Create Campaigns',
+      action: 'write',
+      description: 'Create and draft WhatsApp broadcast campaigns',
+    },
+    {
+      key: WHATSAPP_PERMISSIONS.CAMPAIGN_MANAGE,
+      name: 'Manage Campaigns',
+      action: 'manage',
+      description: 'Schedule, pause, resume or cancel WhatsApp broadcast campaigns',
+    },
+    {
+      key: WHATSAPP_PERMISSIONS.USAGE_READ,
+      name: 'View WhatsApp Usage',
+      action: 'read',
+      description: 'View WhatsApp message volume, delivery metrics, and billing estimates',
+    },
+  ],
+};

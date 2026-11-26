@@ -1,5 +1,6 @@
 import { Router } from 'express';
 
+import { validate } from '@/middleware/validate';
 import addressRoutes from '@/modules/addresses/addresses.routes';
 import { platformMetricsRouter } from '@/modules/analytics/analytics.routes';
 import announcementsRoutes from '@/modules/announcements/announcements.routes';
@@ -35,6 +36,10 @@ import { ssoAuthRouter } from '@/modules/sso/sso.routes';
 import { feedbackRouter, platformSupportRouter } from '@/modules/support/support.routes';
 import tenantRoutes from '@/modules/tenants/tenants.routes';
 import userRoutes from '@/modules/users/users.routes';
+import * as whatsAppOtpController from '@/modules/whatsapp/controllers/whatsapp-otp.controller';
+import { sendOtpSchema, verifyOtpSchema } from '@/modules/whatsapp/validators/whatsapp.dto';
+import * as whatsAppWebhookController from '@/modules/whatsapp/webhooks/whatsapp-webhook.controller';
+import whatsAppRoutes from '@/modules/whatsapp/whatsapp.routes';
 
 const router: Router = Router();
 const optionalRouters = { leads: leadsRoutes } satisfies Record<OptionalModuleKey, Router>;
@@ -57,6 +62,20 @@ router.use('/email-templates', emailTemplateRoutes);
 router.use('/billing', billingRoutes);
 router.use('/plans', billingRoutes);
 router.post('/webhooks/razorpay', billingController.handleBillingWebhook);
+router.get('/webhooks/whatsapp', whatsAppWebhookController.verifyWebhook);
+router.post('/webhooks/whatsapp', whatsAppWebhookController.handleWebhook);
+router.post(
+  '/auth/whatsapp/send-otp',
+  validate({ body: sendOtpSchema }),
+  whatsAppOtpController.sendOtp,
+);
+router.post(
+  '/auth/whatsapp/verify-otp',
+  validate({ body: verifyOtpSchema }),
+  whatsAppOtpController.verifyOtp,
+);
+router.use('/tenant/whatsapp', whatsAppRoutes);
+router.use('/whatsapp', whatsAppRoutes);
 router.use('/internal', internalRoutes);
 router.use('/developers', developersRoutes);
 router.use('/feature-flags', featureFlagsRoutes);

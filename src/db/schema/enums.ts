@@ -221,3 +221,122 @@ export const chatParticipantRoleEnum = pgEnum('ChatParticipantRole', ['OWNER', '
 export const chatMessageTypeEnum = pgEnum('ChatMessageType', ['TEXT', 'SYSTEM']);
 
 export const pushChannelEnum = pgEnum('PushChannel', ['webpush', 'fcm', 'apns']);
+
+// WhatsApp Business Platform Enums
+export const whatsAppAccountStatusEnum = pgEnum('WhatsAppAccountStatus', [
+  'NOT_CONNECTED',
+  'ONBOARDING',
+  'PENDING_VERIFICATION',
+  'CONNECTED',
+  'RESTRICTED',
+  'DISCONNECTED',
+  'ERROR',
+]);
+
+export const whatsAppTemplateCategoryEnum = pgEnum('WhatsAppTemplateCategory', [
+  'AUTHENTICATION',
+  'UTILITY',
+  'MARKETING',
+]);
+
+export const whatsAppTemplateStatusEnum = pgEnum('WhatsAppTemplateStatus', [
+  'DRAFT',
+  'SUBMITTED',
+  'PENDING',
+  'APPROVED',
+  'REJECTED',
+  'PAUSED',
+  'DISABLED',
+  'DELETED',
+]);
+
+export const whatsAppMessageTypeEnum = pgEnum('WhatsAppMessageType', [
+  'TEMPLATE',
+  'TEXT',
+  'IMAGE',
+  'DOCUMENT',
+  'VIDEO',
+  'AUDIO',
+  'LOCATION',
+  'INTERACTIVE',
+]);
+
+export const whatsAppMessageDirectionEnum = pgEnum('WhatsAppMessageDirection', [
+  'INBOUND',
+  'OUTBOUND',
+]);
+
+export const whatsAppMessageInternalStatusEnum = pgEnum('WhatsAppMessageInternalStatus', [
+  'QUEUED',
+  'ACCEPTED',
+  'SENT',
+  'DELIVERED',
+  'READ',
+  'FAILED',
+]);
+
+export const whatsAppConversationStatusEnum = pgEnum('WhatsAppConversationStatus', [
+  'OPEN',
+  'PENDING',
+  'CLOSED',
+]);
+
+export const whatsAppConsentStatusEnum = pgEnum('WhatsAppConsentStatus', ['OPTED_IN', 'OPTED_OUT']);
+
+export const whatsAppConsentPurposeEnum = pgEnum('WhatsAppConsentPurpose', [
+  'AUTHENTICATION',
+  'TRANSACTIONAL',
+  'MARKETING',
+]);
+
+export const whatsAppCampaignStatusEnum = pgEnum('WhatsAppCampaignStatus', [
+  'DRAFT',
+  'SCHEDULED',
+  'SENDING',
+  'COMPLETED',
+  'PAUSED',
+  'CANCELLED',
+  'FAILED',
+]);
+
+export const whatsAppCampaignRecipientStatusEnum = pgEnum('WhatsAppCampaignRecipientStatus', [
+  'PENDING',
+  'SENT',
+  'DELIVERED',
+  'READ',
+  'FAILED',
+  'SUPPRESSED',
+]);
+
+export const whatsAppScheduledMessageStatusEnum = pgEnum('WhatsAppScheduledMessageStatus', [
+  'SCHEDULED',
+  'PROCESSING',
+  'SENT',
+  'CANCELLED',
+  'FAILED',
+]);
+
+export const whatsAppOtpPurposeEnum = pgEnum('WhatsAppOtpPurpose', [
+  'LOGIN',
+  'SIGNUP',
+  'PHONE_VERIFICATION',
+  'PASSWORD_RESET',
+  'SENSITIVE_ACTION',
+]);
+
+export type WhatsAppAccountStatus = (typeof whatsAppAccountStatusEnum.enumValues)[number];
+export type WhatsAppTemplateCategory = (typeof whatsAppTemplateCategoryEnum.enumValues)[number];
+export type WhatsAppTemplateStatus = (typeof whatsAppTemplateStatusEnum.enumValues)[number];
+export type WhatsAppMessageType = (typeof whatsAppMessageTypeEnum.enumValues)[number];
+export type WhatsAppMessageDirection = (typeof whatsAppMessageDirectionEnum.enumValues)[number];
+export type WhatsAppMessageInternalStatus =
+  (typeof whatsAppMessageInternalStatusEnum.enumValues)[number];
+export type WhatsAppConversationStatus = (typeof whatsAppConversationStatusEnum.enumValues)[number];
+export type WhatsAppConsentStatus = (typeof whatsAppConsentStatusEnum.enumValues)[number];
+export type WhatsAppConsentPurpose = (typeof whatsAppConsentPurposeEnum.enumValues)[number];
+export type WhatsAppCampaignStatus = (typeof whatsAppCampaignStatusEnum.enumValues)[number];
+export type WhatsAppCampaignRecipientStatus =
+  (typeof whatsAppCampaignRecipientStatusEnum.enumValues)[number];
+export type WhatsAppScheduledMessageStatus =
+  (typeof whatsAppScheduledMessageStatusEnum.enumValues)[number];
+export type WhatsAppOtpPurpose = (typeof whatsAppOtpPurposeEnum.enumValues)[number];

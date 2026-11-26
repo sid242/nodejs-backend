@@ -3,6 +3,8 @@ import { Worker, type Processor, type WorkerOptions } from 'bullmq';
 import { env } from '@/config/env';
 import { logger } from '@/config/logger';
 import { createRedis } from '@/config/redis';
+import { processWhatsAppCampaignJob } from '@/modules/whatsapp/queues/whatsapp-send.processor';
+import { processWhatsAppWebhookJob } from '@/modules/whatsapp/webhooks/whatsapp-webhook.processor';
 import { captureJobException } from '@/observability/sentry';
 import { maintenanceQueue, notificationQueue, QUEUES } from '@/queues/index';
 import { processDbOperation } from '@/queues/workers/db-ops.worker';
@@ -76,6 +78,12 @@ export function startWorkers(): Worker[] {
     createWorker(QUEUES.MEMBER_IMPORT, processMemberImport as Processor, { concurrency: 2 }),
     createWorker(QUEUES.WEBHOOK, processWebhookDelivery as Processor, {
       concurrency: 5,
+    }),
+    createWorker(QUEUES.WHATSAPP_SEND, processWhatsAppCampaignJob as Processor, {
+      concurrency: 5,
+    }),
+    createWorker(QUEUES.WHATSAPP_WEBHOOK, processWhatsAppWebhookJob as Processor, {
+      concurrency: 10,
     }),
   ];
 }

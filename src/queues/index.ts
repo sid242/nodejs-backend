@@ -11,6 +11,10 @@ export const QUEUES = {
   NOTIFICATION: 'notification',
   WEBHOOK: 'webhook-delivery',
   MEMBER_IMPORT: 'member-import',
+  WHATSAPP_SEND: 'whatsapp-send',
+  WHATSAPP_WEBHOOK: 'whatsapp-webhook',
+  WHATSAPP_SCHEDULED: 'whatsapp-scheduled',
+  WHATSAPP_TEMPLATE_SYNC: 'whatsapp-template-sync',
 } as const;
 
 // Producer connection (used by the API and the worker when it enqueues follow-up jobs).
@@ -38,6 +42,10 @@ export const dbOpsQueue = make(QUEUES.DB_OPS);
 export const notificationQueue = make(QUEUES.NOTIFICATION);
 export const webhookQueue = make(QUEUES.WEBHOOK);
 export const memberImportQueue = make(QUEUES.MEMBER_IMPORT);
+export const whatsAppSendQueue = make(QUEUES.WHATSAPP_SEND);
+export const whatsAppWebhookQueue = make(QUEUES.WHATSAPP_WEBHOOK);
+export const whatsAppScheduledQueue = make(QUEUES.WHATSAPP_SCHEDULED);
+export const whatsAppTemplateSyncQueue = make(QUEUES.WHATSAPP_TEMPLATE_SYNC);
 export const allQueues: Queue[] = [
   memberImportQueue,
   emailQueue,
@@ -46,6 +54,10 @@ export const allQueues: Queue[] = [
   dbOpsQueue,
   notificationQueue,
   webhookQueue,
+  whatsAppSendQueue,
+  whatsAppWebhookQueue,
+  whatsAppScheduledQueue,
+  whatsAppTemplateSyncQueue,
 ];
 
 export async function closeQueues(): Promise<void> {
