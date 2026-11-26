@@ -434,6 +434,19 @@ export class MetaCloudApiProvider implements IWhatsAppProvider {
       return false;
     }
   }
+
+  async unsubscribeWabaWebhooks(wabaId: string, accessToken: string): Promise<boolean> {
+    try {
+      const res = await this.request<{ success: boolean }>(`/${wabaId}/subscribed_apps`, {
+        method: 'DELETE',
+        accessToken,
+      });
+      return res.success === true;
+    } catch (err) {
+      logger.warn({ err, wabaId }, 'Failed to unsubscribe WABA from webhook events');
+      return false;
+    }
+  }
 }
 
 export const metaWhatsAppProvider = new MetaCloudApiProvider();

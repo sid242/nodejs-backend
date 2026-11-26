@@ -10,10 +10,11 @@ export function verifyMetaSignature(
 ): boolean {
   const secret = env.META_APP_SECRET;
   if (!secret) {
-    logger.warn(
-      'META_APP_SECRET is not configured; skipping webhook signature verification in non-production',
-    );
-    return env.NODE_ENV !== 'production';
+    if (env.NODE_ENV === 'test') {
+      return true;
+    }
+    logger.error('META_APP_SECRET is not configured; rejecting incoming webhook');
+    return false;
   }
 
   if (!signatureHeader || !rawBody) {
@@ -29,10 +30,12 @@ export function verifyMetaSignature(
   const computedSignature = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
 
   try {
-    return crypto.timingSafeEqual(
-      Buffer.from(expectedSignature, 'hex'),
-      Buffer.from(computedSignature, 'hex'),
-    );
+    const expectedBuf = Buffer.from(expectedSignature, 'hex');
+    const computedBuf = Buffer.from(computedSignature, 'hex');
+    if (expectedBuf.length !== computedBuf.length) {
+      return false;
+    }
+    return crypto.timingSafeEqual(expectedBuf, computedBuf);
   } catch {
     return false;
   }

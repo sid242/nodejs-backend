@@ -24,4 +24,5 @@ export interface IWhatsAppProvider {
   uploadMedia(input: UploadMediaInput): Promise<ProviderMediaResult>;
   exchangeCodeForToken(code: string): Promise<TokenExchangeResult>;
   subscribeWabaWebhooks(wabaId: string, accessToken: string): Promise<boolean>;
+  unsubscribeWabaWebhooks(wabaId: string, accessToken: string): Promise<boolean>;
 }

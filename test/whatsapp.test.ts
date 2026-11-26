@@ -166,3 +166,177 @@ test('WhatsApp OTP Authentication Flow', async (t) => {
     );
   });
 });
+
+test('WhatsApp Template Status Webhook, Security & Clean Disconnect (W2, W9, W13)', async (t) => {
+  const webhookService = await import('@/modules/whatsapp/webhooks/whatsapp-webhook.service');
+  const signatureService = await import('@/modules/whatsapp/webhooks/whatsapp-signature.service');
+  const { whatsAppWebhookQueue } = await import('@/queues/index');
+  const { redis } = await import('@/config/redis');
+
+  const tenantId = 'tenant_w2_w9_w13';
+  const testWabaId = 'waba_test_w2';
+
+  const origAddBulk = whatsAppWebhookQueue.addBulk.bind(whatsAppWebhookQueue);
+
+  await t.test(
+    'W2: routes template status update without phone_number_id via WABA lookup',
+    async () => {
+      const templateUpdatePayload = {
+        object: 'whatsapp_business_account',
+        nonce: `${Date.now()}_w2`,
+        entry: [
+          {
+            id: testWabaId,
+            changes: [
+              {
+                field: 'message_template_status_update',
+                value: {
+                  event: 'APPROVED',
+                  message_template_id: 'meta_template_99',
+                  message_template_name: 'appointment_confirmation',
+                  message_template_language: 'en_US',
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const rawBody = Buffer.from(JSON.stringify(templateUpdatePayload));
+      const secret = env.META_APP_SECRET || 'test-meta-app-secret-32-characters';
+      const origSecret = env.META_APP_SECRET;
+      (env as Record<string, unknown>).META_APP_SECRET = secret;
+      const hmac = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+      const signature = `sha256=${hmac}`;
+
+      let enqueuedJobs: Array<{ data: { tenantId: string; wabaId: string } }> = [];
+      whatsAppWebhookQueue.addBulk = (async (jobs: unknown) => {
+        enqueuedJobs = jobs as typeof enqueuedJobs;
+        return jobs as unknown as ReturnType<typeof whatsAppWebhookQueue.addBulk>;
+      }) as typeof whatsAppWebhookQueue.addBulk;
+
+      const mockDeps = {
+        resolveTenantByPhoneNumberId: async () => undefined,
+        resolveTenantByWabaId: async (wId: string) => {
+          if (wId === testWabaId) {
+            return {
+              tenantId,
+              wabaId: testWabaId,
+              connectionStatus: 'CONNECTED',
+              databaseRoutingKey: 'primary',
+            };
+          }
+          return undefined;
+        },
+      };
+
+      try {
+        const res = await webhookService.processWebhookPayload(
+          rawBody,
+          signature,
+          templateUpdatePayload,
+          mockDeps,
+        );
+        assert.equal(res.status, 'queued');
+        assert.equal(enqueuedJobs.length, 1);
+        assert.equal(enqueuedJobs[0]?.data?.tenantId, tenantId);
+        assert.equal(enqueuedJobs[0]?.data?.wabaId, testWabaId);
+      } finally {
+        (env as Record<string, unknown>).META_APP_SECRET = origSecret;
+        const dedupeKey = `whatsapp:webhook:dedupe:${crypto.createHash('sha256').update(rawBody).digest('hex')}`;
+        await redis.del(dedupeKey);
+      }
+    },
+  );
+
+  await t.test('W13: ignores webhook events when account is DISCONNECTED', async () => {
+    const disconnectedPayload = {
+      object: 'whatsapp_business_account',
+      nonce: `${Date.now()}_w13`,
+      entry: [
+        {
+          id: testWabaId,
+          changes: [
+            {
+              field: 'messages',
+              value: {
+                metadata: { phone_number_id: 'phone_disconnected' },
+                messages: [{ id: 'wamid_disconnected' }],
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const rawBody = Buffer.from(JSON.stringify(disconnectedPayload));
+    const secret = env.META_APP_SECRET || 'test-meta-app-secret-32-characters';
+    const origSecret = env.META_APP_SECRET;
+    (env as Record<string, unknown>).META_APP_SECRET = secret;
+    const hmac = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+    const signature = `sha256=${hmac}`;
+
+    let enqueuedCount = 0;
+    whatsAppWebhookQueue.addBulk = (async (jobs: unknown) => {
+      enqueuedCount = (jobs as unknown[]).length;
+      return jobs as unknown as ReturnType<typeof whatsAppWebhookQueue.addBulk>;
+    }) as typeof whatsAppWebhookQueue.addBulk;
+
+    const mockDeps = {
+      resolveTenantByPhoneNumberId: async () => ({
+        tenantId,
+        wabaId: testWabaId,
+        connectionStatus: 'DISCONNECTED',
+        databaseRoutingKey: 'primary',
+      }),
+      resolveTenantByWabaId: async () => undefined,
+    };
+
+    try {
+      const res = await webhookService.processWebhookPayload(
+        rawBody,
+        signature,
+        disconnectedPayload,
+        mockDeps,
+      );
+      assert.equal(res.status, 'acknowledged');
+      assert.equal(enqueuedCount, 0, 'No jobs must be enqueued for disconnected tenant');
+    } finally {
+      (env as Record<string, unknown>).META_APP_SECRET = origSecret;
+    }
+  });
+
+  await t.test('W9: verifySubscription rejects default token in production', () => {
+    const origNodeEnv = env.NODE_ENV;
+    const origToken = env.META_WEBHOOK_VERIFY_TOKEN;
+    (env as Record<string, unknown>).NODE_ENV = 'production';
+    (env as Record<string, unknown>).META_WEBHOOK_VERIFY_TOKEN = 'whatsapp-verify-token';
+
+    try {
+      assert.throws(
+        () => webhookService.verifySubscription('subscribe', 'whatsapp-verify-token', '12345'),
+        (err: unknown) => err instanceof AppError && err.status === 500,
+      );
+    } finally {
+      (env as Record<string, unknown>).NODE_ENV = origNodeEnv;
+      (env as Record<string, unknown>).META_WEBHOOK_VERIFY_TOKEN = origToken;
+    }
+  });
+
+  await t.test('W9: verifyMetaSignature rejects when secret is missing in staging/prod', () => {
+    const origNodeEnv = env.NODE_ENV;
+    const origSecret = env.META_APP_SECRET;
+    (env as Record<string, unknown>).NODE_ENV = 'staging';
+    (env as Record<string, unknown>).META_APP_SECRET = undefined;
+
+    try {
+      const verified = signatureService.verifyMetaSignature('sha256=abcdef', Buffer.from('test'));
+      assert.equal(verified, false);
+    } finally {
+      (env as Record<string, unknown>).NODE_ENV = origNodeEnv;
+      (env as Record<string, unknown>).META_APP_SECRET = origSecret;
+    }
+  });
+
+  whatsAppWebhookQueue.addBulk = origAddBulk;
+});

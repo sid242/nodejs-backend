@@ -88,6 +88,17 @@ export async function setPhoneNumberEnabled(
 }
 
 export async function disconnectAccount(tenantId: string, userId: string, accountId: string) {
+  // 1. Unsubscribe WABA webhooks if credentials are still present
+  try {
+    const { account, accessToken } = await getDecryptedAccountToken(tenantId);
+    if (account?.wabaId && accessToken) {
+      await metaWhatsAppProvider.unsubscribeWabaWebhooks(account.wabaId, accessToken);
+    }
+  } catch {
+    // If already disconnected or credentials unavailable, proceed to local cleanup
+  }
+
+  // 2. Mark account DISCONNECTED, wipe token, and update registry
   const disconnected = await accountRepo.disconnectAccount(tenantId, accountId);
   if (!disconnected) {
     throw AppError.notFound('WhatsApp account not found', {
