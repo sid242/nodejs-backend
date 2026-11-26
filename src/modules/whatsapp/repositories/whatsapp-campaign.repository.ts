@@ -85,6 +85,80 @@ export async function listCampaignRecipients(
     .offset(offset);
 }
 
+export async function listPendingCampaignRecipients(
+  tenantId: string,
+  campaignId: string,
+  limit = 200,
+): Promise<WhatsAppCampaignRecipientRecord[]> {
+  return tenantDb()
+    .select()
+    .from(whatsAppCampaignRecipients)
+    .where(
+      and(
+        eq(whatsAppCampaignRecipients.tenantId, tenantId),
+        eq(whatsAppCampaignRecipients.campaignId, campaignId),
+        eq(whatsAppCampaignRecipients.status, 'PENDING'),
+      ),
+    )
+    .limit(limit);
+}
+
+export async function updateCampaignRecipient(
+  tenantId: string,
+  recipientId: string,
+  patch: Partial<NewWhatsAppCampaignRecipientRecord>,
+): Promise<WhatsAppCampaignRecipientRecord | undefined> {
+  const [updated] = await tenantDb()
+    .update(whatsAppCampaignRecipients)
+    .set({
+      ...patch,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(whatsAppCampaignRecipients.id, recipientId),
+        eq(whatsAppCampaignRecipients.tenantId, tenantId),
+      ),
+    )
+    .returning();
+  return updated;
+}
+
+export async function getCampaignRecipientSummary(
+  tenantId: string,
+  campaignId: string,
+): Promise<{
+  total: number;
+  pending: number;
+  sent: number;
+  failed: number;
+  suppressed: number;
+}> {
+  const rows = await tenantDb()
+    .select({
+      status: whatsAppCampaignRecipients.status,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(whatsAppCampaignRecipients)
+    .where(
+      and(
+        eq(whatsAppCampaignRecipients.tenantId, tenantId),
+        eq(whatsAppCampaignRecipients.campaignId, campaignId),
+      ),
+    )
+    .groupBy(whatsAppCampaignRecipients.status);
+
+  const summary = { total: 0, pending: 0, sent: 0, failed: 0, suppressed: 0 };
+  for (const row of rows) {
+    summary.total += row.count;
+    if (row.status === 'PENDING') summary.pending += row.count;
+    else if (row.status === 'SENT') summary.sent += row.count;
+    else if (row.status === 'FAILED') summary.failed += row.count;
+    else if (row.status === 'SUPPRESSED') summary.suppressed += row.count;
+  }
+  return summary;
+}
+
 export async function incrementCampaignCounters(
   tenantId: string,
   campaignId: string,
