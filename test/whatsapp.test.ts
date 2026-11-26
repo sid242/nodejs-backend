@@ -895,3 +895,89 @@ test('WhatsApp Template Status Webhook, Security & Clean Disconnect (W2, W9, W13
 
   whatsAppWebhookQueue.addBulk = origAddBulk;
 });
+
+test('WhatsApp Graph API Version Expiry & Token Exchange (W8)', async (t) => {
+  const { checkGraphApiVersionExpiry } =
+    await import('@/modules/whatsapp/utils/graph-version.util');
+  const { MetaCloudApiProvider } =
+    await import('@/modules/whatsapp/providers/meta-cloud-api.provider');
+
+  await t.test('detects expired Graph API version', () => {
+    // Reference date after v19.0 expiry (2026-05-14)
+    const refDate = new Date('2026-06-01T00:00:00Z');
+    const result = checkGraphApiVersionExpiry('v19.0', refDate);
+    assert.equal(result.isExpired, true);
+    assert.ok(result.warning?.includes('expired on'));
+  });
+
+  await t.test('detects Graph API version within 90 days of expiry', () => {
+    // Reference date 30 days before v21.0 expiry (2027-01-21) -> ~2026-12-22
+    const refDate = new Date('2026-12-22T00:00:00Z');
+    const result = checkGraphApiVersionExpiry('v21.0', refDate);
+    assert.equal(result.isExpired, false);
+    assert.ok(result.daysRemaining !== null && result.daysRemaining <= 90);
+    assert.ok(result.warning?.includes('will expire on'));
+  });
+
+  await t.test('approves stable current Graph API version (v26.0)', () => {
+    const refDate = new Date('2026-11-26T00:00:00Z');
+    const result = checkGraphApiVersionExpiry('v26.0', refDate);
+    assert.equal(result.isExpired, false);
+    assert.ok(result.daysRemaining !== null && result.daysRemaining > 90);
+    assert.equal(result.warning, undefined);
+  });
+
+  await t.test('MetaCloudApiProvider defaults to v26.0', () => {
+    const provider = new MetaCloudApiProvider();
+    assert.equal(env.META_GRAPH_API_VERSION, 'v26.0');
+    assert.ok(provider);
+  });
+
+  await t.test('exchangeCodeForToken sends credentials in POST body, not query', async () => {
+    const provider = new MetaCloudApiProvider();
+    const origAppId = env.META_APP_ID;
+    const origAppSecret = env.META_APP_SECRET;
+
+    (env as unknown as Record<string, unknown>).META_APP_ID = 'test-meta-app-id';
+    (env as unknown as Record<string, unknown>).META_APP_SECRET = 'test-meta-app-secret';
+
+    const origFetch = global.fetch;
+    let interceptedUrl: string | undefined;
+    let interceptedMethod: string | undefined;
+    let interceptedBody: string | undefined;
+
+    try {
+      global.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+        interceptedUrl = String(input);
+        interceptedMethod = init?.method;
+        interceptedBody = String(init?.body ?? '');
+        return new Response(
+          JSON.stringify({
+            access_token: 'mock-access-token-from-code',
+            token_type: 'bearer',
+            expires_in: 5184000,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      };
+
+      const result = await provider.exchangeCodeForToken('meta-test-auth-code');
+      assert.equal(result.accessToken, 'mock-access-token-from-code');
+      assert.equal(result.tokenType, 'bearer');
+      assert.equal(interceptedMethod, 'POST');
+      assert.ok(interceptedUrl?.endsWith('/oauth/access_token'));
+      // Verify query string does NOT leak secrets
+      assert.ok(!interceptedUrl?.includes('client_secret'));
+      assert.ok(!interceptedUrl?.includes('code='));
+      // Verify body contains the secrets
+      const parsedBody = JSON.parse(interceptedBody ?? '{}');
+      assert.equal(parsedBody.client_id, 'test-meta-app-id');
+      assert.equal(parsedBody.client_secret, 'test-meta-app-secret');
+      assert.equal(parsedBody.code, 'meta-test-auth-code');
+    } finally {
+      global.fetch = origFetch;
+      (env as unknown as Record<string, unknown>).META_APP_ID = origAppId;
+      (env as unknown as Record<string, unknown>).META_APP_SECRET = origAppSecret;
+    }
+  });
+});

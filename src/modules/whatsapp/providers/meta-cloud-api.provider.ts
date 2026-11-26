@@ -20,6 +20,7 @@ import type {
   WhatsAppTemplateCategory,
   WhatsAppTemplateStatus,
 } from '../types/whatsapp-provider.types';
+import { warnIfGraphVersionCloseToExpiry } from '../utils/graph-version.util';
 import type { IWhatsAppProvider } from './whatsapp-provider.interface';
 
 export class MetaCloudApiProvider implements IWhatsAppProvider {
@@ -27,8 +28,9 @@ export class MetaCloudApiProvider implements IWhatsAppProvider {
   private readonly graphVersion: string;
 
   constructor(graphVersion?: string) {
-    this.graphVersion = graphVersion ?? env.META_GRAPH_API_VERSION ?? 'v21.0';
+    this.graphVersion = graphVersion ?? env.META_GRAPH_API_VERSION ?? 'v26.0';
     this.baseUrl = `https://graph.facebook.com/${this.graphVersion}`;
+    warnIfGraphVersionCloseToExpiry(this.graphVersion);
   }
 
   private mapGraphError(errorData: unknown, status: number): AppError {
@@ -119,7 +121,7 @@ export class MetaCloudApiProvider implements IWhatsAppProvider {
     endpoint: string,
     options: {
       method?: 'GET' | 'POST' | 'DELETE';
-      accessToken: string;
+      accessToken?: string;
       body?: unknown;
       headers?: Record<string, string>;
       isFormData?: boolean;
@@ -127,9 +129,11 @@ export class MetaCloudApiProvider implements IWhatsAppProvider {
   ): Promise<T> {
     const url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${options.accessToken}`,
       ...options.headers,
     };
+    if (options.accessToken) {
+      headers.Authorization = `Bearer ${options.accessToken}`;
+    }
 
     let reqBody: BodyInit | undefined;
     if (options.body) {
@@ -411,11 +415,11 @@ export class MetaCloudApiProvider implements IWhatsAppProvider {
       expires_in?: number;
     }>('/oauth/access_token', {
       method: 'POST',
-      body: JSON.stringify({
+      body: {
         client_id: appId,
         client_secret: appSecret,
         code,
-      }),
+      },
       accessToken: `${appId}|${appSecret}`,
     });
 
