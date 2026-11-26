@@ -143,7 +143,7 @@ const schema = z.object({
   META_APP_ID: z.string().optional(),
   META_APP_SECRET: z.string().optional(),
   META_CONFIG_ID: z.string().optional(),
-  META_GRAPH_API_VERSION: z.string().default('v21.0'),
+  META_GRAPH_API_VERSION: z.string().default('v26.0'),
   META_WEBHOOK_VERIFY_TOKEN: z.string().default('whatsapp-verify-token'),
   WHATSAPP_TOKEN_ENCRYPTION_KEY: z.string().optional(),
   WHATSAPP_WEBHOOK_URL: z.string().optional(),
