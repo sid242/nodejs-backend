@@ -166,3 +166,16 @@ test('WhatsApp OTP Authentication Flow', async (t) => {
     );
   });
 });
+
+test('WhatsApp Broadcast Campaign Resumable Processing & Reconciliation (W11)', async (t) => {
+  const campaignRepo = await import('@/modules/whatsapp/repositories/whatsapp-campaign.repository');
+
+  await t.test(
+    'exports listPendingCampaignRecipients and updateCampaignRecipient functions',
+    () => {
+      assert.equal(typeof campaignRepo.listPendingCampaignRecipients, 'function');
+      assert.equal(typeof campaignRepo.updateCampaignRecipient, 'function');
+      assert.equal(typeof campaignRepo.getCampaignRecipientSummary, 'function');
+    },
+  );
+});
