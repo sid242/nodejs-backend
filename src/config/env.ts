@@ -149,6 +149,11 @@ const schema = z.object({
   WHATSAPP_WEBHOOK_URL: z.string().optional(),
   WHATSAPP_DEFAULT_TIMEZONE: z.string().default('UTC'),
   WHATSAPP_SEND_RATE_LIMIT_PER_SEC: z.coerce.number().int().min(1).max(500).default(80),
+  ENABLE_WHATSAPP_AUTH_OTP: z.preprocess(
+    (val) => val === 'true' || val === true,
+    z.boolean().default(false),
+  ),
+  WHATSAPP_OTP_SECRET: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);

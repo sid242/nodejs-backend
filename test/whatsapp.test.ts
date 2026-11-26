@@ -136,34 +136,59 @@ test('WhatsApp Webhook Handshake & Signature Security', async (t) => {
   });
 });
 
-test('WhatsApp OTP Authentication Flow', async (t) => {
+test('WhatsApp OTP Authentication Flow (W16)', async (t) => {
   const testPhone = `+9199${Math.floor(10000000 + Math.random() * 90000000)}`;
+  const otpService = await import('@/modules/whatsapp/services/whatsapp-otp.service');
 
-  await t.test('sends OTP challenge and stores secure hash', async () => {
-    const res = await import('@/modules/whatsapp/services/whatsapp-otp.service').then((m) =>
-      m.sendOtp({ phoneNumber: testPhone, purpose: 'LOGIN' }),
-    );
-
-    assert.equal(res.success, true);
-    assert.equal(res.expiresInSeconds, 300);
+  await t.test('rejects sendOtp when ENABLE_WHATSAPP_AUTH_OTP is disabled (default)', async () => {
+    const origFlag = env.ENABLE_WHATSAPP_AUTH_OTP;
+    (env as unknown as Record<string, unknown>).ENABLE_WHATSAPP_AUTH_OTP = false;
+    try {
+      await assert.rejects(
+        async () => {
+          await otpService.sendOtp({ phoneNumber: testPhone, purpose: 'LOGIN' });
+        },
+        (err: unknown) =>
+          err instanceof AppError && err.status === 503 && err.code === 'WHATSAPP_OTP_DISABLED',
+      );
+    } finally {
+      (env as unknown as Record<string, unknown>).ENABLE_WHATSAPP_AUTH_OTP = origFlag;
+    }
   });
 
-  await t.test('rejects incorrect verification code', async () => {
-    const otpService = await import('@/modules/whatsapp/services/whatsapp-otp.service');
-    await assert.rejects(
-      async () => {
-        await otpService.verifyOtp({
-          phoneNumber: testPhone,
-          purpose: 'LOGIN',
-          code: '000000',
-        });
-      },
-      (err: unknown) =>
-        err instanceof AppError &&
-        err.status === 400 &&
-        ((err.details as Record<string, unknown>)?.code === 'WHATSAPP_OTP_INVALID' ||
-          err.code === 'BAD_REQUEST'),
-    );
+  await t.test('sends OTP challenge and stores secure hash when feature flag enabled', async () => {
+    const origFlag = env.ENABLE_WHATSAPP_AUTH_OTP;
+    (env as unknown as Record<string, unknown>).ENABLE_WHATSAPP_AUTH_OTP = true;
+    try {
+      const res = await otpService.sendOtp({ phoneNumber: testPhone, purpose: 'LOGIN' });
+      assert.equal(res.success, true);
+      assert.equal(res.expiresInSeconds, 300);
+    } finally {
+      (env as unknown as Record<string, unknown>).ENABLE_WHATSAPP_AUTH_OTP = origFlag;
+    }
+  });
+
+  await t.test('rejects incorrect verification code when enabled', async () => {
+    const origFlag = env.ENABLE_WHATSAPP_AUTH_OTP;
+    (env as unknown as Record<string, unknown>).ENABLE_WHATSAPP_AUTH_OTP = true;
+    try {
+      await assert.rejects(
+        async () => {
+          await otpService.verifyOtp({
+            phoneNumber: testPhone,
+            purpose: 'LOGIN',
+            code: '000000',
+          });
+        },
+        (err: unknown) =>
+          err instanceof AppError &&
+          err.status === 400 &&
+          ((err.details as Record<string, unknown>)?.code === 'WHATSAPP_OTP_INVALID' ||
+            err.code === 'BAD_REQUEST'),
+      );
+    } finally {
+      (env as unknown as Record<string, unknown>).ENABLE_WHATSAPP_AUTH_OTP = origFlag;
+    }
   });
 });
 

@@ -14,9 +14,10 @@ const MAX_VERIFY_ATTEMPTS = 5;
 const RESEND_COOLDOWN_SECONDS = 60;
 
 function hashOtp(code: string, phoneNumber: string, purpose: string): string {
+  const secret = env.WHATSAPP_OTP_SECRET || env.META_APP_SECRET || env.JWT_ACCESS_SECRET;
   return crypto
-    .createHash('sha256')
-    .update(`${phoneNumber}:${purpose}:${code}:${env.JWT_ACCESS_SECRET}`)
+    .createHmac('sha256', secret)
+    .update(`${phoneNumber}:${purpose}:${code}`)
     .digest('hex');
 }
 
@@ -39,6 +40,14 @@ export async function sendOtp(
   message: string;
   expiresInSeconds: number;
 }> {
+  if (!env.ENABLE_WHATSAPP_AUTH_OTP) {
+    throw new AppError(
+      503,
+      'WhatsApp OTP authentication is currently disabled.',
+      'WHATSAPP_OTP_DISABLED',
+    );
+  }
+
   const normalizedPhone = normalizePhoneNumber(dto.phoneNumber);
 
   // 1. Enforce per-phone and per-IP cooldown rate limit
@@ -108,6 +117,14 @@ export async function verifyOtp(dto: VerifyOtpDto): Promise<{
   verified: boolean;
   message: string;
 }> {
+  if (!env.ENABLE_WHATSAPP_AUTH_OTP) {
+    throw new AppError(
+      503,
+      'WhatsApp OTP authentication is currently disabled.',
+      'WHATSAPP_OTP_DISABLED',
+    );
+  }
+
   const normalizedPhone = normalizePhoneNumber(dto.phoneNumber);
   const inputHash = hashOtp(dto.code.trim(), normalizedPhone, dto.purpose);
 
