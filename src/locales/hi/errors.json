@@ -1,0 +1,18 @@
+{
+  "UNAUTHORIZED": "अनधिकृत",
+  "FORBIDDEN": "पहुंच अस्वीकृत",
+  "NOT_FOUND": "संसाधन नहीं मिला",
+  "CONFLICT": "एक विरोध उत्पन्न हुआ",
+  "VALIDATION_ERROR": "सत्यापन विफल रहा",
+  "INTERNAL_ERROR": "एक आंतरिक सर्वर त्रुटि उत्पन्न हुई",
+  "TOKEN_EXPIRED": "टोकन समाप्त हो गया है",
+  "RATE_LIMIT_EXCEEDED": "दर सीमा पार हो गई। कृपया बाद में पुनः प्रयास करें।",
+  "TENANT_MAINTENANCE": "कार्यस्थान रखरखाव के अंतर्गत है",
+  "BAD_REQUEST": "अमान्य अनुरोध",
+  "PAYLOAD_TOO_LARGE": "पेलोड बहुत बड़ा है",
+  "BAD_JSON": "विकृत JSON सामग्री",
+  "INVALID_CREDENTIALS": "अमान्य ईमेल या पासवर्ड",
+  "USER_LOCKED": "उपयोगकर्ता खाता बंद है",
+  "USER_INACTIVE": "उपयोगकर्ता खाता निष्क्रिय है",
+  "WORKSPACE_NOT_FOUND": "कार्यस्थान नहीं मिला"
+}

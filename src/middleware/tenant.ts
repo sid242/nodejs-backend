@@ -10,6 +10,8 @@ import { getLatestSchemaTag, isSchemaVersionCurrent } from '@/db/schema-version'
 import { runWithTenantDb } from '@/db/tenancy/context';
 import { getTenantDb } from '@/db/tenancy/tenant-db';
 import { AppError } from '@/lib/errors';
+import { resolveLocale } from '@/lib/i18n';
+import { setRequestLocale } from '@/lib/request-context';
 import { SUPPORT_SCOPE_PRESETS } from '@/middleware/support';
 import * as platformRepo from '@/modules/platform/platform.repository';
 import { resolveUserPermissions, SYSTEM_ROLES } from '@/modules/rbac/rbac.service';
@@ -339,6 +341,14 @@ export async function resolveTenantContext(
     }
 
     req.permissions = effectivePermissions;
+
+    const resolvedLocale = resolveLocale({
+      header: (req.headers['x-locale'] as string | undefined) || undefined,
+      userLocale: (req.user as { locale?: string } | undefined)?.locale,
+      tenantLocale: (tenant as { locale?: string } | undefined)?.locale,
+      acceptLanguage: (req.headers['accept-language'] as string | undefined) || undefined,
+    });
+    setRequestLocale(resolvedLocale);
 
     if (isRlsPilotEnabled(req.tenant, req)) {
       return req.db

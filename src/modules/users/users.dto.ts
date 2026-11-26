@@ -1,9 +1,11 @@
 import { z } from 'zod';
 
+import { SUPPORTED_LOCALES } from '@/lib/i18n';
+
 export const updateMeDto = z.object({
   firstName: z.string().min(1).max(50).optional(),
   lastName: z.string().max(50).nullable().optional(),
-  locale: z.string().min(2).max(10).optional(),
+  locale: z.enum(SUPPORTED_LOCALES).optional(),
   timezone: z.string().min(1).max(50).optional(),
   dateFormat: z.string().min(1).max(20).optional(),
   avatarUrl: z.string().url('Must be a valid URL').nullable().optional(),

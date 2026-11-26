@@ -3,11 +3,16 @@ import jwt from 'jsonwebtoken';
 import { ZodError } from 'zod';
 
 import { AppError } from '@/lib/errors';
+import { t } from '@/lib/i18n';
+import { localizeZodError } from '@/lib/i18n/zod-error-map';
+import { getLocale } from '@/lib/request-context';
 import { captureException } from '@/observability/sentry';
 
 export function notFound(req: Request, res: Response): void {
+  const localized = t('errors.NOT_FOUND');
+  const base = localized !== 'errors.NOT_FOUND' ? localized : 'Resource not found';
   res.status(404).json({
-    error: { code: 'NOT_FOUND', message: `Route ${req.method} ${req.originalUrl} not found` },
+    error: { code: 'NOT_FOUND', message: `${base}: ${req.method} ${req.originalUrl}` },
     requestId: req.id,
   });
 }
@@ -17,16 +22,20 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   let code = 'INTERNAL_ERROR';
   let message = 'Something went wrong';
   let details: unknown = undefined;
+  let params: Record<string, unknown> | undefined = undefined;
 
   const errObj = (typeof err === 'object' && err !== null ? err : {}) as Record<string, unknown>;
 
   if (err instanceof AppError) {
-    ({ status, code, message, details } = err);
+    ({ status, code, message, details, params } = err);
   } else if (err instanceof ZodError) {
     status = 400;
     code = 'VALIDATION_ERROR';
-    message = 'Invalid request';
-    details = err.flatten();
+    const locale = getLocale();
+    const localizedErr = localizeZodError(err, locale);
+    const localizedCodeMsg = t('errors.VALIDATION_ERROR');
+    message = localizedCodeMsg !== 'errors.VALIDATION_ERROR' ? localizedCodeMsg : 'Invalid request';
+    details = localizedErr.flatten();
   } else if (err instanceof jwt.TokenExpiredError) {
     status = 401;
     code = 'TOKEN_EXPIRED';
@@ -48,6 +57,14 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     status = 413;
     code = 'PAYLOAD_TOO_LARGE';
     message = 'Payload too large';
+  }
+
+  // Look up localized error text for the resolved error code if not already set by ZodError
+  if (!(err instanceof ZodError)) {
+    const localizedMsg = t(`errors.${code}`, params);
+    if (localizedMsg && localizedMsg !== `errors.${code}`) {
+      message = localizedMsg;
+    }
   }
 
   const log = req?.log;

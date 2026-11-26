@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { normalizeLocale } from '@/lib/i18n';
+
 export const emailTemplateCategories = [
   'MARKETING',
   'TRANSACTIONAL',
@@ -54,7 +56,13 @@ export const createEmailTemplateDto = z.object({
     .max(100)
     .regex(/^[a-z0-9-]+$/, 'Slug must only contain lowercase alphanumeric characters and hyphens')
     .optional(),
-  locale: z.string().trim().min(2).max(10).default('en'),
+  locale: z
+    .string()
+    .trim()
+    .min(2)
+    .max(10)
+    .refine((val) => normalizeLocale(val) !== null, { message: 'Unsupported locale' })
+    .default('en'),
   subject: z.string().trim().min(1, 'Subject is required').max(200),
   category: z.enum(emailTemplateCategories).default('CUSTOM'),
   status: z.enum(emailTemplateStatuses).default('DRAFT'),
@@ -99,7 +107,11 @@ export const listEmailTemplatesQueryDto = z.object({
   search: z.string().trim().optional(),
   category: z.enum(emailTemplateCategories).optional(),
   status: z.enum(emailTemplateStatuses).optional(),
-  locale: z.string().trim().optional(),
+  locale: z
+    .string()
+    .trim()
+    .refine((val) => normalizeLocale(val) !== null, { message: 'Unsupported locale' })
+    .optional(),
 });
 
 export type ListEmailTemplatesQueryDto = z.infer<typeof listEmailTemplatesQueryDto>;

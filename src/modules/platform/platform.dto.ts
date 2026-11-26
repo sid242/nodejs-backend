@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { normalizeLocale } from '@/lib/i18n';
 import { tenantSlugSchema } from '@/modules/tenants/tenants.dto';
 
 // ==========================================
@@ -222,7 +223,11 @@ export const provisionTenantDto = z.object({
   country: z.string().trim().max(100).optional(),
   region: z.string().trim().max(100).optional(),
   timezone: z.string().trim().default('UTC'),
-  locale: z.string().trim().default('en-US'),
+  locale: z
+    .string()
+    .trim()
+    .refine((v) => normalizeLocale(v) !== null, { message: 'Unsupported locale' })
+    .default('en-US'),
   currency: z.string().trim().default('USD'),
   supportEmail: z.string().trim().email().optional(),
   supportPhone: z.string().trim().max(30).optional(),
@@ -287,7 +292,11 @@ export const updatePlatformTenantDto = z.object({
   country: z.string().trim().max(100).optional(),
   region: z.string().trim().max(100).optional(),
   timezone: z.string().trim().optional(),
-  locale: z.string().trim().optional(),
+  locale: z
+    .string()
+    .trim()
+    .refine((v) => normalizeLocale(v) !== null, { message: 'Unsupported locale' })
+    .optional(),
   currency: z.string().trim().optional(),
   supportEmail: z.string().trim().email().optional(),
   supportPhone: z.string().trim().max(30).optional(),

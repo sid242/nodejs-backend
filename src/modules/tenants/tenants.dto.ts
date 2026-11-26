@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { normalizeLocale } from '@/lib/i18n';
+
 export const RESERVED_SLUGS = [
   'www',
   'api',
@@ -373,7 +375,15 @@ export type VerifyCustomDomainDto = z.infer<typeof verifyCustomDomainDto>;
 
 export const updateTenantSettingsDto = z.object({
   timezone: z.string().trim().min(1).max(100).optional(),
-  locale: z.string().trim().min(1).max(20).optional(),
+  locale: z
+    .string()
+    .trim()
+    .min(1)
+    .max(20)
+    .refine((val) => normalizeLocale(val) !== null, {
+      message: 'Unsupported locale. Must be a supported language (e.g. en, hi, en-US, hi-IN)',
+    })
+    .optional(),
   currency: z.string().trim().length(3).optional(),
   dateFormat: z.string().trim().min(1).max(30).optional(),
   timeFormat: z.enum(['12h', '24h']).optional(),

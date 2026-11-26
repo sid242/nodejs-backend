@@ -1,5 +1,7 @@
 import { Router } from 'express';
 
+import { LOCALES_METADATA } from '@/lib/i18n';
+import { AppResponse } from '@/lib/responses';
 import { validate } from '@/middleware/validate';
 import addressRoutes from '@/modules/addresses/addresses.routes';
 import { platformMetricsRouter } from '@/modules/analytics/analytics.routes';
@@ -92,5 +94,8 @@ router.use('/feedback', feedbackRouter);
 router.use('/geo', geoRoutes);
 router.use('/addresses', addressRoutes);
 router.get('/public/plans', billingController.listPublicPlans);
+router.get('/meta/locales', (_req, res) => {
+  return AppResponse.ok(Object.values(LOCALES_METADATA)).send(res);
+});
 
 export default router;

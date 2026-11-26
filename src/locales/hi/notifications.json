@@ -1,0 +1,7 @@
+{
+  "default_title": "नई सूचना",
+  "welcome_title": "{{appName}} में आपका स्वागत है",
+  "welcome_body": "स्वागत है, {{name}}! आपका कार्यस्थान तैयार है।",
+  "security_alert_title": "सुरक्षा चेतावनी",
+  "security_alert_body": "आपके खाते में एक नया साइन-इन देखा गया।"
+}

@@ -1,0 +1,7 @@
+{
+  "default_title": "New Notification",
+  "welcome_title": "Welcome to {{appName}}",
+  "welcome_body": "Welcome aboard, {{name}}! Your workspace is ready.",
+  "security_alert_title": "Security Alert",
+  "security_alert_body": "A new sign-in was detected on your account."
+}

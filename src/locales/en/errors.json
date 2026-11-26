@@ -1,0 +1,18 @@
+{
+  "UNAUTHORIZED": "Unauthorized",
+  "FORBIDDEN": "Access denied",
+  "NOT_FOUND": "Resource not found",
+  "CONFLICT": "A conflict occurred",
+  "VALIDATION_ERROR": "Validation failed",
+  "INTERNAL_ERROR": "An internal server error occurred",
+  "TOKEN_EXPIRED": "Token has expired",
+  "RATE_LIMIT_EXCEEDED": "Rate limit exceeded. Please try again later.",
+  "TENANT_MAINTENANCE": "Tenant workspace is under maintenance",
+  "BAD_REQUEST": "Bad request",
+  "PAYLOAD_TOO_LARGE": "Payload too large",
+  "BAD_JSON": "Malformed JSON body",
+  "INVALID_CREDENTIALS": "Invalid email or password",
+  "USER_LOCKED": "User account is locked",
+  "USER_INACTIVE": "User account is inactive",
+  "WORKSPACE_NOT_FOUND": "Workspace not found"
+}
