@@ -166,3 +166,38 @@ test('WhatsApp OTP Authentication Flow', async (t) => {
     );
   });
 });
+
+test('WhatsApp Versioned Rate Card & Cost Estimation (W14)', async (t) => {
+  const { calculateEstimatedCost } = await import('@/modules/whatsapp/utils/rate-card.util');
+
+  await t.test('calculates correct rates for India (IN)', () => {
+    const marketing = calculateEstimatedCost('MARKETING', 'IN');
+    assert.equal(marketing.currency, 'INR');
+    assert.equal(marketing.estimatedCost, '0.8600');
+    assert.equal(marketing.rateCardVersion, '2026-01');
+
+    const utility = calculateEstimatedCost('UTILITY', 'IN');
+    assert.equal(utility.currency, 'INR');
+    assert.equal(utility.estimatedCost, '0.1150');
+
+    const auth = calculateEstimatedCost('AUTHENTICATION', 'IN');
+    assert.equal(auth.currency, 'INR');
+    assert.equal(auth.estimatedCost, '0.1150');
+  });
+
+  await t.test('calculates correct rates for United States (US)', () => {
+    const marketing = calculateEstimatedCost('MARKETING', 'US');
+    assert.equal(marketing.currency, 'USD');
+    assert.equal(marketing.estimatedCost, '0.0250');
+
+    const utility = calculateEstimatedCost('UTILITY', 'US');
+    assert.equal(utility.currency, 'USD');
+    assert.equal(utility.estimatedCost, '0.0150');
+  });
+
+  await t.test('falls back gracefully to default rate card for unknown regions', () => {
+    const unknownCountry = calculateEstimatedCost('MARKETING', 'ZZ');
+    assert.equal(unknownCountry.currency, 'INR');
+    assert.equal(unknownCountry.estimatedCost, '0.8600');
+  });
+});
