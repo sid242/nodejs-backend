@@ -1,5 +1,7 @@
-import { Router } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 
+import { env } from '@/config/env';
+import { AppError } from '@/lib/errors';
 import { LOCALES_METADATA } from '@/lib/i18n';
 import { AppResponse } from '@/lib/responses';
 import { validate } from '@/middleware/validate';
@@ -66,13 +68,26 @@ router.use('/plans', billingRoutes);
 router.post('/webhooks/razorpay', billingController.handleBillingWebhook);
 router.get('/webhooks/whatsapp', whatsAppWebhookController.verifyWebhook);
 router.post('/webhooks/whatsapp', whatsAppWebhookController.handleWebhook);
+const requireWhatsAppOtpEnabled = (_req: Request, _res: Response, next: NextFunction) => {
+  if (!env.ENABLE_WHATSAPP_AUTH_OTP) {
+    throw new AppError(
+      503,
+      'WhatsApp OTP authentication is currently disabled.',
+      'WHATSAPP_OTP_DISABLED',
+    );
+  }
+  next();
+};
+
 router.post(
   '/auth/whatsapp/send-otp',
+  requireWhatsAppOtpEnabled,
   validate({ body: sendOtpSchema }),
   whatsAppOtpController.sendOtp,
 );
 router.post(
   '/auth/whatsapp/verify-otp',
+  requireWhatsAppOtpEnabled,
   validate({ body: verifyOtpSchema }),
   whatsAppOtpController.verifyOtp,
 );
