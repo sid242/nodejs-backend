@@ -1,4 +1,8 @@
-import type { WhatsAppConsentPurpose, WhatsAppMessageType } from '@/db/schema/enums';
+import type {
+  WhatsAppConsentPurpose,
+  WhatsAppContactConsentRecord,
+  WhatsAppMessageType,
+} from '@/db/schema';
 import { AppError } from '@/lib/errors';
 
 import { metaWhatsAppProvider } from '../providers/meta-cloud-api.provider';
@@ -46,6 +50,29 @@ export interface SendMediaMessageDto {
     filename?: string;
   };
   idempotencyKey?: string;
+}
+
+export function assertMessageConsent(
+  category: string,
+  consent?: WhatsAppContactConsentRecord,
+  recipientPhone?: string,
+): void {
+  const phoneText = recipientPhone ? `Recipient ${recipientPhone}` : 'Recipient';
+  if (category === 'MARKETING') {
+    if (consent?.status !== 'OPTED_IN') {
+      throw AppError.badRequest(
+        `${phoneText} has not opted in to MARKETING messages. Explicit opt-in consent is required.`,
+        { code: 'WHATSAPP_MARKETING_OPT_IN_REQUIRED' },
+      );
+    }
+  } else {
+    // UTILITY and AUTHENTICATION templates are permitted unless explicitly OPTED_OUT
+    if (consent?.status === 'OPTED_OUT') {
+      throw AppError.badRequest(`${phoneText} has opted out of ${category} messages`, {
+        code: 'WHATSAPP_CONSENT_REQUIRED',
+      });
+    }
+  }
 }
 
 export async function sendTemplateMessage(
@@ -110,14 +137,14 @@ export async function sendTemplateMessage(
   const consent = await contactRepo.findConsent(
     tenantId,
     contact.id,
-    template.category as WhatsAppConsentPurpose,
+    (template.category === 'MARKETING'
+      ? 'MARKETING'
+      : template.category === 'AUTHENTICATION'
+        ? 'AUTHENTICATION'
+        : 'TRANSACTIONAL') as WhatsAppConsentPurpose,
   );
-  if (consent?.status === 'OPTED_OUT') {
-    throw AppError.badRequest(
-      `Recipient ${recipientPhone} has opted out of ${template.category} messages`,
-      { code: 'WHATSAPP_CONSENT_REQUIRED' },
-    );
-  }
+
+  assertMessageConsent(template.category, consent, recipientPhone);
 
   // 6. Validate template parameters
   const bodyComponent = (template.components as Array<{ type: string; text?: string }>)?.find(

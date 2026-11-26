@@ -650,3 +650,74 @@ test('WhatsApp Multi-Tenant Batch Routing & Deduplication Safety (W1, W3)', asyn
     whatsAppWebhookQueue.addBulk = origAddBulk;
   }
 });
+
+test('WhatsApp Marketing Opt-in Requirement & Inbound STOP Handling (W6)', async (t) => {
+  const { assertMessageConsent } =
+    await import('@/modules/whatsapp/services/whatsapp-message.service');
+  const { isRecipientConsentSuppressed } =
+    await import('@/modules/whatsapp/services/whatsapp-campaign.service');
+  const typeConsent = (status: 'OPTED_IN' | 'OPTED_OUT') =>
+    ({
+      id: 'c1',
+      tenantId: 't1',
+      contactId: 'ct1',
+      purpose: 'MARKETING',
+      status,
+      consentSource: 'DIRECT',
+      policyVersion: 'v1.0',
+      consentedAt: new Date(),
+      revokedAt: null,
+      evidenceReference: null,
+      createdAt: new Date(),
+    }) as unknown as import('@/db/schema').WhatsAppContactConsentRecord;
+
+  await t.test('assertMessageConsent blocks MARKETING when consent is missing', () => {
+    assert.throws(
+      () => assertMessageConsent('MARKETING', undefined, '+919876543210'),
+      (err: unknown) =>
+        err instanceof AppError &&
+        err.status === 400 &&
+        (err.details as Record<string, unknown>)?.code === 'WHATSAPP_MARKETING_OPT_IN_REQUIRED',
+    );
+  });
+
+  await t.test('assertMessageConsent blocks MARKETING when status is OPTED_OUT', () => {
+    assert.throws(
+      () => assertMessageConsent('MARKETING', typeConsent('OPTED_OUT'), '+919876543210'),
+      (err: unknown) =>
+        err instanceof AppError &&
+        err.status === 400 &&
+        (err.details as Record<string, unknown>)?.code === 'WHATSAPP_MARKETING_OPT_IN_REQUIRED',
+    );
+  });
+
+  await t.test('assertMessageConsent allows MARKETING when status is OPTED_IN', () => {
+    assert.doesNotThrow(() =>
+      assertMessageConsent('MARKETING', typeConsent('OPTED_IN'), '+919876543210'),
+    );
+  });
+
+  await t.test('assertMessageConsent allows UTILITY when consent is missing', () => {
+    assert.doesNotThrow(() => assertMessageConsent('UTILITY', undefined, '+919876543210'));
+  });
+
+  await t.test('assertMessageConsent blocks UTILITY when status is OPTED_OUT', () => {
+    assert.throws(
+      () => assertMessageConsent('UTILITY', typeConsent('OPTED_OUT'), '+919876543210'),
+      (err: unknown) =>
+        err instanceof AppError &&
+        err.status === 400 &&
+        (err.details as Record<string, unknown>)?.code === 'WHATSAPP_CONSENT_REQUIRED',
+    );
+  });
+
+  await t.test('isRecipientConsentSuppressed suppresses recipients without opt-in', () => {
+    assert.equal(isRecipientConsentSuppressed('MARKETING', undefined), true);
+    assert.equal(isRecipientConsentSuppressed('MARKETING', typeConsent('OPTED_OUT')), true);
+    assert.equal(isRecipientConsentSuppressed('MARKETING', typeConsent('OPTED_IN')), false);
+
+    assert.equal(isRecipientConsentSuppressed('UTILITY', undefined), false);
+    assert.equal(isRecipientConsentSuppressed('UTILITY', typeConsent('OPTED_IN')), false);
+    assert.equal(isRecipientConsentSuppressed('UTILITY', typeConsent('OPTED_OUT')), true);
+  });
+});

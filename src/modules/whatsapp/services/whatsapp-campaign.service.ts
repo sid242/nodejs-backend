@@ -1,4 +1,4 @@
-import type { WhatsAppConsentPurpose } from '@/db/schema/enums';
+import type { WhatsAppConsentPurpose, WhatsAppContactConsentRecord } from '@/db/schema';
 import { AppError } from '@/lib/errors';
 import { logSecurityEvent } from '@/modules/audit/audit.service';
 import { whatsAppSendQueue } from '@/queues/index';
@@ -18,6 +18,16 @@ export interface CreateCampaignDto {
     displayName?: string;
     parameters?: Record<string, string>;
   }>;
+}
+
+export function isRecipientConsentSuppressed(
+  category: string,
+  consent?: WhatsAppContactConsentRecord,
+): boolean {
+  if (category === 'MARKETING') {
+    return consent?.status !== 'OPTED_IN';
+  }
+  return consent?.status === 'OPTED_OUT';
 }
 
 export async function createCampaign(tenantId: string, userId: string, dto: CreateCampaignDto) {
@@ -68,15 +78,21 @@ export async function createCampaign(tenantId: string, userId: string, dto: Crea
     const consent = await contactRepo.findConsent(
       tenantId,
       contact.id,
-      template.category as WhatsAppConsentPurpose,
+      (template.category === 'MARKETING'
+        ? 'MARKETING'
+        : template.category === 'AUTHENTICATION'
+          ? 'AUTHENTICATION'
+          : 'TRANSACTIONAL') as WhatsAppConsentPurpose,
     );
-    const isOptedOut = consent?.status === 'OPTED_OUT';
+    // W6: For MARKETING campaigns, require explicit OPTED_IN.
+    // Recipients without opt-in are marked SUPPRESSED.
+    const isSuppressed = isRecipientConsentSuppressed(template.category, consent);
 
     campaignRecipients.push({
       tenantId,
       campaignId: campaign.id,
       contactId: contact.id,
-      status: isOptedOut ? ('SUPPRESSED' as const) : ('PENDING' as const),
+      status: isSuppressed ? ('SUPPRESSED' as const) : ('PENDING' as const),
     });
   }
 
