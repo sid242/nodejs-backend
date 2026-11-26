@@ -76,10 +76,11 @@ export async function processWhatsAppWebhookJob(job: Job<WebhookJobData>): Promi
 
           await messageRepo.updateMessageStatus(tenantId, message.id, patch);
 
-          // Emit real-time status update to tenant UI
+          // Emit real-time status update to dedicated tenant WhatsApp room
           try {
-            emitToRoom(`tenant:${tenantId}`, 'whatsapp:status:updated', {
+            emitToRoom(`tenant:${tenantId}:whatsapp`, 'whatsapp:status:updated', {
               messageId: message.id,
+              conversationId: message.conversationId,
               providerMessageId: wamid,
               status,
             });
@@ -180,11 +181,17 @@ export async function processWhatsAppWebhookJob(job: Job<WebhookJobData>): Promi
             deliveredAt: timestamp,
           });
 
-          // Real-time broadcast to connected UI clients
+          // Real-time broadcast to connected UI clients in dedicated whatsapp room
+          // Minimal event: conversationId, unreadCount, and contact summary (NO body, NO raw payload)
           try {
-            emitToRoom(`tenant:${tenantId}`, 'whatsapp:message:received', {
+            emitToRoom(`tenant:${tenantId}:whatsapp`, 'whatsapp:message:received', {
               conversationId: conv.id,
-              message: savedMessage,
+              messageId: savedMessage.id,
+              phoneNumberId,
+              direction: 'INBOUND',
+              messageType: savedMessage.messageType,
+              createdAt: savedMessage.createdAt,
+              unreadCount: conv.unreadCount ?? 1,
               contact: {
                 id: contact.id,
                 name: contact.displayName,

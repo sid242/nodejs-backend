@@ -2,6 +2,7 @@ import type { Server, Socket } from 'socket.io';
 import { z } from 'zod';
 
 import { loadActiveSupportAccess } from '@/modules/platform/support-access';
+import { resolveUserPermissions, SYSTEM_ROLES } from '@/modules/rbac/rbac.service';
 import * as tenantsRepo from '@/modules/tenants/tenants.repository';
 
 import { getSocketAuthState } from '../types';
@@ -9,7 +10,21 @@ import { getSocketAuthState } from '../types';
 const roomSchema = z.object({ roomId: z.string().min(1).max(64) });
 const messageSchema = roomSchema.extend({ text: z.string().min(1).max(2000) });
 
-async function authorizeRoomAccess(socket: Socket, roomId: string): Promise<boolean> {
+export interface RoomAuthDependencies {
+  findTenantMember: typeof tenantsRepo.findTenantMember;
+  resolveUserPermissions: typeof resolveUserPermissions;
+}
+
+export const defaultRoomAuthDeps: RoomAuthDependencies = {
+  findTenantMember: tenantsRepo.findTenantMember,
+  resolveUserPermissions,
+};
+
+export async function authorizeRoomAccess(
+  socket: Socket,
+  roomId: string,
+  deps: RoomAuthDependencies = defaultRoomAuthDeps,
+): Promise<boolean> {
   if (roomId.startsWith('chat:') || roomId.startsWith('staff:') || roomId.startsWith('platform:')) {
     return false;
   }
@@ -20,7 +35,9 @@ async function authorizeRoomAccess(socket: Socket, roomId: string): Promise<bool
   if (supportSession && supportClaims) {
     await loadActiveSupportAccess(supportClaims);
     return (
-      roomId === `session:${supportSession.id}` || roomId === `tenant:${supportSession.tenantId}`
+      roomId === `session:${supportSession.id}` ||
+      roomId === `tenant:${supportSession.tenantId}` ||
+      roomId === `tenant:${supportSession.tenantId}:whatsapp`
     );
   }
 
@@ -32,12 +49,25 @@ async function authorizeRoomAccess(socket: Socket, roomId: string): Promise<bool
     return false;
   }
   if (roomId.startsWith('tenant:')) {
-    const tenantId = roomId.slice('tenant:'.length);
+    const parts = roomId.split(':');
+    const tenantId = parts[1];
+    const subScope = parts[2];
+
     if (!workspaceTenantId || tenantId !== workspaceTenantId) return false;
 
     try {
-      const member = await tenantsRepo.findTenantMember(tenantId, user.id);
-      return Boolean(member && member.status === 'ACTIVE');
+      const member = await deps.findTenantMember(tenantId, user.id);
+      if (!member || member.status !== 'ACTIVE') return false;
+
+      // Dedicated privacy-restricted rooms
+      if (subScope === 'whatsapp') {
+        const resolved = await deps.resolveUserPermissions(tenantId, user.id);
+        const perms = resolved.permissions;
+        const isOwner = resolved.roles.includes(SYSTEM_ROLES.OWNER);
+        return isOwner || perms.includes('*') || perms.includes('whatsapp:conversation:read');
+      }
+
+      return true;
     } catch {
       return false;
     }

@@ -255,3 +255,93 @@ test('WhatsApp Onboarding Session & Token Validation (W7)', async (t) => {
     assert.ok(Array.isArray(res.scopes));
   });
 });
+
+test('WhatsApp Socket Privacy & Room Authorization (W5)', async (t) => {
+  const { authorizeRoomAccess } = await import('@/sockets/handlers/room.handlers');
+
+  const tenantId = 'tenant_w5_privacy';
+  const permittedUserId = 'user_w5_permitted';
+  const unpermittedUserId = 'user_w5_unpermitted';
+
+  const mockDeps = {
+    findTenantMember: async (tId: string, uId: string) => {
+      if (tId === tenantId && (uId === permittedUserId || uId === unpermittedUserId)) {
+        return {
+          id: `m_${uId}`,
+          status: 'ACTIVE',
+          userId: uId,
+          tenantId: tId,
+        } as unknown as Awaited<
+          ReturnType<typeof import('@/modules/tenants/tenants.repository').findTenantMember>
+        >;
+      }
+      return null;
+    },
+    resolveUserPermissions: async (_tId: string, uId: string) => {
+      if (uId === permittedUserId) {
+        return {
+          roles: ['MEMBER'],
+          roleIds: ['r1'],
+          permissions: ['whatsapp:conversation:read'],
+          groupIds: [],
+          groupSlugs: [],
+        };
+      }
+      return {
+        roles: ['MEMBER'],
+        roleIds: ['r2'],
+        permissions: ['other:permission'],
+        groupIds: [],
+        groupSlugs: [],
+      };
+    },
+  };
+
+  await t.test(
+    'allows member with whatsapp:conversation:read to join tenant:<id>:whatsapp',
+    async () => {
+      const socket = {
+        data: {
+          actorType: 'USER',
+          user: { id: permittedUserId },
+          workspaceTenantId: tenantId,
+        },
+      } as unknown as import('socket.io').Socket;
+
+      const allowed = await authorizeRoomAccess(socket, `tenant:${tenantId}:whatsapp`, mockDeps);
+      assert.equal(allowed, true);
+    },
+  );
+
+  await t.test(
+    'rejects member without whatsapp:conversation:read from joining tenant:<id>:whatsapp',
+    async () => {
+      const socket = {
+        data: {
+          actorType: 'USER',
+          user: { id: unpermittedUserId },
+          workspaceTenantId: tenantId,
+        },
+      } as unknown as import('socket.io').Socket;
+
+      const allowed = await authorizeRoomAccess(socket, `tenant:${tenantId}:whatsapp`, mockDeps);
+      assert.equal(allowed, false);
+    },
+  );
+
+  await t.test(
+    'rejects socket from joining tenant:<id>:whatsapp when workspace tenant mismatch',
+    async () => {
+      const socket = {
+        data: {
+          actorType: 'USER',
+          user: { id: permittedUserId },
+          workspaceTenantId: 'another_tenant_456',
+        },
+      } as unknown as import('socket.io').Socket;
+
+      const allowed = await authorizeRoomAccess(socket, `tenant:${tenantId}:whatsapp`, mockDeps);
+      assert.equal(allowed, false);
+    },
+  );
+});
