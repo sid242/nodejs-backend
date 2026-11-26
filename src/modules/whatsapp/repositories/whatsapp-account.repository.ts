@@ -11,6 +11,7 @@ import {
   type WhatsAppPhoneNumberRecord,
 } from '@/db/schema';
 import { primaryDbHandle, tenantDb } from '@/db/tenancy/context';
+import { AppError } from '@/lib/errors';
 
 export type { WhatsAppBusinessAccountRecord, WhatsAppPhoneNumberRecord };
 
@@ -222,6 +223,13 @@ export async function registerPlatformAccount(
     .limit(1);
 
   if (existing) {
+    if (existing.tenantId !== data.tenantId && existing.connectionStatus === 'CONNECTED') {
+      throw AppError.conflict(
+        `WhatsApp Phone Number ID ${data.phoneNumberId} is already connected to another tenant. The current owner must disconnect it first.`,
+        { code: 'WHATSAPP_PHONE_ALREADY_REGISTERED' },
+      );
+    }
+
     await primaryDbHandle()
       .update(platformWhatsAppAccountRegistry)
       .set({
@@ -237,9 +245,7 @@ export async function registerPlatformAccount(
   }
 }
 
-export async function resolveTenantByPhoneNumberId(
-  phoneNumberId: string,
-): Promise<
+export async function resolveTenantByPhoneNumberId(phoneNumberId: string): Promise<
   | {
       tenantId: string;
       wabaId: string;
