@@ -459,3 +459,194 @@ test('WhatsApp Phone Takeover Guard & Central Registry Protection (W4)', async (
       .where(eq(platformWhatsAppAccountRegistry.phoneNumberId, testPhoneNumberId));
   }
 });
+
+test('WhatsApp Multi-Tenant Batch Routing & Deduplication Safety (W1, W3)', async (t) => {
+  const webhookService = await import('@/modules/whatsapp/webhooks/whatsapp-webhook.service');
+  const { whatsAppWebhookQueue } = await import('@/queues/index');
+  const { redis } = await import('@/config/redis');
+
+  const tenantA = 'tenant_batch_a';
+  const phoneA = 'phone_id_a';
+  const tenantB = 'tenant_batch_b';
+  const phoneB = 'phone_id_b';
+
+  const origAddBulk = whatsAppWebhookQueue.addBulk.bind(whatsAppWebhookQueue);
+
+  const mockDeps = {
+    resolveTenantByPhoneNumberId: async (phoneId: string) => {
+      if (phoneId === phoneA) {
+        return {
+          tenantId: tenantA,
+          wabaId: 'waba_a',
+          connectionStatus: 'CONNECTED',
+          databaseRoutingKey: 'primary',
+        };
+      }
+      if (phoneId === phoneB) {
+        return {
+          tenantId: tenantB,
+          wabaId: 'waba_b',
+          connectionStatus: 'CONNECTED',
+          databaseRoutingKey: 'tenant_b_key',
+        };
+      }
+      return undefined;
+    },
+    resolveTenantByWabaId: async () => undefined,
+  };
+
+  try {
+    await t.test(
+      'routes batched webhook payload per change to respective tenants (W1)',
+      async () => {
+        const nonce = `${Date.now()}_${Math.random()}`;
+        const batchPayload = {
+          object: 'whatsapp_business_account',
+          nonce,
+          entry: [
+            {
+              id: 'waba_a',
+              changes: [
+                {
+                  field: 'messages',
+                  value: {
+                    metadata: { phone_number_id: phoneA },
+                    messages: [{ id: 'wamid_a', text: { body: 'Hello Tenant A' } }],
+                  },
+                },
+              ],
+            },
+            {
+              id: 'waba_b',
+              changes: [
+                {
+                  field: 'messages',
+                  value: {
+                    metadata: { phone_number_id: phoneB },
+                    messages: [{ id: 'wamid_b', text: { body: 'Hello Tenant B' } }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        const rawBody = Buffer.from(JSON.stringify(batchPayload));
+        const secret = env.META_APP_SECRET || 'test-meta-app-secret-32-characters';
+        const origSecret = env.META_APP_SECRET;
+        (env as Record<string, unknown>).META_APP_SECRET = secret;
+        const hmac = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+        const signature = `sha256=${hmac}`;
+
+        let enqueuedJobs: Array<{
+          name: string;
+          data: {
+            tenantId: string;
+            phoneNumberId?: string;
+            payload: {
+              entry: Array<{
+                changes: Array<{ value: { metadata: { phone_number_id: string } } }>;
+              }>;
+            };
+          };
+        }> = [];
+
+        whatsAppWebhookQueue.addBulk = (async (jobs: unknown) => {
+          enqueuedJobs = jobs as typeof enqueuedJobs;
+          return jobs as unknown as ReturnType<typeof whatsAppWebhookQueue.addBulk>;
+        }) as typeof whatsAppWebhookQueue.addBulk;
+
+        try {
+          const res = await webhookService.processWebhookPayload(
+            rawBody,
+            signature,
+            batchPayload,
+            mockDeps,
+          );
+          assert.equal(res.status, 'queued');
+          assert.equal(enqueuedJobs.length, 2, 'Should enqueue 2 separate jobs');
+
+          // Verify Tenant A job
+          assert.equal(enqueuedJobs[0]?.data?.tenantId, tenantA);
+          assert.equal(enqueuedJobs[0]?.data?.phoneNumberId, phoneA);
+          assert.equal(
+            enqueuedJobs[0]?.data?.payload?.entry[0]?.changes[0]?.value?.metadata?.phone_number_id,
+            phoneA,
+          );
+
+          // Verify Tenant B job
+          assert.equal(enqueuedJobs[1]?.data?.tenantId, tenantB);
+          assert.equal(enqueuedJobs[1]?.data?.phoneNumberId, phoneB);
+          assert.equal(
+            enqueuedJobs[1]?.data?.payload?.entry[0]?.changes[0]?.value?.metadata?.phone_number_id,
+            phoneB,
+          );
+        } finally {
+          (env as Record<string, unknown>).META_APP_SECRET = origSecret;
+          const dedupeKey = `whatsapp:webhook:dedupe:${crypto.createHash('sha256').update(rawBody).digest('hex')}`;
+          await redis.del(dedupeKey);
+        }
+      },
+    );
+
+    await t.test('does not write dedupe key in Redis if queue.addBulk fails (W3)', async () => {
+      const payload = {
+        object: 'whatsapp_business_account',
+        entry: [
+          {
+            id: 'waba_a',
+            changes: [
+              {
+                field: 'messages',
+                value: {
+                  metadata: { phone_number_id: phoneA },
+                  messages: [{ id: 'wamid_fail_test' }],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const rawBody = Buffer.from(JSON.stringify(payload) + Date.now());
+      const fingerprint = crypto.createHash('sha256').update(rawBody).digest('hex');
+      const dedupeKey = `whatsapp:webhook:dedupe:${fingerprint}`;
+
+      const secret = env.META_APP_SECRET || 'test-meta-app-secret-32-characters';
+      const origSecret = env.META_APP_SECRET;
+      (env as Record<string, unknown>).META_APP_SECRET = secret;
+      const hmac = crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+      const signature = `sha256=${hmac}`;
+
+      // Simulate queue failure
+      whatsAppWebhookQueue.addBulk = (async () => {
+        throw new Error('Redis connection dropped');
+      }) as typeof whatsAppWebhookQueue.addBulk;
+
+      try {
+        await assert.rejects(
+          async () => {
+            await webhookService.processWebhookPayload(rawBody, signature, payload, mockDeps);
+          },
+          (err: unknown) => {
+            return (
+              err instanceof AppError &&
+              err.status === 500 &&
+              (err.details as Record<string, unknown>)?.code === 'WHATSAPP_QUEUE_ERROR'
+            );
+          },
+        );
+
+        // Verify dedupe key was NOT written to Redis
+        const dedupeVal = await redis.get(dedupeKey);
+        assert.equal(dedupeVal, null, 'Dedupe marker must not be written if enqueue fails');
+      } finally {
+        (env as Record<string, unknown>).META_APP_SECRET = origSecret;
+        const dedupeKey = `whatsapp:webhook:dedupe:${crypto.createHash('sha256').update(rawBody).digest('hex')}`;
+        await redis.del(dedupeKey);
+      }
+    });
+  } finally {
+    whatsAppWebhookQueue.addBulk = origAddBulk;
+  }
+});

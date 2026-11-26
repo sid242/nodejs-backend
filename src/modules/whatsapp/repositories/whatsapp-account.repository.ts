@@ -267,3 +267,26 @@ export async function resolveTenantByPhoneNumberId(phoneNumberId: string): Promi
 
   return record;
 }
+
+export async function resolveTenantByWabaId(wabaId: string): Promise<
+  | {
+      tenantId: string;
+      wabaId: string;
+      connectionStatus: string;
+      databaseRoutingKey?: string | null;
+    }
+  | undefined
+> {
+  const [record] = await primaryDbHandle()
+    .select({
+      tenantId: platformWhatsAppAccountRegistry.tenantId,
+      wabaId: platformWhatsAppAccountRegistry.wabaId,
+      connectionStatus: platformWhatsAppAccountRegistry.connectionStatus,
+      databaseRoutingKey: platformWhatsAppAccountRegistry.databaseRoutingKey,
+    })
+    .from(platformWhatsAppAccountRegistry)
+    .where(eq(platformWhatsAppAccountRegistry.wabaId, wabaId))
+    .limit(1);
+
+  return record;
+}

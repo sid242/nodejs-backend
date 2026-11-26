@@ -16,13 +16,13 @@ import { normalizePhoneNumber } from '../utils/phone-number.util';
 export interface WebhookJobData {
   tenantId: string;
   wabaId: string;
-  phoneNumberId: string;
+  phoneNumberId?: string;
   payload: Record<string, unknown>;
   routingKey?: string | null;
 }
 
 export async function processWhatsAppWebhookJob(job: Job<WebhookJobData>): Promise<void> {
-  const { tenantId, phoneNumberId, payload } = job.data;
+  const { tenantId, phoneNumberId: defaultPhoneId, payload } = job.data;
   const db = await getTenantDb(tenantId);
 
   await runWithTenantDb({ tenantId, db }, async () => {
@@ -34,6 +34,11 @@ export async function processWhatsAppWebhookJob(job: Job<WebhookJobData>): Promi
       for (const change of changes) {
         const value = change.value as Record<string, unknown> | undefined;
         if (!value) continue;
+
+        const meta = value.metadata as Record<string, unknown> | undefined;
+        const phoneNumberId = meta?.phone_number_id
+          ? String(meta.phone_number_id)
+          : (defaultPhoneId ?? '');
 
         // 1. Process Delivery Status Updates (SENT, DELIVERED, READ, FAILED)
         const statuses = (value.statuses as Array<Record<string, unknown>>) ?? [];
