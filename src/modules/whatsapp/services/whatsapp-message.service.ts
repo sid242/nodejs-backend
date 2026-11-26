@@ -17,6 +17,7 @@ import type {
   TemplateComponentInput,
 } from '../types/whatsapp-provider.types';
 import { getCountryFromPhoneNumber, normalizePhoneNumber } from '../utils/phone-number.util';
+import { calculateEstimatedCost } from '../utils/rate-card.util';
 import { validateTemplateParameters } from '../utils/template-variables.util';
 import { getDecryptedAccountToken } from './whatsapp-onboarding.service';
 
@@ -214,9 +215,12 @@ export async function sendTemplateMessage(
       lastMessageAt: new Date(),
     });
 
-    // 11. Record billable usage estimate
+    // 11. Record billable usage estimate from versioned rate card
     const country = getCountryFromPhoneNumber(recipientPhone);
-    const estimatedCost = template.category === 'MARKETING' ? '0.80' : '0.40';
+    const { estimatedCost, currency, rateCardVersion } = calculateEstimatedCost(
+      template.category,
+      country,
+    );
     await usageRepo.recordUsage({
       tenantId,
       wabaId: template.businessAccountId,
@@ -225,8 +229,9 @@ export async function sendTemplateMessage(
       templateCategory: template.category,
       providerMessageId: sendResult.providerMessageId,
       deliveryStatus: 'ACCEPTED',
+      pricingRateCardVersion: rateCardVersion,
       estimatedCost,
-      currency: 'INR',
+      currency,
     });
 
     return updated;
