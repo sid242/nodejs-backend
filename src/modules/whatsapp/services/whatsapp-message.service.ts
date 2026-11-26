@@ -64,12 +64,18 @@ export async function sendTemplateMessage(
   // 2. Normalize and validate recipient phone number
   const recipientPhone = normalizePhoneNumber(dto.to);
 
-  // 3. Resolve sending phone number
-  let phone = dto.phoneNumberId
-    ? await accountRepo.findPhoneNumberByProviderId(tenantId, dto.phoneNumberId)
-    : undefined;
-
-  if (!phone) {
+  // 3. Resolve sending phone number (never silently switch if specific ID requested)
+  let phone;
+  if (dto.phoneNumberId) {
+    phone = await accountRepo.findPhoneNumberByProviderId(tenantId, dto.phoneNumberId);
+    if (!phone) {
+      throw new AppError(
+        400,
+        `Requested WhatsApp phone number ID '${dto.phoneNumberId}' was not found for this tenant`,
+        'WHATSAPP_PHONE_NUMBER_NOT_FOUND',
+      );
+    }
+  } else {
     const numbers = await accountRepo.listPhoneNumbers(tenantId);
     phone = numbers.find((n) => n.isDefault) || numbers[0];
   }
@@ -215,13 +221,28 @@ export async function sendTemplateMessage(
 }
 
 export async function sendTextMessage(tenantId: string, userId: string, dto: SendTextMessageDto) {
+  // 1. Idempotency Check
+  if (dto.idempotencyKey) {
+    const existing = await messageRepo.findMessageByIdempotencyKey(tenantId, dto.idempotencyKey);
+    if (existing) {
+      return existing;
+    }
+  }
+
   const recipientPhone = normalizePhoneNumber(dto.to);
 
-  // Resolve Phone
-  let phone = dto.phoneNumberId
-    ? await accountRepo.findPhoneNumberByProviderId(tenantId, dto.phoneNumberId)
-    : undefined;
-  if (!phone) {
+  // Resolve Phone (reject invalid requested number)
+  let phone;
+  if (dto.phoneNumberId) {
+    phone = await accountRepo.findPhoneNumberByProviderId(tenantId, dto.phoneNumberId);
+    if (!phone) {
+      throw new AppError(
+        400,
+        `Requested WhatsApp phone number ID '${dto.phoneNumberId}' was not found for this tenant`,
+        'WHATSAPP_PHONE_NUMBER_NOT_FOUND',
+      );
+    }
+  } else {
     const numbers = await accountRepo.listPhoneNumbers(tenantId);
     phone = numbers.find((n) => n.isDefault) || numbers[0];
   }
@@ -270,6 +291,7 @@ export async function sendTextMessage(tenantId: string, userId: string, dto: Sen
     direction: 'OUTBOUND',
     messageType: 'TEXT',
     body: dto.text,
+    idempotencyKey: dto.idempotencyKey || null,
     internalStatus: 'QUEUED',
   });
 
@@ -306,17 +328,51 @@ export async function sendTextMessage(tenantId: string, userId: string, dto: Sen
 }
 
 export async function sendMediaMessage(tenantId: string, userId: string, dto: SendMediaMessageDto) {
+  // 1. Idempotency Check
+  if (dto.idempotencyKey) {
+    const existing = await messageRepo.findMessageByIdempotencyKey(tenantId, dto.idempotencyKey);
+    if (existing) {
+      return existing;
+    }
+  }
+
+  // 2. Validate media link protocol if external link supplied
+  if (dto.media?.link) {
+    try {
+      const url = new URL(dto.media.link);
+      if (url.protocol !== 'https:') {
+        throw new Error('Not https');
+      }
+    } catch {
+      throw new AppError(
+        400,
+        'Media URL must use secure https:// protocol',
+        'WHATSAPP_INVALID_MEDIA_URL',
+      );
+    }
+  }
+
   const recipientPhone = normalizePhoneNumber(dto.to);
 
-  let phone = dto.phoneNumberId
-    ? await accountRepo.findPhoneNumberByProviderId(tenantId, dto.phoneNumberId)
-    : undefined;
-  if (!phone) {
+  // Resolve Phone (reject invalid requested number)
+  let phone;
+  if (dto.phoneNumberId) {
+    phone = await accountRepo.findPhoneNumberByProviderId(tenantId, dto.phoneNumberId);
+    if (!phone) {
+      throw new AppError(
+        400,
+        `Requested WhatsApp phone number ID '${dto.phoneNumberId}' was not found for this tenant`,
+        'WHATSAPP_PHONE_NUMBER_NOT_FOUND',
+      );
+    }
+  } else {
     const numbers = await accountRepo.listPhoneNumbers(tenantId);
     phone = numbers.find((n) => n.isDefault) || numbers[0];
   }
   if (!phone || !phone.isEnabled) {
-    throw AppError.badRequest('No active WhatsApp phone number available');
+    throw AppError.badRequest('No active WhatsApp phone number available', {
+      code: 'WHATSAPP_PHONE_NUMBER_DISABLED',
+    });
   }
 
   let contact = await contactRepo.findContactByPhoneNumber(tenantId, recipientPhone);
@@ -351,6 +407,7 @@ export async function sendMediaMessage(tenantId: string, userId: string, dto: Se
     messageType: dto.type.toUpperCase() as WhatsAppMessageType,
     body: dto.media.caption || `[Media: ${dto.type}]`,
     payload: dto.media as unknown as Record<string, unknown>,
+    idempotencyKey: dto.idempotencyKey || null,
     internalStatus: 'QUEUED',
   });
 

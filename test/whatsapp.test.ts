@@ -166,3 +166,59 @@ test('WhatsApp OTP Authentication Flow', async (t) => {
     );
   });
 });
+
+test('WhatsApp Sending Idempotency & Phone Matching (W10)', async (t) => {
+  const messageService = await import('@/modules/whatsapp/services/whatsapp-message.service');
+  const testTenantId = crypto.randomUUID();
+
+  await t.test(
+    'rejects template send when requested phone number is not found for tenant',
+    async () => {
+      await assert.rejects(
+        async () => {
+          await messageService.sendTemplateMessage(testTenantId, 'user_1', {
+            phoneNumberId: 'non_existent_phone_123',
+            to: '+919999999999',
+            template: { name: 'sample_template' },
+          });
+        },
+        (err: unknown) =>
+          err instanceof AppError &&
+          err.status === 400 &&
+          err.code === 'WHATSAPP_PHONE_NUMBER_NOT_FOUND',
+      );
+    },
+  );
+
+  await t.test('rejects text send when requested phone number is not found', async () => {
+    await assert.rejects(
+      async () => {
+        await messageService.sendTextMessage(testTenantId, 'user_1', {
+          phoneNumberId: 'non_existent_phone_123',
+          to: '+919999999999',
+          text: 'hello',
+        });
+      },
+      (err: unknown) =>
+        err instanceof AppError &&
+        err.status === 400 &&
+        err.code === 'WHATSAPP_PHONE_NUMBER_NOT_FOUND',
+    );
+  });
+
+  await t.test('rejects media message with insecure or non-https link', async () => {
+    await assert.rejects(
+      async () => {
+        await messageService.sendMediaMessage(testTenantId, 'user_1', {
+          to: '+919999999999',
+          type: 'image',
+          media: {
+            link: 'http://insecure-domain.com/image.png',
+          },
+        });
+      },
+      (err: unknown) =>
+        err instanceof AppError && err.status === 400 && err.code === 'WHATSAPP_INVALID_MEDIA_URL',
+    );
+  });
+});

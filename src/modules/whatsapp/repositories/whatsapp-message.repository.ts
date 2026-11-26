@@ -87,8 +87,25 @@ export async function findMessageByIdempotencyKey(
 export async function createMessage(
   data: NewWhatsAppMessageRecord,
 ): Promise<WhatsAppMessageRecord> {
-  const [created] = await tenantDb().insert(whatsAppMessages).values(data).returning();
-  return created!;
+  try {
+    const [created] = await tenantDb().insert(whatsAppMessages).values(data).returning();
+    return created!;
+  } catch (err: unknown) {
+    // If concurrent requests raced on unique index (tenantId, idempotencyKey), return the existing record
+    if (
+      data.idempotencyKey &&
+      err &&
+      typeof err === 'object' &&
+      'code' in err &&
+      err.code === '23505'
+    ) {
+      const existing = await findMessageByIdempotencyKey(data.tenantId, data.idempotencyKey);
+      if (existing) {
+        return existing;
+      }
+    }
+    throw err;
+  }
 }
 
 export async function updateMessageStatus(
