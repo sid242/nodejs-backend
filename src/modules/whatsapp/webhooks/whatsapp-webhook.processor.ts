@@ -180,6 +180,21 @@ export async function processWhatsAppWebhookJob(job: Job<WebhookJobData>): Promi
             deliveredAt: timestamp,
           });
 
+          // Process inbound opt-out keywords (W6: STOP, UNSUBSCRIBE, CANCEL, QUIT, END, ROK)
+          const trimmedUpper = bodyText.trim().toUpperCase();
+          const OPT_OUT_KEYWORDS = ['STOP', 'UNSUBSCRIBE', 'CANCEL', 'QUIT', 'END', 'ROK'];
+          if (OPT_OUT_KEYWORDS.includes(trimmedUpper)) {
+            await contactRepo.optOutContact(
+              tenantId,
+              contact.id,
+              `Inbound opt-out keyword '${trimmedUpper}' via message ${wamid}`,
+            );
+            logger.info(
+              { tenantId, contactId: contact.id, keyword: trimmedUpper },
+              'WhatsApp contact opted out via inbound keyword',
+            );
+          }
+
           // Real-time broadcast to connected UI clients
           try {
             emitToRoom(`tenant:${tenantId}`, 'whatsapp:message:received', {

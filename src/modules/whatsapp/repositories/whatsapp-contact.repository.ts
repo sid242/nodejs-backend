@@ -96,6 +96,8 @@ export async function upsertConsent(
       .update(whatsAppContactConsents)
       .set({
         status: data.status,
+        consentSource: data.consentSource ?? existing.consentSource,
+        evidenceReference: data.evidenceReference ?? existing.evidenceReference,
         revokedAt: data.status === 'OPTED_OUT' ? new Date() : null,
         consentedAt: data.status === 'OPTED_IN' ? new Date() : existing.consentedAt,
       })
@@ -106,4 +108,22 @@ export async function upsertConsent(
 
   const [created] = await tenantDb().insert(whatsAppContactConsents).values(data).returning();
   return created!;
+}
+
+export async function optOutContact(
+  tenantId: string,
+  contactId: string,
+  reason: string,
+): Promise<void> {
+  const purposes: WhatsAppConsentPurpose[] = ['MARKETING', 'TRANSACTIONAL', 'AUTHENTICATION'];
+  for (const purpose of purposes) {
+    await upsertConsent({
+      tenantId,
+      contactId,
+      purpose,
+      status: 'OPTED_OUT',
+      consentSource: 'INBOUND_KEYWORD',
+      evidenceReference: reason,
+    });
+  }
 }
