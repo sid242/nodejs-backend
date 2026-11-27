@@ -59,18 +59,27 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     message = 'Payload too large';
   }
 
-  // Look up localized error text for the resolved error code if not already set by ZodError
+  // Look up localized error text for the resolved error code.
+  // Only override with the generic i18n text when the error carries the
+  // default placeholder (e.g. "Bad request"); preserve specific messages like
+  // "24-hour customer service window is closed" so the client and logs see
+  // the actionable reason.
   if (!(err instanceof ZodError)) {
     const localizedMsg = t(`errors.${code}`, params);
     if (localizedMsg && localizedMsg !== `errors.${code}`) {
-      message = localizedMsg;
+      // AppError with a specific message that differs from the generic i18n
+      // default should NOT be overwritten.
+      const hasSpecificMessage = err instanceof AppError && message !== localizedMsg;
+      if (!hasSpecificMessage) {
+        message = localizedMsg;
+      }
     }
   }
 
   const log = req?.log;
   if (log) {
     if (status >= 500) log.error({ err }, 'unhandled error');
-    else log.warn({ code, message }, 'request failed');
+    else log.warn({ code, message, details }, 'request failed');
   }
 
   // Report 5xx unexpected server errors to Sentry
