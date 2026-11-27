@@ -799,6 +799,37 @@ export async function seedDemo({ reset = true } = {}): Promise<void> {
       },
       roleNames: ['MEMBER'],
     },
+    {
+      name: 'WhatsApp Inbox & Template Read Access',
+      description:
+        'Allows workspace members and viewers to view WhatsApp conversations and templates.',
+      resource: 'whatsapp',
+      action: 'read',
+      effect: 'allow' as const,
+      priority: 50,
+      conditions: { always: true },
+      roleNames: ['MEMBER', 'VIEWER'],
+    },
+    {
+      name: 'WhatsApp Conversation Reply Access',
+      description: 'Allows workspace members to reply to customer WhatsApp conversations.',
+      resource: 'whatsapp_conversations',
+      action: 'reply',
+      effect: 'allow' as const,
+      priority: 50,
+      conditions: { always: true },
+      roleNames: ['MEMBER'],
+    },
+    {
+      name: 'Protect WhatsApp Templates from Non-Admin Deletion',
+      description: 'Prevents non-admin members and viewers from deleting WhatsApp templates.',
+      resource: 'whatsapp_templates',
+      action: 'delete',
+      effect: 'deny' as const,
+      priority: 100,
+      conditions: { always: true },
+      roleNames: ['MEMBER', 'VIEWER'],
+    },
   ];
 
   for (const tenantDef of DEMO_CREDENTIALS.tenants) {

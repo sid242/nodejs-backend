@@ -76,6 +76,80 @@ export function assertMessageConsent(
   }
 }
 
+export interface RenderedTemplateSnapshot {
+  name: string;
+  language: string;
+  header?: { format?: string; text?: string };
+  body?: string;
+  footer?: string;
+  buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
+}
+
+function substituteTemplateVariables(
+  text: string,
+  parameters?: TemplateComponentInput['parameters'],
+): string {
+  if (!parameters?.length) return text;
+  return text.replace(/\{\{(\d+)\}\}/g, (match, indexStr: string) => {
+    const idx = Number(indexStr) - 1;
+    const param = parameters[idx];
+    return param?.text ?? match;
+  });
+}
+
+export function buildRenderedTemplateSnapshot(
+  templateName: string,
+  language: string,
+  definitionComponents: Array<Record<string, unknown>> | undefined,
+  sentComponents: TemplateComponentInput[] | undefined,
+): { bodyText: string; snapshot: RenderedTemplateSnapshot } {
+  const comps = definitionComponents ?? [];
+  const headerDef = comps.find((c) => c.type === 'HEADER');
+  const bodyDef = comps.find((c) => c.type === 'BODY');
+  const footerDef = comps.find((c) => c.type === 'FOOTER');
+  const buttonsDef = comps.find((c) => c.type === 'BUTTONS');
+
+  const headerParams = sentComponents?.find((c) => c.type === 'header')?.parameters;
+  const bodyParams = sentComponents?.find((c) => c.type === 'body')?.parameters;
+
+  const headerText =
+    typeof headerDef?.text === 'string'
+      ? substituteTemplateVariables(headerDef.text, headerParams)
+      : undefined;
+  const bodyText =
+    typeof bodyDef?.text === 'string' ? substituteTemplateVariables(bodyDef.text, bodyParams) : '';
+  const footerText = typeof footerDef?.text === 'string' ? footerDef.text : undefined;
+  const buttons = Array.isArray(buttonsDef?.buttons)
+    ? (buttonsDef.buttons as Array<{
+        type: string;
+        text: string;
+        url?: string;
+        phone_number?: string;
+      }>)
+    : undefined;
+
+  const snapshot: RenderedTemplateSnapshot = {
+    name: templateName,
+    language,
+    ...(headerDef
+      ? {
+          header: {
+            format: typeof headerDef.format === 'string' ? headerDef.format : 'TEXT',
+            ...(headerText ? { text: headerText } : {}),
+          },
+        }
+      : {}),
+    ...(bodyText ? { body: bodyText } : {}),
+    ...(footerText ? { footer: footerText } : {}),
+    ...(buttons?.length ? { buttons } : {}),
+  };
+
+  return {
+    bodyText: bodyText || headerText || `[Template: ${templateName}]`,
+    snapshot,
+  };
+}
+
 export async function sendTemplateMessage(
   tenantId: string,
   userId: string,
@@ -180,6 +254,13 @@ export async function sendTemplateMessage(
   }
 
   // 8. Create Outbound Message Record (Outbox Pattern)
+  const { bodyText: renderedBody, snapshot: renderedSnapshot } = buildRenderedTemplateSnapshot(
+    template.name,
+    language,
+    template.components as Array<Record<string, unknown>> | undefined,
+    dto.template.components,
+  );
+
   const messageRecord = await messageRepo.createMessage({
     tenantId,
     phoneNumberId: phone.phoneNumberId,
@@ -189,8 +270,11 @@ export async function sendTemplateMessage(
     messageType: 'TEMPLATE',
     templateId: template.id,
     idempotencyKey: dto.idempotencyKey || null,
-    body: `[Template: ${template.name}]`,
-    payload: dto.template as unknown as Record<string, unknown>,
+    body: renderedBody,
+    payload: {
+      ...(dto.template as unknown as Record<string, unknown>),
+      rendered: renderedSnapshot,
+    },
     internalStatus: 'QUEUED',
   });
 
