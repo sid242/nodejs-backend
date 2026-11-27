@@ -9,6 +9,8 @@ import { logger } from '@/config/logger';
 import { platformPermissions } from '@/db/schema';
 import { cache } from '@/lib/cache';
 import { AppError } from '@/lib/errors';
+import { buildS3PublicUrl, createUploadPost, ensurePublicBucketPolicies } from '@/lib/s3';
+import { safeFilename } from '@/lib/utils';
 import * as authRepo from '@/modules/auth/auth.repository';
 import { buildPlatformUrl } from '@/modules/tenants/tenant-url.service';
 import { emailQueue } from '@/queues/index';
@@ -22,6 +24,7 @@ import {
   type InviteStaffDto,
   type ListStaffQueryDto,
   type LoginStaffDto,
+  type StaffAvatarUploadUrlDto,
   type UpdatePlatformProfileDto,
   type UpdatePlatformRoleDto,
   type UpdateStaffDto,
@@ -640,6 +643,30 @@ export async function updateStaffProfile(
   });
 
   return updated;
+}
+
+export async function getStaffAvatarUploadUrl(staffId: string, dto: StaffAvatarUploadUrlDto) {
+  const staff = await platformRepo.findStaffById(staffId);
+  if (!staff) throw AppError.notFound('Platform staff member not found');
+
+  await ensurePublicBucketPolicies();
+
+  const sanitized = safeFilename(dto.filename || 'avatar.png');
+  const key = `avatars/platform/${staffId}/${Date.now()}-${sanitized}`;
+
+  const upload = await createUploadPost({
+    key,
+    contentType: dto.contentType,
+    expiresIn: 300,
+  });
+
+  const publicUrl = buildS3PublicUrl(key);
+
+  return {
+    upload,
+    fileKey: key,
+    publicUrl,
+  };
 }
 
 export async function changeStaffPassword(

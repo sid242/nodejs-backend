@@ -99,6 +99,11 @@ export const updateMe = asyncHandler(async (req: Request, res: Response) => {
   AppResponse.ok(result, 'Profile updated successfully').send(res);
 });
 
+export const getStaffAvatarUploadUrl = asyncHandler(async (req: Request, res: Response) => {
+  const result = await service.getStaffAvatarUploadUrl(req.staff!.id, req.valid?.body);
+  AppResponse.ok(result, 'Avatar upload URL generated').send(res);
+});
+
 export const changePassword = asyncHandler(async (req: Request, res: Response) => {
   const result = await service.changeStaffPassword(
     req.staff!.id,

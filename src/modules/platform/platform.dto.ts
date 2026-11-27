@@ -97,6 +97,15 @@ export const changePlatformPasswordDto = z.object({
 });
 export type ChangePlatformPasswordDto = z.infer<typeof changePlatformPasswordDto>;
 
+export const staffAvatarUploadUrlDto = z.object({
+  contentType: z
+    .string()
+    .trim()
+    .regex(/^image\/(jpeg|jpg|png|webp|gif)$/, 'Must be a valid image content type'),
+  filename: z.string().trim().max(100).optional().default('avatar.png'),
+});
+export type StaffAvatarUploadUrlDto = z.infer<typeof staffAvatarUploadUrlDto>;
+
 export const suspendStaffDto = z.object({
   reason: z.string().trim().min(3).max(300).optional(),
 });
