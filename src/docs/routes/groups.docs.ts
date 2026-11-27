@@ -5,6 +5,8 @@ import { bearerAuth, errorResponse, successResponse } from '@/docs/helpers';
 import {
   addTenantGroupMembersDto,
   createGroupDto,
+  groupIdParamDto,
+  listGroupMembersQueryDto,
   updateGroupDto,
 } from '@/modules/groups/groups.dto';
 
@@ -118,8 +120,18 @@ export function registerGroupsDocs(registry: OpenAPIRegistry): void {
     summary: 'List tenant group members',
     tags: ['User Groups'],
     security: [{ [bearerAuth.name]: [] }],
+    request: { params: groupIdParamDto, query: listGroupMembersQueryDto },
     responses: {
-      200: successResponse(z.array(UserGroupMemberSchema), 'Group members retrieved successfully'),
+      200: successResponse(
+        z.object({
+          items: z.array(UserGroupMemberSchema),
+          total: z.number().int(),
+          page: z.number().int(),
+          limit: z.number().int(),
+        }),
+        'Group members retrieved successfully',
+      ),
+      400: errorResponse('Invalid group ID or pagination'),
       401: errorResponse('Unauthorized'),
       404: errorResponse('User group not found'),
     },

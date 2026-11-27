@@ -46,9 +46,12 @@ export const updateGroupDto = z
 
 export type UpdateGroupInput = z.infer<typeof updateGroupDto>;
 
-export const listGroupsQueryDto = z.object({
+export const listGroupMembersQueryDto = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
+export const listGroupsQueryDto = listGroupMembersQueryDto.extend({
   search: z.string().trim().optional(),
   status: z.enum(['ACTIVE', 'ARCHIVED', 'ALL']).default('ACTIVE'),
   roleId: z.string().trim().uuid('Invalid role ID').optional(),

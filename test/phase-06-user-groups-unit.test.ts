@@ -4,7 +4,12 @@ import { after, describe, it } from 'node:test';
 import { closeDb } from '@/config/db';
 import { closeRedisClients } from '@/config/redis';
 import { cache } from '@/lib/cache';
-import { bindRoleDto, groupRoleParamsDto, listGroupsQueryDto } from '@/modules/groups/groups.dto';
+import {
+  bindRoleDto,
+  groupRoleParamsDto,
+  listGroupMembersQueryDto,
+  listGroupsQueryDto,
+} from '@/modules/groups/groups.dto';
 import { groupsRepo } from '@/modules/groups/groups.repository';
 import * as groupsService from '@/modules/groups/groups.service';
 import { rbacRepo } from '@/modules/rbac/rbac.repository';
@@ -63,6 +68,23 @@ describe('Phase 06: User Groups & Dynamic RBAC Integration Unit Tests', () => {
       });
       assert.equal(parsed.roleId, mockRoleId);
       assert.equal(parsed.status, 'ACTIVE');
+    });
+
+    it('validates group member pagination with bounded limits and stable defaults', () => {
+      assert.deepEqual(listGroupMembersQueryDto.parse({}), { page: 1, limit: 20 });
+      assert.deepEqual(listGroupMembersQueryDto.parse({ page: '2', limit: '100' }), {
+        page: 2,
+        limit: 100,
+      });
+      for (const query of [
+        { page: '0' },
+        { page: 'invalid' },
+        { page: ['1', '2'] },
+        { limit: '101' },
+        { limit: '1.5' },
+      ]) {
+        assert.equal(listGroupMembersQueryDto.safeParse(query).success, false);
+      }
     });
   });
 

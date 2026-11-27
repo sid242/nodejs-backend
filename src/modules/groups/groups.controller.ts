@@ -43,9 +43,8 @@ export const archiveGroup = asyncHandler(async (req: Request, res: Response) => 
 });
 
 export const listGroupMembers = asyncHandler(async (req: Request, res: Response) => {
-  const groupId = (req.params.groupId ?? req.valid?.params?.groupId) as string;
-  const page = req.query.page ? Number(req.query.page) : 1;
-  const limit = req.query.limit ? Number(req.query.limit) : 20;
+  const { groupId } = req.valid!.params;
+  const { page, limit } = req.valid!.query;
 
   const result = await groupsService.listTenantGroupMembers(req.tenant!.id, groupId, page, limit);
   AppResponse.ok(result, 'Group members retrieved successfully').send(res);

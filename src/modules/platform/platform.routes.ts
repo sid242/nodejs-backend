@@ -505,7 +505,7 @@ router.delete(
 router.get(
   '/groups/:groupId/members',
   requirePlatformPermission(PLATFORM_PERMISSIONS.GROUPS_READ),
-  validate({ params: groupsDto.groupIdParamDto }),
+  validate({ params: groupsDto.groupIdParamDto, query: groupsDto.listGroupMembersQueryDto }),
   platformGroupsController.listPlatformGroupMembers,
 );
 

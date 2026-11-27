@@ -53,7 +53,7 @@ router.delete(
 router.get(
   '/:groupId/members',
   requirePermission('groups:read'),
-  validate({ params: dto.groupIdParamDto }),
+  validate({ params: dto.groupIdParamDto, query: dto.listGroupMembersQueryDto }),
   controller.listGroupMembers,
 );
 

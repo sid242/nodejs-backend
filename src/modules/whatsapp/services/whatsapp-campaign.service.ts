@@ -1,4 +1,5 @@
 import type { WhatsAppConsentPurpose, WhatsAppContactConsentRecord } from '@/db/schema';
+import { currentTenantCtx, runWithTenantDb, tenantDb } from '@/db/tenancy/context';
 import { AppError } from '@/lib/errors';
 import { logSecurityEvent } from '@/modules/audit/audit.service';
 import { whatsAppSendQueue } from '@/queues/index';
@@ -31,6 +32,12 @@ export function isRecipientConsentSuppressed(
 }
 
 export async function createCampaign(tenantId: string, userId: string, dto: CreateCampaignDto) {
+  const recipients = new Map<string, CreateCampaignDto['recipients'][number]>();
+  for (const recipient of dto.recipients) {
+    const phoneNumber = normalizePhoneNumber(recipient.phoneNumber);
+    if (!recipients.has(phoneNumber)) recipients.set(phoneNumber, recipient);
+  }
+
   // 1. Verify Template
   const template = await templateRepo.findTemplateById(tenantId, dto.templateId);
   if (!template || template.status !== 'APPROVED') {
@@ -40,63 +47,75 @@ export async function createCampaign(tenantId: string, userId: string, dto: Crea
   }
 
   // 2. Resolve Sending Phone Number
-  let phone = dto.phoneNumberId
+  const phone = dto.phoneNumberId
     ? await accountRepo.findPhoneNumberByProviderId(tenantId, dto.phoneNumberId)
-    : undefined;
-  if (!phone) {
-    const numbers = await accountRepo.listPhoneNumbers(tenantId);
-    phone = numbers.find((n) => n.isDefault) || numbers[0];
-  }
-  if (!phone || !phone.isEnabled) {
-    throw AppError.badRequest('Active WhatsApp sending number is required');
-  }
-
-  // 3. Create Campaign record
-  const campaign = await campaignRepo.createCampaign({
-    tenantId,
-    name: dto.name,
-    templateId: template.id,
-    phoneNumberId: phone.phoneNumberId,
-    status: 'DRAFT',
-    totalRecipients: dto.recipients.length,
-    createdBy: userId,
-  });
-
-  // 4. Ingest and validate recipients & consent
-  const campaignRecipients = [];
-  for (const r of dto.recipients) {
-    const normalized = normalizePhoneNumber(r.phoneNumber);
-    let contact = await contactRepo.findContactByPhoneNumber(tenantId, normalized);
-    if (!contact) {
-      contact = await contactRepo.createContact({
-        tenantId,
-        phoneNumber: normalized,
-        displayName: r.displayName || normalized,
-      });
+    : await findDefaultSendingNumber(tenantId, template.businessAccountId);
+  if (!phone || !phone.isEnabled || phone.businessAccountId !== template.businessAccountId) {
+    if (dto.phoneNumberId) {
+      throw new AppError(
+        400,
+        'The selected WhatsApp sending number is unavailable',
+        'WHATSAPP_CAMPAIGN_SENDER_UNAVAILABLE',
+      );
     }
-
-    const consent = await contactRepo.findConsent(
-      tenantId,
-      contact.id,
-      (template.category === 'MARKETING'
-        ? 'MARKETING'
-        : template.category === 'AUTHENTICATION'
-          ? 'AUTHENTICATION'
-          : 'TRANSACTIONAL') as WhatsAppConsentPurpose,
+    throw new AppError(
+      400,
+      'Active WhatsApp sending number is required',
+      'WHATSAPP_CAMPAIGN_SENDER_REQUIRED',
     );
-    // W6: For MARKETING campaigns, require explicit OPTED_IN.
-    // Recipients without opt-in are marked SUPPRESSED.
-    const isSuppressed = isRecipientConsentSuppressed(template.category, consent);
-
-    campaignRecipients.push({
-      tenantId,
-      campaignId: campaign.id,
-      contactId: contact.id,
-      status: isSuppressed ? ('SUPPRESSED' as const) : ('PENDING' as const),
-    });
   }
 
-  await campaignRepo.addCampaignRecipients(campaignRecipients);
+  const db = tenantDb();
+  const campaign = await db.transaction((tx) =>
+    runWithTenantDb({ ...currentTenantCtx(), tenantId, db, tx }, async () => {
+      // 3. Create Campaign record
+      const campaign = await campaignRepo.createCampaign({
+        tenantId,
+        name: dto.name,
+        templateId: template.id,
+        phoneNumberId: phone.phoneNumberId,
+        status: 'DRAFT',
+        totalRecipients: recipients.size,
+        createdBy: userId,
+      });
+
+      // 4. Ingest and validate recipients & consent
+      const campaignRecipients = [];
+      for (const [normalized, recipient] of recipients) {
+        let contact = await contactRepo.findContactByPhoneNumber(tenantId, normalized);
+        if (!contact) {
+          contact = await contactRepo.createContact({
+            tenantId,
+            phoneNumber: normalized,
+            displayName: recipient.displayName || normalized,
+          });
+        }
+
+        const consent = await contactRepo.findConsent(
+          tenantId,
+          contact.id,
+          (template.category === 'MARKETING'
+            ? 'MARKETING'
+            : template.category === 'AUTHENTICATION'
+              ? 'AUTHENTICATION'
+              : 'TRANSACTIONAL') as WhatsAppConsentPurpose,
+        );
+        // W6: For MARKETING campaigns, require explicit OPTED_IN.
+        // Recipients without opt-in are marked SUPPRESSED.
+        const isSuppressed = isRecipientConsentSuppressed(template.category, consent);
+
+        campaignRecipients.push({
+          tenantId,
+          campaignId: campaign.id,
+          contactId: contact.id,
+          status: isSuppressed ? ('SUPPRESSED' as const) : ('PENDING' as const),
+        });
+      }
+
+      await campaignRepo.addCampaignRecipients(campaignRecipients);
+      return campaign;
+    }),
+  );
 
   await logSecurityEvent({
     tenantId,
@@ -106,12 +125,19 @@ export async function createCampaign(tenantId: string, userId: string, dto: Crea
     entityId: campaign.id,
     metadata: {
       name: dto.name,
-      recipientsCount: dto.recipients.length,
+      recipientsCount: recipients.size,
       templateName: template.name,
     },
   });
 
   return campaign;
+}
+
+async function findDefaultSendingNumber(tenantId: string, businessAccountId: string) {
+  const enabled = (await accountRepo.listPhoneNumbers(tenantId, businessAccountId)).filter(
+    (phone) => phone.isEnabled,
+  );
+  return enabled.find((phone) => phone.isDefault) ?? enabled[0];
 }
 
 export async function scheduleCampaign(
@@ -129,8 +155,16 @@ export async function scheduleCampaign(
     throw AppError.badRequest(`Cannot schedule campaign in '${campaign.status}' state`);
   }
 
-  const scheduleDate = scheduledAt ? new Date(scheduledAt) : new Date();
-  const delayMs = Math.max(0, scheduleDate.getTime() - Date.now());
+  const now = Date.now();
+  const scheduleDate = scheduledAt ? new Date(scheduledAt) : new Date(now);
+  const delayMs = scheduleDate.getTime() - now;
+  if (scheduledAt && (!Number.isFinite(delayMs) || delayMs <= 0)) {
+    throw new AppError(
+      400,
+      'Choose a future time to schedule the campaign',
+      'WHATSAPP_CAMPAIGN_SCHEDULE_PAST',
+    );
+  }
 
   const updated = await campaignRepo.updateCampaign(tenantId, campaignId, {
     status: delayMs > 0 ? 'SCHEDULED' : 'SENDING',

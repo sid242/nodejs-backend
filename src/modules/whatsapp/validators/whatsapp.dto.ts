@@ -115,9 +115,9 @@ export const contactConsentSchema = z.object({
 });
 
 export const createCampaignSchema = z.object({
-  name: z.string().min(1).max(255),
+  name: z.string().trim().min(1).max(255),
   templateId: z.string().uuid(),
-  phoneNumberId: z.string().optional(),
+  phoneNumberId: z.string().trim().min(1).optional(),
   recipients: z
     .array(
       z.object({

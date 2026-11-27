@@ -397,7 +397,7 @@ export async function listTenantGroupMembers(
     })
     .from(userGroupMembers)
     .where(whereClause)
-    .orderBy(desc(userGroupMembers.createdAt))
+    .orderBy(desc(userGroupMembers.createdAt), desc(userGroupMembers.id))
     .limit(limit)
     .offset(offset);
 
@@ -465,7 +465,7 @@ export async function listPlatformGroupMembers(
     .from(userGroupMembers)
     .innerJoin(platformStaff, eq(userGroupMembers.staffId, platformStaff.id))
     .where(whereClause)
-    .orderBy(desc(userGroupMembers.createdAt))
+    .orderBy(desc(userGroupMembers.createdAt), desc(userGroupMembers.id))
     .limit(limit)
     .offset(offset);
 
