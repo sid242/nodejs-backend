@@ -47,6 +47,11 @@ router.use(requirePlatformAuth);
 router.get('/auth/me', controller.getMe);
 router.patch('/auth/me', validate({ body: dto.updatePlatformProfileDto }), controller.updateMe);
 router.post(
+  '/auth/me/avatar-upload-url',
+  validate({ body: dto.staffAvatarUploadUrlDto }),
+  controller.getStaffAvatarUploadUrl,
+);
+router.post(
   '/auth/change-password',
   validate({ body: dto.changePlatformPasswordDto }),
   controller.changePassword,

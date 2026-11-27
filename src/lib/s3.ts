@@ -204,3 +204,11 @@ export async function ensurePublicBucketPolicies(): Promise<void> {
     // Graceful no-op if IAM policy prevents PutBucketPolicy or in managed cloud environments
   }
 }
+
+export function buildS3PublicUrl(key: string): string {
+  if (env.S3_ENDPOINT) {
+    const base = env.S3_ENDPOINT.replace(/\/$/, '');
+    return `${base}/${env.S3_BUCKET}/${key}`;
+  }
+  return `https://${env.S3_BUCKET}.s3.${env.AWS_REGION}.amazonaws.com/${key}`;
+}
