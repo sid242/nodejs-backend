@@ -1,4 +1,4 @@
-import { desc, eq, sql } from 'drizzle-orm';
+import { asc, desc, eq, sql } from 'drizzle-orm';
 
 import {
   whatsAppUsageRecords,
@@ -15,15 +15,20 @@ export async function recordUsage(data: NewWhatsAppUsageRecord): Promise<WhatsAp
 export async function getUsageSummary(tenantId: string): Promise<{
   totalMessages: number;
   totalEstimatedCost: string;
+  estimatedCostByCurrency: Array<{ currency: string; estimatedCost: string }>;
   categoryBreakdown: Array<{ category: string; count: number }>;
 }> {
-  const [totalRes] = await tenantDb()
+  const costs = await tenantDb()
     .select({
-      count: sql<number>`count(*)::int`,
-      totalCost: sql<string>`coalesce(sum(${whatsAppUsageRecords.estimatedCost}), 0)::text`,
+      currency: whatsAppUsageRecords.currency,
+      estimatedCost: sql<string>`sum(${whatsAppUsageRecords.estimatedCost})::text`,
+      totalMessages: sql<number>`sum(count(*)) over ()::int`,
+      legacyTotalCost: sql<string>`sum(sum(${whatsAppUsageRecords.estimatedCost})) over ()::text`,
     })
     .from(whatsAppUsageRecords)
-    .where(eq(whatsAppUsageRecords.tenantId, tenantId));
+    .where(eq(whatsAppUsageRecords.tenantId, tenantId))
+    .groupBy(whatsAppUsageRecords.currency)
+    .orderBy(asc(whatsAppUsageRecords.currency));
 
   const categories = await tenantDb()
     .select({
@@ -35,8 +40,13 @@ export async function getUsageSummary(tenantId: string): Promise<{
     .groupBy(whatsAppUsageRecords.templateCategory);
 
   return {
-    totalMessages: totalRes?.count ?? 0,
-    totalEstimatedCost: totalRes?.totalCost ?? '0.00',
+    totalMessages: costs[0]?.totalMessages ?? 0,
+    // Retain the original field for older clients. New clients use the currency breakdown.
+    totalEstimatedCost: costs[0]?.legacyTotalCost ?? '0.00',
+    estimatedCostByCurrency: costs.map(({ currency, estimatedCost }) => ({
+      currency,
+      estimatedCost,
+    })),
     categoryBreakdown: categories,
   };
 }

@@ -1093,6 +1093,44 @@ test('WhatsApp Versioned Rate Card & Cost Estimation (W14)', async (t) => {
   });
 });
 
+test('WhatsApp usage summarizes fees separately per currency and workspace', async () => {
+  const { eq } = await import('drizzle-orm');
+  const { db } = await import('@/config/db');
+  const { tenants, whatsAppUsageRecords } = await import('@/db/schema');
+  const { getUsageSummary } =
+    await import('@/modules/whatsapp/repositories/whatsapp-usage.repository');
+  const tenantId = crypto.randomUUID();
+  const otherTenantId = crypto.randomUUID();
+  try {
+    await db.insert(tenants).values([
+      { id: tenantId, name: 'Currency summary', slug: tenantId },
+      { id: otherTenantId, name: 'Other workspace', slug: otherTenantId },
+    ]);
+    const usage = {
+      tenantId,
+      wabaId: 'fixture',
+      phoneNumberId: 'fixture',
+      templateCategory: 'UTILITY',
+    };
+    await db.insert(whatsAppUsageRecords).values([
+      { ...usage, currency: 'INR', estimatedCost: '0.8600' },
+      { ...usage, currency: 'USD', estimatedCost: '0.0250' },
+      { ...usage, currency: 'USD', estimatedCost: '0.0040' },
+      { ...usage, tenantId: otherTenantId, currency: 'USD', estimatedCost: '100.0000' },
+    ]);
+    const summary = await getUsageSummary(tenantId);
+    assert.equal(summary.totalMessages, 3);
+    assert.deepEqual(summary.estimatedCostByCurrency, [
+      { currency: 'INR', estimatedCost: '0.8600' },
+      { currency: 'USD', estimatedCost: '0.0290' },
+    ]);
+    assert.deepEqual(summary.categoryBreakdown, [{ category: 'UTILITY', count: 3 }]);
+  } finally {
+    await db.delete(tenants).where(eq(tenants.id, tenantId));
+    await db.delete(tenants).where(eq(tenants.id, otherTenantId));
+  }
+});
+
 test('WhatsApp Sending Idempotency & Phone Matching (W10)', async (t) => {
   const messageService = await import('@/modules/whatsapp/services/whatsapp-message.service');
   const testTenantId = crypto.randomUUID();
@@ -1160,4 +1198,95 @@ test('WhatsApp Broadcast Campaign Resumable Processing & Reconciliation (W11)', 
       assert.equal(typeof campaignRepo.getCampaignRecipientSummary, 'function');
     },
   );
+});
+
+test('WhatsApp campaign drafts validate senders and persist one recipient per destination', async () => {
+  const { eq } = await import('drizzle-orm');
+  const { db } = await import('@/config/db');
+  const { tenants, users, whatsAppBusinessAccounts, whatsAppPhoneNumbers, whatsAppTemplates } =
+    await import('@/db/schema');
+  const { createCampaign, getCampaign, listCampaigns, scheduleCampaign } =
+    await import('@/modules/whatsapp/services/whatsapp-campaign.service');
+
+  const tenantId = crypto.randomUUID();
+  const userId = crypto.randomUUID();
+  const businessAccountId = crypto.randomUUID();
+  const templateId = crypto.randomUUID();
+  const enabledSender = `${tenantId}-enabled`;
+  const disabledSender = `${tenantId}-disabled`;
+
+  try {
+    await db.insert(tenants).values({ id: tenantId, name: 'Campaign test', slug: tenantId });
+    await db.insert(users).values({ id: userId, email: `${userId}@example.com` });
+    await db.insert(whatsAppBusinessAccounts).values({
+      id: businessAccountId,
+      tenantId,
+      wabaId: tenantId,
+      displayName: 'Campaign test',
+      encryptedAccessToken: 'fixture',
+    });
+    await db.insert(whatsAppPhoneNumbers).values([
+      {
+        tenantId,
+        businessAccountId,
+        phoneNumberId: enabledSender,
+        displayPhoneNumber: '+12025550101',
+      },
+      {
+        tenantId,
+        businessAccountId,
+        phoneNumberId: disabledSender,
+        displayPhoneNumber: '+12025550102',
+        isDefault: true,
+        isEnabled: false,
+      },
+    ]);
+    await db.insert(whatsAppTemplates).values({
+      id: templateId,
+      tenantId,
+      businessAccountId,
+      name: 'test_campaign',
+      category: 'MARKETING',
+      status: 'APPROVED',
+    });
+
+    const draft = {
+      name: 'Workspace update',
+      templateId,
+      recipients: [{ phoneNumber: '+1 (202) 555-0103' }, { phoneNumber: '+12025550103' }],
+    };
+    for (const phoneNumberId of [disabledSender, `${tenantId}-missing`]) {
+      await assert.rejects(
+        createCampaign(tenantId, userId, { ...draft, phoneNumberId }),
+        /selected WhatsApp sending number is unavailable/,
+      );
+    }
+    await assert.rejects(
+      createCampaign(tenantId, userId, {
+        ...draft,
+        recipients: [...draft.recipients, { phoneNumber: 'invalid' }],
+      }),
+      /Invalid phone number format/,
+    );
+    assert.deepEqual(await listCampaigns(tenantId), []);
+
+    const campaign = await createCampaign(tenantId, userId, draft);
+    assert.equal(campaign.phoneNumberId, enabledSender);
+    assert.equal(campaign.totalRecipients, 1);
+    const details = await getCampaign(tenantId, campaign.id);
+    assert.deepEqual(
+      details.recipients.map((recipient) => recipient.status),
+      ['SUPPRESSED'],
+    );
+    await assert.rejects(
+      scheduleCampaign(tenantId, userId, campaign.id, '2000-01-01T00:00:00.000Z'),
+      /Choose a future time/,
+    );
+    assert.equal((await getCampaign(tenantId, campaign.id)).status, 'DRAFT');
+  } finally {
+    // Audit records retain their tenant and actor references.
+    const deletedAt = new Date();
+    await db.update(tenants).set({ deletedAt }).where(eq(tenants.id, tenantId));
+    await db.update(users).set({ deletedAt }).where(eq(users.id, userId));
+  }
 });

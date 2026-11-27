@@ -14,5 +14,8 @@
   "INVALID_CREDENTIALS": "अमान्य ईमेल या पासवर्ड",
   "USER_LOCKED": "उपयोगकर्ता खाता बंद है",
   "USER_INACTIVE": "उपयोगकर्ता खाता निष्क्रिय है",
-  "WORKSPACE_NOT_FOUND": "कार्यस्थान नहीं मिला"
+  "WORKSPACE_NOT_FOUND": "कार्यस्थान नहीं मिला",
+  "WHATSAPP_CAMPAIGN_SENDER_UNAVAILABLE": "चुना गया WhatsApp नंबर उपलब्ध नहीं है",
+  "WHATSAPP_CAMPAIGN_SENDER_REQUIRED": "संदेश भेजने के लिए एक सक्रिय WhatsApp नंबर चाहिए",
+  "WHATSAPP_CAMPAIGN_SCHEDULE_PAST": "अभियान शेड्यूल करने के लिए भविष्य का समय चुनें"
 }

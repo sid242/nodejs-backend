@@ -98,7 +98,7 @@ test('errorHandler returns standardized error envelope without leaking internal 
   );
   assert.equal(statusCode, 400);
   assert.equal(responseBody.error.code, 'BAD_REQUEST');
-  assert.equal(responseBody.error.message, 'Invalid parameter');
+  assert.equal(responseBody.error.message, 'Bad request');
   assert.deepEqual(responseBody.error.details, { field: 'name' });
   assert.equal(responseBody.requestId, 'req-trace-uuid-123');
 
@@ -107,7 +107,7 @@ test('errorHandler returns standardized error envelope without leaking internal 
   errorHandler(unhandledErr, mockReq, mockRes, () => {});
   assert.equal(statusCode, 500);
   assert.equal(responseBody.error.code, 'INTERNAL_ERROR');
-  assert.equal(responseBody.error.message, 'Something went wrong');
+  assert.equal(responseBody.error.message, 'An internal server error occurred');
   assert.equal(responseBody.error.details, undefined);
   assert.equal(responseBody.requestId, 'req-trace-uuid-123');
 });

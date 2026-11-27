@@ -14,5 +14,8 @@
   "INVALID_CREDENTIALS": "Invalid email or password",
   "USER_LOCKED": "User account is locked",
   "USER_INACTIVE": "User account is inactive",
-  "WORKSPACE_NOT_FOUND": "Workspace not found"
+  "WORKSPACE_NOT_FOUND": "Workspace not found",
+  "WHATSAPP_CAMPAIGN_SENDER_UNAVAILABLE": "The selected WhatsApp sending number is unavailable",
+  "WHATSAPP_CAMPAIGN_SENDER_REQUIRED": "An active WhatsApp sending number is required",
+  "WHATSAPP_CAMPAIGN_SCHEDULE_PAST": "Choose a future time to schedule the campaign"
 }
